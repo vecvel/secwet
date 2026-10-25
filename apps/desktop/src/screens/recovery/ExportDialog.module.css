@@ -1,0 +1,21 @@
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.facts dt {
+  color: var(--color-text-tertiary);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.unavailable {
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+}

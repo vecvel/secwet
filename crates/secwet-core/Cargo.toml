@@ -1,0 +1,44 @@
+[package]
+name = "secwet-core"
+description = "Shared security core: vault model, crypto boundaries and sync events."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+test-util = []
+
+
+[dependencies]
+secwet-proto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+# Approved Cryptography (docs/IMPLEMENTATION.md §4)
+chacha20poly1305.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+ed25519-dalek.workspace = true
+x25519-dalek.workspace = true
+hpke.workspace = true
+rand_core.workspace = true
+getrandom.workspace = true
+zeroize.workspace = true
+secrecy.workspace = true
+subtle.workspace = true
+postcard.workspace = true
+keyring.workspace = true
+data-encoding.workspace = true
+
+# Storage & Platform (docs/IMPLEMENTATION.md §5.1, §5.2)
+rusqlite.workspace = true
+directories.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+secwet-core = { path = ".", features = ["test-util"] }
+proptest.workspace = true
+tempfile.workspace = true
+serde_json.workspace = true

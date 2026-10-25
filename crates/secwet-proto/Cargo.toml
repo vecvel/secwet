@@ -1,0 +1,11 @@
+[package]
+name = "secwet-proto"
+description = "Shared wire and model protocol types for Secwet (zero crypto, zero IO)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+postcard.workspace = true
+serde.workspace = true
+uuid.workspace = true

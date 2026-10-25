@@ -1,0 +1,36 @@
+[package]
+name = "secwet-desktop"
+description = "Secwet desktop app (Tauri 2)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "secwet_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+tauri.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+secwet-core = { workspace = true, features = ["test-util"] }
+secwet-proto.workspace = true
+uuid.workspace = true
+directories.workspace = true
+secrecy.workspace = true
+subtle.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["time"] }
+tauri-plugin-clipboard-manager = "2"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+# Dock icon that follows the system appearance in development builds (src/dock_icon.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData"] }

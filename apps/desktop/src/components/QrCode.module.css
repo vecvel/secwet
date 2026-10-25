@@ -1,0 +1,8 @@
+.qr {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+}

@@ -1,0 +1,13 @@
+{
+  "name": "secwet",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "tokens": "pnpm --filter @secwet/design-tokens build",
+    "brand": "pnpm --filter @secwet/brand build",
+    "desktop:dev": "pnpm tokens && pnpm --filter @secwet/desktop dev",
+    "desktop:tauri": "pnpm tokens && pnpm --filter @secwet/desktop tauri dev",
+    "desktop:build": "pnpm tokens && pnpm --filter @secwet/desktop build",
+    "typecheck": "pnpm --filter @secwet/desktop typecheck"
+  }
+}

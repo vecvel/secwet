@@ -1,0 +1,11 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.footnote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  max-width: 72ch;
+}

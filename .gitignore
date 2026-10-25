@@ -1,0 +1,10 @@
+/target
+node_modules/
+dist/
+apps/desktop/src-tauri/gen/
+.DS_Store
+# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/build/
+.agents/
+.claude/

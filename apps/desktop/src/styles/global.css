@@ -1,0 +1,137 @@
+@import "@secwet/design-tokens/tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  line-height: var(--line-height-tight);
+  text-wrap: balance;
+}
+
+/* Controls: no hover, focus, outline or press chrome (design decision). */
+button,
+input,
+select,
+textarea,
+a,
+[role="button"],
+[role="tab"],
+[role="menuitem"] {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  font: inherit;
+  color: inherit;
+}
+
+:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input,
+select,
+textarea {
+  appearance: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Navigation tile: 24 px moss square holding an icon or project initial. Same size at every layout width. */
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--radius-small);
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.icon-tile-selected {
+  background: var(--color-accent-fill);
+  color: var(--color-on-accent-fill);
+}
+
+/* Lets a <form> wrap dialog fields without breaking the dialog body's flex layout. */
+.form-contents {
+  display: contents;
+}
+
+/* macOS overlay title bar: window buttons span x 18 to 78 (measured). Equal 18 pt space on both sides. */
+:root[data-titlebar="overlay"] {
+  --titlebar-controls-width: 96px;
+}
+
+/* Safe-area insets in one place. Phones report real insets (notch, home indicator); the desktop
+   shell's web view reports insets for rounded window corners, which would only add empty space. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+:root[data-shell="desktop"] {
+  --safe-top: 0px;
+  --safe-right: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+}

@@ -1,0 +1,67 @@
+.shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-8) var(--space-6) var(--space-12);
+}
+
+.crumb {
+  color: var(--color-text-tertiary);
+}
+
+.crumbSep {
+  color: var(--color-text-tertiary);
+}
+
+.crumbCurrent {
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectPicker {
+  display: none;
+  width: 200px;
+}
+
+@media (max-width: 1023px) {
+  .crumb,
+  .crumbSep,
+  .crumbCurrent:not(:only-child) {
+    display: none;
+  }
+  .projectPicker {
+    display: block;
+  }
+}
+
+@media (max-width: 639px) {
+  .shell {
+    flex-direction: column;
+  }
+  /* The bottom bar floats over the content; leave room for the bar, its arch and the fade. */
+  .content {
+    padding: var(--space-5) max(var(--space-4), var(--safe-right))
+      calc(var(--layout-bottom-bar-height) + var(--safe-bottom) + var(--space-12)) max(var(--space-4), var(--safe-left));
+  }
+  .projectPicker {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+}

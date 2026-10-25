@@ -1,0 +1,57 @@
+.scan {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.scanText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.status {
+  display: flex;
+}
+
+.help {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.expiredQr {
+  opacity: 0.25;
+}
+
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 108px;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+}
+
+.compareLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.code {
+  font-size: var(--font-size-xxl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 479px) {
+  .scan {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@secwet/brand",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Secwet Twin mark: geometry source and generated icons for every platform.",
+  "exports": {
+    "./geometry": "./geometry.mjs",
+    "./logo.svg": "./dist/logo.svg"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "polygon-clipping": "^0.15.7"
+  }
+}

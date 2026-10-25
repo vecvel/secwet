@@ -1,0 +1,63 @@
+.bar {
+  display: none;
+}
+
+/* Floats over the scrolling content. */
+@media (max-width: 639px) {
+  .bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+  }
+}
+
+/* Bar surface: color only, no blur (backdrop blur always has a crisp edge). */
+/* Color only. From 32px above the bar, opacity rises along the smootherstep curve while the color deepens
+   from the background to the darker sunken shade. Both reach full at 80% of the way down, so the bottom of
+   the bar is solid dark. The curve's flat ends mean there is no band where it starts or finishes. */
+.fade {
+  position: absolute;
+  inset: -32px 0 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 0%, var(--color-bg)) 0%, transparent) 0%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 10%, var(--color-bg)) 0.9%, transparent) 8%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 20%, var(--color-bg)) 5.8%, transparent) 16%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 30%, var(--color-bg)) 16.3%, transparent) 24%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 40%, var(--color-bg)) 31.7%, transparent) 32%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 50%, var(--color-bg)) 50%, transparent) 40%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 60%, var(--color-bg)) 68.3%, transparent) 48%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 70%, var(--color-bg)) 83.7%, transparent) 56%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 80%, var(--color-bg)) 94.2%, transparent) 64%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 90%, var(--color-bg)) 99.1%, transparent) 72%,
+    color-mix(in srgb, color-mix(in srgb, var(--color-surface-sunken) 100%, var(--color-bg)) 100%, transparent) 80%,
+    var(--color-surface-sunken) 100%
+  );
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: var(--layout-bottom-bar-height);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.active {
+  color: var(--color-text-primary);
+}
+
+/* Inactive tiles keep their tint but sit on a solid base, so content scrolling behind the bar doesn't show through them. */
+.tab :global(.icon-tile):not(:global(.icon-tile-selected)) {
+  background: linear-gradient(var(--color-accent-tint), var(--color-accent-tint)), var(--color-bg);
+}
