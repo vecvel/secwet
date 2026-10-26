@@ -14,46 +14,34 @@ body,
 
 :root {
   --input-bg: var(--color-surface);
-  --scrollbar-thumb: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
-  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
 }
 
-/* Global thin scrollbar: 5px, flat ends, transparent track, zero spread on hover/focus/active */
+/* Hide scrollbars totally while preserving full scrollability */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
 ::-webkit-scrollbar,
 *::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 
 ::-webkit-scrollbar-track,
-*::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
+*::-webkit-scrollbar-track,
 ::-webkit-scrollbar-thumb,
-*::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 0 !important;
-  border: none !important;
-}
-
-::-webkit-scrollbar-thumb:hover,
-*::-webkit-scrollbar-thumb:hover,
-::-webkit-scrollbar-thumb:active,
-*::-webkit-scrollbar-thumb:active {
-  background: var(--scrollbar-thumb-hover) !important;
-  border-radius: 0 !important;
-  border: none !important;
-}
-
+*::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-corner,
-*::-webkit-scrollbar-corner {
-  background: transparent !important;
-}
-
+*::-webkit-scrollbar-corner,
 ::-webkit-scrollbar-button,
 *::-webkit-scrollbar-button {
   display: none !important;
+  background: transparent !important;
   width: 0 !important;
   height: 0 !important;
 }
