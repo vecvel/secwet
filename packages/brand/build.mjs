@@ -2,12 +2,13 @@
 //
 // Writes:
 //   packages/brand/dist/            logo.svg, logo-small.svg, tile-light.svg, tile-dark.svg, favicon.svg
+//   assets/                         icon.png, icon-dark.png, icon-light.png, tile-dark.svg, tile-light.svg, mark-dark.svg, mark-light.svg, mark.svg, favicon.svg
 //   apps/desktop/public/            favicon.svg
 //   apps/desktop/src/components/    brandMark.generated.ts
 //   apps/desktop/src-tauri/icons/   icon.icns, icon.ico, 32x32, 64x64, 128x128, 128x128@2x, icon.png, Windows Store logos
 //   apps/mobile/ios/.../AppIcon     1024 default, dark and tinted + Contents.json
 //   apps/mobile/android/.../res     adaptive icon (foreground, monochrome, background) + legacy mipmaps
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
@@ -136,6 +137,14 @@ write("packages/brand/dist/tile-light.svg", tile(C.cream, C.moss));
 write("packages/brand/dist/tile-dark.svg", tile(C.deep, C.mossLight));
 write("packages/brand/dist/favicon.svg", favicon);
 write("apps/desktop/public/favicon.svg", favicon);
+
+// Public repository assets (assets/)
+write("assets/tile-light.svg", tile(C.cream, C.moss));
+write("assets/tile-dark.svg", tile(C.deep, C.mossLight));
+write("assets/mark-light.svg", glyphOnly(C.moss));
+write("assets/mark-dark.svg", glyphOnly(C.mossLight));
+write("assets/mark.svg", glyphOnly("currentColor"));
+write("assets/favicon.svg", favicon);
 
 // 2. In-app mark for the desktop UI
 const big = twin();
@@ -278,6 +287,12 @@ try {
 for (const [name, size] of [["Square30x30Logo", 30], ["Square44x44Logo", 44], ["Square71x71Logo", 71], ["Square89x89Logo", 89], ["Square107x107Logo", 107], ["Square142x142Logo", 142], ["Square150x150Logo", 150], ["Square284x284Logo", 284], ["Square310x310Logo", 310], ["StoreLogo", 50]]) {
   write(`${iconsDir}/${name}.png`, desk(size));
 }
+
+// Sync public repository dock icons to assets/
+mkdirSync(resolve(root, "assets"), { recursive: true });
+copyFileSync(resolve(root, `${iconsDir}/dock-dark.png`), resolve(root, "assets/icon-dark.png"));
+copyFileSync(resolve(root, `${iconsDir}/dock-dark.png`), resolve(root, "assets/icon.png"));
+copyFileSync(resolve(root, `${iconsDir}/dock-light.png`), resolve(root, "assets/icon-light.png"));
 
 // 4. iOS (Flutter Runner). Default is opaque full-bleed; dark and tinted are transparent so iOS draws the backdrop.
 const appIcon = "apps/mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset";
