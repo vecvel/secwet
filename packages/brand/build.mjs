@@ -162,7 +162,7 @@ write(
 // 3. Desktop bundle icons (Tauri)
 const iconsDir = "apps/desktop/src-tauri/icons";
 for (const name of readdirSync(resolve(root, iconsDir))) rmSync(resolve(root, iconsDir, name), { recursive: true, force: true });
-const desk = (size) => png(tile(C.cream, C.moss, { small: size <= SMALL_MAX }), size);
+const desk = (size) => png(glyphOnly(C.moss, size <= SMALL_MAX), size);
 const mac = (size) => png(macTile(size <= SMALL_MAX), size);
 write(`${iconsDir}/32x32.png`, desk(32));
 write(`${iconsDir}/64x64.png`, desk(64));
@@ -291,8 +291,8 @@ for (const [name, size] of [["Square30x30Logo", 30], ["Square44x44Logo", 44], ["
 // Sync public repository dock icons to assets/
 mkdirSync(resolve(root, "assets"), { recursive: true });
 copyFileSync(resolve(root, `${iconsDir}/dock-dark.png`), resolve(root, "assets/icon-dark.png"));
-copyFileSync(resolve(root, `${iconsDir}/dock-dark.png`), resolve(root, "assets/icon.png"));
 copyFileSync(resolve(root, `${iconsDir}/dock-light.png`), resolve(root, "assets/icon-light.png"));
+write("assets/icon.png", png(glyphOnly(C.moss, false), 1024));
 
 // 4. iOS (Flutter Runner). Default is opaque full-bleed; dark and tinted are transparent so iOS draws the backdrop.
 const appIcon = "apps/mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset";

@@ -6,7 +6,7 @@ Public-facing identity assets for Secwet. Generated mathematically from [`packag
 |---|---|---|
 | [`icon-dark.png`](icon-dark.png) | 1024×1024 PNG | High-precision Retina macOS squircle dock icon (dark appearance, dithered plate) |
 | [`icon-light.png`](icon-light.png) | 1024×1024 PNG | High-precision Retina macOS squircle dock icon (light appearance, cream plate) |
-| [`icon.png`](icon.png) | 1024×1024 PNG | Default repository icon (identical to `icon-dark.png`) |
+| [`icon.png`](icon.png) | 1024×1024 PNG | High-precision transparent mark (ideal for avatars, web headers, documents) |
 | [`tile-dark.svg`](tile-dark.svg) | SVG | Vector squircle app tile (dark `#1A1916` background with mint mark) |
 | [`tile-light.svg`](tile-light.svg) | SVG | Vector squircle app tile (cream `#F6F4EF` background with moss mark) |
 | [`mark-dark.svg`](mark-dark.svg) | SVG | Standalone Splash Twin mark in mint (`#8FBE9C`, transparent background) |
