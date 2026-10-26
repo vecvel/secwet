@@ -13,7 +13,7 @@ Read these before writing any code.
 1. **Work milestone by milestone** (section 12), in order. Do not start a milestone until the previous one's "Done when" list is fully checked.
 2. **Never weaken the security rules** in section 13. If a task seems to require breaking one, stop and ask a human.
 3. **Never write your own cryptography.** Use only the crates named in section 4. Never change an algorithm, key size, nonce size or encoding without a human's approval.
-4. **Never log, print or put secret values in error messages.** This includes secret values, vault keys, device private keys, recovery keys and decrypted names. Use the `secrecy` crate's `SecretString` / `SecretBox` for these in Rust.
+4. **Never log, print or put secret values in error messages.** This includes secret values, encryption keys, device private keys, recovery keys and decrypted names. Use the `secrecy` crate's `SecretString` / `SecretBox` for these in Rust.
 5. **Every feature ships with tests.** The tests listed for a feature are the minimum. A feature is not done until its tests pass in CI.
 6. **Keep the existing UI design.** The desktop UI is already built and approved (see `docs/design-decisions.md` and `docs/ui-rules.md`). Wire it to real data; do not restyle it. If a feature needs a new screen or control, follow `docs/ui-rules.md` and get a human to approve a visual preview first.
 7. **Run all checks before you say something is done** (section 11.6). Report real output; never claim a check passed if you did not run it.
@@ -26,15 +26,15 @@ Read these before writing any code.
 - **Local-first.** Everything works offline on one device with no account and no server.
 - **User-defined organization.** Users define how their information is organized. The sidebar handles high-level navigation (Overview, user labels, Settings), while items and their contents (secrets, files, notes, optional environments) are managed inside their respective screens. Secwet imposes no rigid project hierarchy and no mandatory environments.
 - **End-to-end encrypted.** Secrets, files, notes, and names are encrypted on the device before they are stored or sent. The relay server only ever sees ciphertext and minimal routing metadata.
-- **Passwordless.** No accounts, emails, passwords or OAuth. A device is identified by its own key pair. The vault key lives in the OS secure storage (Keychain, Credential Manager, Secret Service, Android Keystore, iOS Keychain).
-- **Separation of concerns.** Device identity (signing keys), subscription authorization (relay entitlements) and vault encryption (vault key) are separate keys and separate code paths.
+- **Passwordless.** No accounts, emails, passwords or OAuth. A device is identified by its own key pair. The master encryption key lives in the OS secure storage (Keychain, Credential Manager, Secret Service, Android Keystore, iOS Keychain).
+- **Separation of concerns.** Device identity (signing keys), subscription authorization (relay entitlements) and data encryption (master encryption key) are separate keys and separate code paths.
 - **A subscription ending never deletes or locks local data.** Only sync stops.
 - **Audited libraries only**, and an independent security review before production.
 
 Known limitations (show these in the UI and docs; never hide them):
 
 - A revoked or stolen device keeps whatever it already decrypted. Revocation and key rotation only protect changes made afterwards.
-- If every device is lost and there is no recovery key plus export (or Pro backup), the vault cannot be recovered. Nobody, including Secwet, can reset access.
+- If every device is lost and there is no recovery key plus export (or Pro backup), Secwet data cannot be recovered. Nobody, including Secwet, can reset access.
 
 ---
 
@@ -51,7 +51,7 @@ Known limitations (show these in the UI and docs; never hide them):
 | `apps/desktop/src-tauri/src/lib.rs` | Tauri host, one command `core_version`, Dock icon switch | Skeleton |
 | `apps/desktop/src/` | React UI: Overview, Secrets, Devices, Recovery, Settings, all dialogs | Complete UI on mock data |
 | `apps/desktop/src/data/mock.ts` | Sample projects, secrets, devices | Replace with real data (M2) |
-| `apps/desktop/src/data/vault.ts` | Reducer with every CRUD action | Replace with calls to Rust (M2) |
+| `apps/desktop/src/data/validation.ts` | Validation helpers and ID generation | Cleaned from legacy mock prototype |
 | `apps/mobile/` | Flutter shell with theme and bottom navigation | Shell only |
 | `packages/design-tokens/` | Design tokens to CSS and Dart (`pnpm tokens`) | Done |
 | `packages/brand/` | Logo geometry and every app icon (`pnpm brand`) | Done |
@@ -68,7 +68,7 @@ The UI already shows every flow described below (create, edit, delete, reveal, c
  React UI  <-- Tauri cmds -->  Dart UI <-- FFI bridge -->  clap commands
       \                          |                          /
        \______________  secwet-core (Rust library)  ________/
-                       |  crypto, vault, storage, sync  |
+                       |  crypto, store, storage, sync  |
                        |  SQLite file + OS keychain     |
                                   |
                        HTTPS + WebSocket (TLS 1.3)
@@ -80,9 +80,9 @@ The UI already shows every flow described below (create, edit, delete, reveal, c
 
 - **secwet-core** owns all logic: keys, encryption, the local database, the record model, sync and conflict resolution. Apps are thin layers that call it.
 - **Desktop** calls core through Tauri commands (section 9). The webview never sees keys and only sees a secret value when the user reveals it.
-- **CLI** links secwet-core directly and opens the same local vault as the desktop app on that machine.
+- **CLI** links secwet-core directly and opens the same local Secwet store as the desktop app on that machine.
 - **Mobile** calls core through `flutter_rust_bridge` bindings in a new crate `crates/secwet-ffi`.
-- **Relay** is only used on the Pro plan. Free vaults never contact it.
+- **Relay** is only used on the Pro plan. Free plans never contact it.
 
 Trust boundaries: the device is trusted while unlocked. The relay is untrusted for confidentiality and integrity: it can delay, drop or reorder events, but it cannot read or forge them. The network is untrusted.
 
@@ -122,7 +122,7 @@ Use only these crates (latest stable versions; pin them in the workspace `Cargo.
 |---|---|---|---|---|
 | Device signing key (Ed25519) | 32 B seed | First launch on each device | OS secure storage, entry `secwet/<vault_id>/device-sign` | The device |
 | Device encryption key (X25519, for HPKE) | 32 B | First launch on each device | OS secure storage, `secwet/<vault_id>/device-enc` | The device |
-| Vault key `K_v` (per epoch) | 32 B random | Vault creation, and each key rotation | OS secure storage, `secwet/<vault_id>/vault-key/<epoch>` | Vault devices (sent only HPKE-encrypted to approved devices) |
+| Master encryption key `K_v` (per epoch) | 32 B random | Workspace creation, and each key rotation | OS secure storage, `secwet/<vault_id>/vault-key/<epoch>` | Paired devices (sent only HPKE-encrypted to approved devices) |
 | Record key `K_rec` | 32 B | Derived: `HKDF(ikm=K_v, salt=vault_id bytes, info="secwet/v1/record")` | Memory only | |
 | Event key `K_evt` | 32 B | Derived: `HKDF(ikm=K_v, salt=vault_id bytes, info="secwet/v1/event")` | Memory only | |
 | Recovery key | 125 bits, shown as 25 Crockford base32 chars in groups of 5 (the UI already does this) | User clicks Create | Never stored by Secwet; the user stores it | The user |
@@ -130,7 +130,7 @@ Use only these crates (latest stable versions; pin them in the workspace `Cargo.
 
 - **Device id** = first 26 characters of Crockford base32 of `SHA-256(ed25519 public key)`.
 - **Fingerprint** shown in the UI (for example `7F3A 18E0 91C2`) = the first 6 bytes of `SHA-256(ed25519 public key || x25519 public key)` as uppercase hex in groups of 4.
-- **Vault id** = UUID v4 from `OsRng`, created with the vault.
+- **Store / Workspace id** (`vault_id`) = UUID v4 from `OsRng`, created with the workspace.
 
 ### 4.2 Encrypting a record (local storage and sync payloads)
 
@@ -152,12 +152,12 @@ pub fn open_record(k_rec: &Key, aad: &RecordAad, sealed: &Sealed) -> Result<Secr
 ```
 
 - Nonce: 24 random bytes from `OsRng` for every seal. Never reuse.
-- AAD binds the ciphertext to its vault, record id, type and key epoch, so a ciphertext cannot be moved to another record or vault without failing decryption.
+- AAD binds the ciphertext to its workspace / store, record id, type and key epoch, so a ciphertext cannot be moved to another record or workspace without failing decryption.
 - Stored bytes layout (`blob` columns): `version (1 byte = 1) || nonce (24) || ciphertext`.
 
 ### 4.3 Encrypting a key for another device (HPKE)
 
-Used for vault key provisioning during pairing and for key rotation.
+Used for master encryption key provisioning during pairing and for key rotation.
 
 ```rust
 pub fn wrap_for_device(recipient_x25519_pub: &[u8; 32], info: &[u8], plaintext_key: &[u8; 32]) -> WrappedKey; // { enc: [u8;32], ciphertext: Vec<u8> }
@@ -209,7 +209,7 @@ pub struct RecordMeta { pub id: Uuid, pub lamport: u64, pub origin_device: Devic
 
 Validation rules:
 
-- Label names: unique per vault, case-insensitive, trimmed, 1 to 64 chars.
+- Label names: unique per workspace / store, case-insensitive, trimmed, 1 to 64 chars.
 - Item names: unique per label, case-insensitive, trimmed, 1 to 64 chars.
 - Environment names: unique per item, case-insensitive, 1 to 64 chars. Environments are **optional**; new items do not create default environments.
 - Secret names: unique per environment (or per item when item-level), case-sensitive, must match regex.
@@ -249,7 +249,7 @@ CREATE TABLE records (         -- items, environments, secrets, files, notes
 CREATE INDEX records_parent ON records(parent_id);
 CREATE INDEX records_type ON records(record_type);
 
-CREATE TABLE devices (         -- devices known to this vault
+CREATE TABLE devices (         -- devices paired with this workspace
   device_id TEXT PRIMARY KEY,
   name_blob BLOB NOT NULL,     -- device name, sealed with K_rec
   sign_pub BLOB NOT NULL,
@@ -357,7 +357,7 @@ impl Vault {
     pub fn approve_pairing(&mut self, session: &PairingSession) -> Result<DeviceView>;
     pub fn join_by_pairing(data_dir: &Path, qr_payload: &str, device_name: &str, keystore: &dyn KeyStore) -> Result<JoinProgress>;
     pub fn revoke_device(&mut self, device: &DeviceId) -> Result<()>;
-    pub fn rotate_vault_key(&mut self) -> Result<u32>;             // new epoch
+    pub fn rotate_vault_key(&mut self) -> Result<u32>;             // new epoch (rotates master encryption key)
     pub fn sync_now(&mut self) -> Result<SyncReport>;
 
     // settings (F17)
@@ -375,8 +375,8 @@ Provide `KeyringStore` (desktop and CLI, using `keyring`) and `MemoryStore` (tes
 ```rust
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("vault is locked")] Locked,
-    #[error("no vault on this device")] NoVault,
+    #[error("Secwet is locked")] Locked,
+    #[error("Secwet is uninitialized on this device")] NoVault,
     #[error("not found")] NotFound,
     #[error("{field}: {message}")] Invalid { field: &'static str, message: String }, // user-facing, no secret data
     #[error("name already used")] Duplicate { field: &'static str },
@@ -401,9 +401,9 @@ Every error crossing to the UI is mapped to a code plus the UI message already w
 
 Each feature lists: behavior, implementation steps, edge cases, and tests. Test names are the names to use.
 
-### F1. First run and vault creation
+### F1. First run and workspace creation
 
-Behavior: on first launch there is no vault. The app creates one silently (no setup wizard, no password): it generates device keys and the vault key, stores them in the OS secure storage and opens the Overview. The device name defaults to the OS host name (editable later in Settings).
+Behavior: on first launch Secwet is uninitialized. The app initializes silently (no setup wizard, no password): it generates device keys and the master encryption key, stores them in the OS secure storage and opens the Overview. The device name defaults to the OS host name (editable later in Settings).
 
 Steps:
 1. `Vault::status` finds no `meta` row: return `Uninitialized`.
@@ -411,13 +411,13 @@ Steps:
 3. Create the database, run migrations, write `meta`, insert this device into `devices`.
 4. Seed nothing. The UI shows "Create your first project" (already built).
 
-Edge cases: keychain unavailable (Linux without Secret Service): show an error explaining what to install; never fall back to storing keys in plaintext. A database exists but its keys are missing (keychain wiped): treat as `Locked` and offer "Restore from export" (F10); do not create a second vault silently.
+Edge cases: keychain unavailable (Linux without Secret Service): show an error explaining what to install; never fall back to storing keys in plaintext. A database exists but its keys are missing (keychain wiped): treat as `Locked` and offer "Restore from export" (F10); do not initialize a second store silently.
 
 Tests: `create_writes_keys_before_db`, `create_fails_cleanly_when_keystore_fails`, `status_uninitialized_then_unlocked`, `db_contains_no_plaintext_names` (create a project and secret, then scan the raw SQLite file bytes for the name and value strings; none may appear).
 
 ### F2. Lock, unlock and auto-lock
 
-Behavior: the vault is unlocked while the app runs. After the idle time chosen in Settings (5, 15, 30 or 60 minutes; default 15) it locks: keys are zeroized, revealed values hide, and the UI shows a locked state with an Unlock button. Unlock reads the keys from the OS secure storage again (the OS may ask for Touch ID or the login password). The CLI unlocks per command.
+Behavior: Secwet is unlocked while the app runs. After the idle time chosen in Settings (5, 15, 30 or 60 minutes; default 15) it locks: keys are zeroized, revealed values hide, and the UI shows a locked state with an Unlock button. Unlock reads the keys from the OS secure storage again (the OS may ask for Touch ID or the login password). The CLI unlocks per command.
 
 Steps: an idle timer in each app (desktop: reset on any UI input event and on Tauri commands); on expiry call `Vault::lock`. On macOS, store keychain items with access control requiring user presence when the user enables "Require Touch ID to unlock" (a later setting; default off).
 
@@ -541,11 +541,11 @@ Tests: `dashboard_preferences_persist_across_restart`, `overview_counts_match_al
 
 | Step | Done when |
 |---|---|
-| Vault created on this device | always true once a vault exists |
+| Secwet initialized on this device | always true once initialized |
 | Create a recovery key | `recovery_status().created_at.is_some()` |
-| Connect the command line | the CLI has run `secwet` at least once against this vault (the CLI writes `meta.cli_last_used_at`), or the user copied the command in the app |
+| Connect the command line | the CLI has run `secwet` at least once against this workspace (the CLI writes `meta.cli_last_used_at`), or the user copied the command in the app |
 | Add another device | Pro plan and more than one active device |
-| Rotate the vault key (only shown when needed) | a device was revoked after the last rotation |
+| Rotate the encryption key (only shown when needed) | a device was revoked after the last rotation |
 
 Tests: `overview_counts_match_records`, `overview_recent_sorted_and_limited`, `checklist_reflects_state`.
 
@@ -576,7 +576,7 @@ Export file `secwet-export-YYYYMMDD.secwet`:
 
 `ciphertext` = `seal(K_r, postcard(VaultSnapshot { projects, environments, secrets with values, settings, key_epoch }))`, AAD = `postcard(("secwet-export", 1u8, vault_id))`.
 
-Restore (`restore_from_export`): used on a new device or after a reinstall. Asks for the file and the recovery key, decrypts, creates a fresh local vault with the same vault id and data, new device keys, and the next key epoch. On Pro it must then be re-approved by another device or re-registered as the vault's first device if no active devices remain (section 8 endpoint `POST /v1/vaults/{id}/recover`).
+Restore (`restore_from_export`): used on a new device or after a reinstall. Asks for the file and the recovery key, decrypts, creates a fresh local store with the same store id and data, new device keys, and the next key epoch. On Pro it must then be re-approved by another device or re-registered as the workspace's first device if no active devices remain (section 8 endpoint `POST /v1/vaults/{id}/recover`).
 
 CLI: `secwet export --out file.secwet` (asks for the recovery key on the terminal without echo) and `secwet export --env production --format dotenv --plaintext --out .env` (plaintext requires the explicit `--plaintext` flag and prints a warning).
 
@@ -591,12 +591,12 @@ secwet run    [--item I | --project P] [--env E] -- CMD... # runs CMD with the c
 secwet set    NAME [--item I | --project P] [--env E] [--kind K]  # reads the value from stdin
 secwet import FILE.env [--item I | --project P] [--env E]  # adds or updates secrets from a dotenv file
 secwet export ...                                          # see F10
-secwet status                                              # vault id, device, plan, sync state
+secwet status                                              # store id, device, plan, sync state
 ```
 
 - Use `clap` (derive). Supports `--item` (with `--project` as a backwards-compatible alias). If the item has no environments, `--env` is optional and omitted. `--item` and `--env` default to values in a `.secwet.toml` in the current directory or any parent (`item = "payments-api"`).
 - `run`: build child environment from parent plus secrets, spawn with `std::process::Command`, forward exit code. Never print secret values.
-- Exit codes: 0 success, 1 runtime error, 2 vault locked or missing, 64 usage error.
+- Exit codes: 0 success, 1 runtime error, 2 Secwet locked or missing, 64 usage error.
 - `get` writes the value with no trailing newline when stdout is not a terminal.
 
 Tests: `cli_list_hides_values`, `cli_run_injects_env_and_forwards_exit_code`, `cli_reads_item_from_secwet_toml`, `cli_works_without_env_flag`.
@@ -619,13 +619,13 @@ Tests: `device_id_is_stable_hash_of_public_key`, `fingerprint_format`.
 - When Pro ends: sync stops, other devices show "Paused" (UI exists), local data stays fully usable and exportable. Never delete or lock anything.
 - The dev-only "Simulate plan" switch in Settings stays dev-only.
 
-Tests: `free_vault_never_calls_relay` (a relay client mock that fails the test if called), `expired_plan_pauses_sync_keeps_local_access`.
+Tests: `free_plan_never_calls_relay` (a relay client mock that fails the test if called), `expired_plan_pauses_sync_keeps_local_access`.
 
 ### F14. Pairing (Pro)
 
 UI (exists): Pair a device dialog with a QR code, a countdown, "Waiting for the new device", then the new device's name, platform, fingerprint and a 6-digit code to compare, and "Codes match, approve".
 
-Protocol (the QR never contains the vault key or a reusable credential):
+Protocol (the QR never contains the master encryption key or a reusable credential):
 
 1. Authorized device A calls `start_pairing`: creates a relay pairing session (`POST /v1/pairing`), gets `session_id` and `expires_at` (5 minutes). Generates an ephemeral X25519 key `a`. QR payload: `secwet://pair?v=1&s=<session_id>&k=<base64url(A_eph_pub)>&r=<relay host>`.
 2. New device N scans the QR (mobile) or pastes the link (desktop). It generates its device keys and an ephemeral X25519 key `n`, computes `shared = X25519(n, A_eph_pub)`, and posts to `POST /v1/pairing/{id}/join`: `{ n_eph_pub, sign_pub, enc_pub, sealed_profile }` where `sealed_profile` = device name and platform sealed with `HKDF(shared, "secwet/v1/pair-profile")`.
@@ -642,7 +642,7 @@ Tests: `pairing_happy_path` (two `Vault`s and an in-process relay), `pairing_sas
 
 #### 15.1 Events
 
-Every local change on a Pro vault creates one event:
+Every local change on a Pro plan creates one event:
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -699,11 +699,11 @@ The relay keeps an event until every active device has acked it, or for 30 days 
 Tests (all in `crates/secwet-core/tests/sync.rs` with an in-process relay and a fake clock):
 `two_devices_converge_on_concurrent_edits`, `delete_vs_update_resolves_by_lamport`, `duplicate_events_applied_once`, `out_of_order_events_converge` (shuffle delivery 100 times with a fixed seed), `offline_device_catches_up`, `offline_device_after_retention_uses_snapshot`, `tampered_event_rejected`, `event_from_revoked_device_rejected`, `replayed_request_rejected` (relay side), and a property test with `proptest`: any interleaving of operations from three devices ends in identical state on all three.
 
-### F16. Revoking devices and rotating the vault key (Pro)
+### F16. Revoking devices and rotating the encryption key (Pro)
 
 UI (exists): Revoke on a device row (confirmation explains that copies stay on the device), then a "Rotate key" notice and Recovery screen action.
 
-Revoke: `POST /v1/vaults/{id}/devices/{device}/revoke`, signed by an active device. The relay marks the device revoked, closes its WebSocket and rejects every later request from it with `revoked`. A revoked device that comes online shows "This device was removed from the vault" and keeps its local data read-only; it may export.
+Revoke: `POST /v1/vaults/{id}/devices/{device}/revoke`, signed by an active device. The relay marks the device revoked, closes its WebSocket and rejects every later request from it with `revoked`. A revoked device that comes online shows "This device was removed from Secwet" and keeps its local data read-only; it may export.
 
 Rotate: `rotate_vault_key` creates `K_v` epoch N+1, wraps it with HPKE for each active device (including itself), posts `POST /v1/vaults/{id}/keys { epoch, wrapped: [{device_id, wrapped_key}], signature }`, and from then on seals all new records and events with the new epoch. Existing records are re-sealed with the new epoch in the background (batches of 100, each in its own transaction, then synced as normal upserts). Recovery wrapped keys are updated (F9).
 
@@ -713,12 +713,12 @@ Tests: `revoked_device_cannot_push_or_pull`, `rotation_new_writes_use_new_epoch`
 
 ### F17. Consolidated Settings
 
-The Vault section and its nested items are removed from the global sidebar. Settings consolidates all application preferences, security, and device/recovery operations into dedicated, clearly named sections:
+The legacy Vault section and its nested items are removed from the global sidebar. Settings consolidates all application preferences, security, and device/recovery operations into dedicated, clearly named sections:
 
 1. **General**: Appearance (system, light, dark), auto-lock time (5, 15, 30, 60 min), editable Home/Overview label, device name.
 2. **Security & Encryption**: Key rotation status and prompt, zeroization policies, biometric presence (Touch ID) options.
-3. **Devices**: List of active and revoked devices (migrated from former sidebar Vault > Devices), device limit indicator, pair new device, revoke device.
-4. **Recovery & Backups**: Recovery key creation/replacement, encrypted `.secwet` export and restore (migrated from former sidebar Vault > Recovery).
+3. **Devices**: List of active and revoked devices (migrated from former sidebar Devices), device limit indicator, pair new device, revoke device.
+4. **Recovery & Backups**: Recovery key creation/replacement, encrypted `.secwet` export and restore (migrated from former sidebar Recovery).
 5. **Synchronization**: Plan entitlements (Free vs. Pro), relay status, outbox count, pause/resume sync indicators.
 
 Settings persistence: stored in SQLite `settings` table through `set_settings`.
@@ -784,7 +784,7 @@ The relay stores no names, values, notes or plaintext of any kind. Device names 
 | Method and path | Who | Does | Errors |
 |---|---|---|---|
 | `GET /health` | anyone | `{ "status": "ok" }` | |
-| `POST /v1/vaults` | first device of a vault upgrading to Pro | registers the vault and device (body: vault_id, sign_pub, enc_pub, proof signature) | `exists`, `not_entitled` |
+| `POST /v1/vaults` | first device of a workspace upgrading to Pro | registers the workspace and device (body: vault_id, sign_pub, enc_pub, proof signature) | `exists`, `not_entitled` |
 | `GET /v1/vaults/{id}/entitlement` | device | plan, device_limit, expires_at | |
 | `POST /v1/pairing` | active device | creates a session, 5-minute expiry | `not_entitled` |
 | `POST /v1/pairing/{id}/join` | new device (unauthenticated) | stores the join payload once | `expired`, `already_joined` |
@@ -865,7 +865,7 @@ Events emitted: `vault://changed { scope }`, `vault://locked`, `sync://status`.
 
 1. **Sidebar Navigation**:
    - Contains ONLY: Overview (Home), user-defined labels, and Settings.
-   - The former "Vault" section is completely removed from the sidebar.
+   - The former legacy "Vault" section is completely removed from the sidebar.
    - Items, individual secrets, files, notes, and environments **never** create separate sidebar navigation entries.
 2. **Dedicated Item Screen (`ItemScreen.tsx`)**:
    - Clicking an item from a label screen opens that item's dedicated screen.
@@ -964,10 +964,10 @@ Do them in order. Each ends with all its tests passing and every item checked.
 ### M2. Desktop and CLI on real data (flexible organization redesign)
 - [ ] Schema migration `0002_flexible_organization.sql` adding `labels` table and non-destructive migration of projects to items under "Projects" label.
 - [ ] Core & Proto: `RecordType` for `Label`, `Item`, `File`, `Note` with `RecordAad` cryptographic bindings.
-- [ ] Vault API for labels, items, files, rich-text notes, and optional environments.
+- [ ] Core API for labels, items, files, rich-text notes, and optional environments.
 - [ ] Tauri IPC commands in section 9.1 implemented and verified.
 - [ ] Desktop UI redesign:
-  - Sidebar: Overview (Home), user-defined labels, and Settings. Former "Vault" section removed from sidebar.
+  - Sidebar: Overview (Home), user-defined labels, and Settings. Former legacy "Vault" section removed from sidebar.
   - `LabelScreen`: lists items belonging to the selected label.
   - `ItemScreen`: header plus internal tabs for Secrets, Files, Notes, and Environments (when present).
   - Context-aware forms: no environment dropdowns when adding content to items without environments.
@@ -985,7 +985,7 @@ Do them in order. Each ends with all its tests passing and every item checked.
 - [ ] `export_file_contains_no_plaintext` passes.
 
 ### M4. Relay foundation
-- [ ] Section 8.1 to 8.3, request authentication, vault registration, entitlements, admin grant command.
+- [ ] Section 8.1 to 8.3, request authentication, store registration, entitlements, admin grant command.
 - [ ] Relay tests for authentication and replay pass.
 
 ### M5. Pairing
@@ -1037,7 +1037,7 @@ Do them in order. Each ends with all its tests passing and every item checked.
 
 | Term | Meaning |
 |---|---|
-| Vault | All items, labels, environments, secrets, files, and notes that a set of devices share |
+| Workspace (Store) | All items, labels, environments, secrets, files, and notes that a set of devices share |
 | Label | A user-defined organizational group in the sidebar (e.g. Projects, Passwords, Personal, Work, Clients) |
 | Item | The primary content container (not synonymous with a project). Can contain secrets, files, rich-text notes, and optional environments |
 | Environment | An optional subdivision inside an individual item (not mandatory, never global) |
@@ -1045,11 +1045,11 @@ Do them in order. Each ends with all its tests passing and every item checked.
 | File | An encrypted document, PDF, image, spreadsheet, or markdown file belonging to an item or environment |
 | Note | An encrypted rich-text note with formatting belonging to an item or environment |
 | Device | One install of Secwet with its own key pair |
-| Vault key (`K_v`) | The 32-byte key that protects the vault; changes on rotation (epochs) |
-| Epoch | The version number of the vault key |
+| Master encryption key (`K_v`) | The 32-byte master key that protects the workspace; changes on rotation (epochs) |
+| Epoch | The version number of the master encryption key |
 | Relay | The Pro sync server; it only forwards and stores ciphertext |
 | Event | One encrypted, signed change sent through the relay |
 | Lamport clock | A counter that orders changes across devices for last-writer-wins |
-| Snapshot | An encrypted copy of the whole vault, used to catch up after a long time offline |
+| Snapshot | An encrypted copy of the whole workspace / store, used to catch up after a long time offline |
 | SAS | Short authentication string: the 6-digit code compared during pairing |
 | HPKE | Hybrid public key encryption (RFC 9180), used to send a key to one device |

@@ -1,39 +1,87 @@
 .wrap {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
+  width: 100%;
+  border-bottom: 1px solid var(--color-border-separator);
 }
 
 .tabs {
   display: flex;
+  align-items: center;
   min-width: 0;
-  gap: var(--space-1);
+  gap: var(--space-5);
   overflow-x: auto;
   scrollbar-width: none;
+  margin-bottom: -1px;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--control-height);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-control);
+  height: 36px;
+  padding: 0;
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
   white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
 }
 
 .selected {
-  background: var(--color-accent-tint);
   color: var(--color-text-primary);
+  border-bottom-color: color-mix(in srgb, var(--color-accent) 65%, transparent);
+  font-weight: var(--font-weight-medium);
 }
 
 .count {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 0 6px;
+  border-radius: var(--radius-count);
+  line-height: 16px;
+}
+
+.selected .count {
+  color: var(--color-accent);
+  border-color: var(--color-accent-tint-soft);
+  background: var(--color-accent-tint-soft);
+}
+
+.separator {
+  width: 1px;
+  height: 10px;
+  background: var(--color-text-tertiary);
+  opacity: 0.6;
+  margin: 0 calc(-1 * var(--space-2));
+  flex: none;
+  align-self: center;
+}
+
+.extra {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
 }
 
 @media (pointer: coarse) {
@@ -41,3 +89,4 @@
     height: var(--control-touch-target);
   }
 }
+

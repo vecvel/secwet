@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use secwet_proto::{
-    DashboardConfig, EnvironmentView, FileMetaView, ItemView, LabelView, NoteMetaView, NoteView,
-    ProjectView, SecretKind, SecretMeta, VaultStatus,
+    AssetMetaView, DashboardConfig, EnvironmentView, FileMetaView, ItemView, LabelView,
+    NoteMetaView, NoteView, ProjectView, SecretKind, SecretMeta, VaultStatus,
 };
 
 /// Device ID wrapper.
@@ -127,7 +127,8 @@ pub struct Overview {
     pub projects_count: usize, // Backwards-compatible alias equal to items_count
     pub environments_count: usize,
     pub secrets_count: usize,
-    pub files_count: usize,
+    pub assets_count: usize,
+    pub files_count: usize, // Backwards-compatible alias equal to assets_count
     pub notes_count: usize,
     pub active_devices_count: usize,
     pub projects: Vec<ProjectView>,

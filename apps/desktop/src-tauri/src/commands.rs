@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use secrecy::ExposeSecret;
 use secwet_core::model::{
-    DashboardConfig, EnvironmentView, FileMetaView, ItemView, LabelView, NoteMetaView, NoteView,
-    Overview, ProjectView, SecretDraft, SecretKind, SecretMeta,
+    AssetMetaView, DashboardConfig, EnvironmentView, FileMetaView, ItemView, LabelView,
+    NoteMetaView, NoteView, Overview, ProjectView, SecretDraft, SecretKind, SecretMeta,
 };
 use secwet_core::vault::Settings;
 use secwet_core::Vault;
@@ -41,10 +41,24 @@ pub struct SecretDraftDto {
     pub note: Option<String>,
 }
 
+fn empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<Uuid>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => Uuid::parse_str(s).map(Some).map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Deserialize)]
 struct RawSecretDraftDto {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub item_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub project_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub environment_id: Option<Uuid>,
     pub name: String,
     pub kind: SecretKind,
@@ -95,15 +109,18 @@ pub struct SettingsPatchDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileDownloadDto {
-    pub meta: FileMetaView,
+pub struct AssetDownloadDto {
+    pub meta: AssetMetaView,
     pub bytes: Vec<u8>,
 }
+
+pub type FileDownloadDto = AssetDownloadDto;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct NoteDraftDto {
     #[serde(alias = "project_id")]
     pub item_id: Uuid,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub environment_id: Option<Uuid>,
     pub title: String,
     #[serde(alias = "body_html")]
@@ -136,6 +153,53 @@ pub fn vault_status_impl(state: &AppState) -> Result<VaultStatusDto, UiError> {
     }
 }
 
+pub fn system_device_name_impl() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(output) = std::process::Command::new("scutil")
+            .arg("--get")
+            .arg("ComputerName")
+            .output()
+        {
+            if output.status.success() {
+                let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !name.is_empty() {
+                    return name;
+                }
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        if let Ok(name) = std::env::var("COMPUTERNAME") {
+            let trimmed = name.trim().to_string();
+            if !trimmed.is_empty() {
+                return trimmed;
+            }
+        }
+    }
+
+    if let Ok(output) = std::process::Command::new("hostname").output() {
+        if output.status.success() {
+            let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !name.is_empty() {
+                let clean = name.strip_suffix(".local").unwrap_or(&name);
+                return clean.to_string();
+            }
+        }
+    }
+
+    if let Ok(name) = std::env::var("HOSTNAME") {
+        let trimmed = name.trim().to_string();
+        if !trimmed.is_empty() {
+            return trimmed;
+        }
+    }
+
+    "Desktop".to_string()
+}
+
 pub fn vault_create_impl(
     app: Option<&AppHandle>,
     state: &AppState,
@@ -149,7 +213,11 @@ pub fn vault_create_impl(
         return Err(UiError::already_initialized());
     }
 
-    let dev_name = device_name.as_deref().unwrap_or("desktop");
+    let real_dev = system_device_name_impl();
+    let dev_name = match device_name.as_deref() {
+        Some(name) if !name.trim().is_empty() && name != "desktop" => name.trim(),
+        _ => &real_dev,
+    };
     let vault = Vault::create(&state.data_dir, dev_name, state.keystore.as_ref())?;
     let vault_id = vault.vault_id();
     *guard = Some(vault);
@@ -282,7 +350,22 @@ pub fn labels_list(state: State<'_, AppState>) -> Result<Vec<LabelView>, UiError
 }
 
 #[tauri::command]
+pub fn groups_list(state: State<'_, AppState>) -> Result<Vec<LabelView>, UiError> {
+    labels_list_impl(&state)
+}
+
+#[tauri::command]
 pub fn label_create(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    icon: Option<String>,
+) -> Result<LabelView, UiError> {
+    label_create_impl(Some(&app), &state, name, icon)
+}
+
+#[tauri::command]
+pub fn group_create(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
@@ -303,6 +386,17 @@ pub fn label_rename(
 }
 
 #[tauri::command]
+pub fn group_rename(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: Uuid,
+    name: String,
+    icon: Option<String>,
+) -> Result<(), UiError> {
+    label_rename_impl(Some(&app), &state, id, name, icon)
+}
+
+#[tauri::command]
 pub fn label_delete(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -312,7 +406,25 @@ pub fn label_delete(
 }
 
 #[tauri::command]
+pub fn group_delete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: Uuid,
+) -> Result<(), UiError> {
+    label_delete_impl(Some(&app), &state, id)
+}
+
+#[tauri::command]
 pub fn label_reorder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<Uuid>,
+) -> Result<(), UiError> {
+    label_reorder_impl(Some(&app), &state, ids)
+}
+
+#[tauri::command]
+pub fn group_reorder(
     app: AppHandle,
     state: State<'_, AppState>,
     ids: Vec<Uuid>,
@@ -679,13 +791,42 @@ pub fn secret_copy_to_environment(
 // ============================================================================
 // 6. Files Implementation & Commands
 // ============================================================================
+// 6. Assets Implementation & Commands (F5b)
+// ============================================================================
+
+pub fn assets_list_impl(
+    state: &AppState,
+    item_id: Uuid,
+    environment_id: Option<Uuid>,
+) -> Result<Vec<AssetMetaView>, UiError> {
+    state.with_vault(|v| v.list_assets(item_id, environment_id))
+}
 
 pub fn files_list_impl(
     state: &AppState,
     item_id: Uuid,
     environment_id: Option<Uuid>,
 ) -> Result<Vec<FileMetaView>, UiError> {
-    state.with_vault(|v| v.list_files(item_id, environment_id))
+    assets_list_impl(state, item_id, environment_id)
+}
+
+pub fn asset_upload_impl(
+    app: Option<&AppHandle>,
+    state: &AppState,
+    item_id: Uuid,
+    environment_id: Option<Uuid>,
+    name: String,
+    mime: Option<String>,
+    bytes: Vec<u8>,
+) -> Result<AssetMetaView, UiError> {
+    let meta = state.with_vault_mut(|v| {
+        v.upload_asset(item_id, environment_id, &name, &bytes, mime.as_deref())
+    })?;
+    if let Some(app) = app {
+        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "assets" }));
+        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "files" }));
+    }
+    Ok(meta)
 }
 
 pub fn file_upload_impl(
@@ -697,23 +838,38 @@ pub fn file_upload_impl(
     mime: Option<String>,
     bytes: Vec<u8>,
 ) -> Result<FileMetaView, UiError> {
-    let meta = state.with_vault_mut(|v| {
-        v.upload_file(item_id, environment_id, &name, &bytes, mime.as_deref())
-    })?;
-    if let Some(app) = app {
-        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "files" }));
-    }
-    Ok(meta)
+    asset_upload_impl(app, state, item_id, environment_id, name, mime, bytes)
+}
+
+pub fn asset_download_impl(
+    state: &AppState,
+    id: Uuid,
+) -> Result<AssetDownloadDto, UiError> {
+    state.with_vault(|v| {
+        let (meta, bytes) = v.download_asset(id)?;
+        Ok(AssetDownloadDto { meta, bytes })
+    })
 }
 
 pub fn file_download_impl(
     state: &AppState,
     id: Uuid,
 ) -> Result<FileDownloadDto, UiError> {
-    state.with_vault(|v| {
-        let (meta, bytes) = v.download_file(id)?;
-        Ok(FileDownloadDto { meta, bytes })
-    })
+    asset_download_impl(state, id)
+}
+
+pub fn asset_rename_impl(
+    app: Option<&AppHandle>,
+    state: &AppState,
+    id: Uuid,
+    name: String,
+) -> Result<AssetMetaView, UiError> {
+    let meta = state.with_vault_mut(|v| v.rename_asset(id, &name))?;
+    if let Some(app) = app {
+        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "assets" }));
+        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "files" }));
+    }
+    Ok(meta)
 }
 
 pub fn file_rename_impl(
@@ -722,11 +878,20 @@ pub fn file_rename_impl(
     id: Uuid,
     name: String,
 ) -> Result<FileMetaView, UiError> {
-    let meta = state.with_vault_mut(|v| v.rename_file(id, &name))?;
+    asset_rename_impl(app, state, id, name)
+}
+
+pub fn asset_delete_impl(
+    app: Option<&AppHandle>,
+    state: &AppState,
+    id: Uuid,
+) -> Result<(), UiError> {
+    state.with_vault_mut(|v| v.delete_asset(id))?;
     if let Some(app) = app {
+        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "assets" }));
         let _ = app.emit("vault://changed", serde_json::json!({ "scope": "files" }));
     }
-    Ok(meta)
+    Ok(())
 }
 
 pub fn file_delete_impl(
@@ -734,11 +899,16 @@ pub fn file_delete_impl(
     state: &AppState,
     id: Uuid,
 ) -> Result<(), UiError> {
-    state.with_vault_mut(|v| v.delete_file(id))?;
-    if let Some(app) = app {
-        let _ = app.emit("vault://changed", serde_json::json!({ "scope": "files" }));
-    }
-    Ok(())
+    asset_delete_impl(app, state, id)
+}
+
+#[tauri::command]
+pub fn assets_list(
+    state: State<'_, AppState>,
+    item_id: Uuid,
+    environment_id: Option<Uuid>,
+) -> Result<Vec<AssetMetaView>, UiError> {
+    assets_list_impl(&state, item_id, environment_id)
 }
 
 #[tauri::command]
@@ -747,7 +917,20 @@ pub fn files_list(
     item_id: Uuid,
     environment_id: Option<Uuid>,
 ) -> Result<Vec<FileMetaView>, UiError> {
-    files_list_impl(&state, item_id, environment_id)
+    assets_list_impl(&state, item_id, environment_id)
+}
+
+#[tauri::command]
+pub fn asset_upload(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    item_id: Uuid,
+    environment_id: Option<Uuid>,
+    name: String,
+    mime: Option<String>,
+    bytes: Vec<u8>,
+) -> Result<AssetMetaView, UiError> {
+    asset_upload_impl(Some(&app), &state, item_id, environment_id, name, mime, bytes)
 }
 
 #[tauri::command]
@@ -760,7 +943,15 @@ pub fn file_upload(
     mime: Option<String>,
     bytes: Vec<u8>,
 ) -> Result<FileMetaView, UiError> {
-    file_upload_impl(Some(&app), &state, item_id, environment_id, name, mime, bytes)
+    asset_upload_impl(Some(&app), &state, item_id, environment_id, name, mime, bytes)
+}
+
+#[tauri::command]
+pub fn asset_download(
+    state: State<'_, AppState>,
+    id: Uuid,
+) -> Result<AssetDownloadDto, UiError> {
+    asset_download_impl(&state, id)
 }
 
 #[tauri::command]
@@ -768,7 +959,17 @@ pub fn file_download(
     state: State<'_, AppState>,
     id: Uuid,
 ) -> Result<FileDownloadDto, UiError> {
-    file_download_impl(&state, id)
+    asset_download_impl(&state, id)
+}
+
+#[tauri::command]
+pub fn asset_rename(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: Uuid,
+    name: String,
+) -> Result<AssetMetaView, UiError> {
+    asset_rename_impl(Some(&app), &state, id, name)
 }
 
 #[tauri::command]
@@ -778,7 +979,16 @@ pub fn file_rename(
     id: Uuid,
     name: String,
 ) -> Result<FileMetaView, UiError> {
-    file_rename_impl(Some(&app), &state, id, name)
+    asset_rename_impl(Some(&app), &state, id, name)
+}
+
+#[tauri::command]
+pub fn asset_delete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: Uuid,
+) -> Result<(), UiError> {
+    asset_delete_impl(Some(&app), &state, id)
 }
 
 #[tauri::command]
@@ -787,7 +997,7 @@ pub fn file_delete(
     state: State<'_, AppState>,
     id: Uuid,
 ) -> Result<(), UiError> {
-    file_delete_impl(Some(&app), &state, id)
+    asset_delete_impl(Some(&app), &state, id)
 }
 
 // ============================================================================
@@ -985,7 +1195,21 @@ pub fn dashboard_set(
 // ============================================================================
 
 pub fn settings_get_impl(state: &AppState) -> Result<Settings, UiError> {
-    state.with_vault(|v| v.settings())
+    state.with_vault(|v| {
+        let mut s = v.settings()?;
+        if s.device_name.trim().is_empty()
+            || s.device_name == "desktop"
+            || s.device_name == "default-device"
+        {
+            s.device_name = system_device_name_impl();
+        }
+        Ok(s)
+    })
+}
+
+#[tauri::command]
+pub fn system_device_name() -> Result<String, UiError> {
+    Ok(system_device_name_impl())
 }
 
 pub fn settings_set_impl(
@@ -1114,3 +1338,18 @@ pub fn project_rename(
 pub fn project_delete(app: AppHandle, state: State<'_, AppState>, id: Uuid) -> Result<(), UiError> {
     project_delete_impl(Some(&app), &state, id)
 }
+
+#[tauri::command]
+pub fn biometric_status() -> Result<crate::biometric::BiometricStatus, UiError> {
+    Ok(crate::biometric::check_biometric_available())
+}
+
+#[tauri::command]
+pub async fn biometric_authenticate(reason: Option<String>) -> Result<bool, UiError> {
+    tokio::task::spawn_blocking(move || {
+        crate::biometric::authenticate(reason.as_deref())
+    })
+    .await
+    .map_err(|e| UiError::internal(format!("Biometric task join error: {}", e)))?
+}
+

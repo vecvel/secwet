@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 class SecwetPalette {
   const SecwetPalette({
+    required this.sidebarBg,
     required this.bg,
     required this.surface,
     required this.surfaceSunken,
@@ -11,6 +12,8 @@ class SecwetPalette {
     required this.textTertiary,
     required this.border,
     required this.borderStrong,
+    required this.borderSeparator,
+    required this.cardHeaderBg,
     required this.accent,
     required this.accentContrast,
     required this.accentTint,
@@ -25,6 +28,7 @@ class SecwetPalette {
     required this.scrim,
   });
 
+  final Color sidebarBg;
   final Color bg;
   final Color surface;
   final Color surfaceSunken;
@@ -33,6 +37,8 @@ class SecwetPalette {
   final Color textTertiary;
   final Color border;
   final Color borderStrong;
+  final Color borderSeparator;
+  final Color cardHeaderBg;
   final Color accent;
   final Color accentContrast;
   final Color accentTint;
@@ -47,14 +53,17 @@ class SecwetPalette {
   final Color scrim;
 
   static const light = SecwetPalette(
-    bg: Color(0xFFF6F4EF),
-    surface: Color(0xFFFCFBF8),
-    surfaceSunken: Color(0xFFF0EDE6),
+    sidebarBg: Color(0xFFF6F4EF),
+    bg: Color(0xFFFFFFFF),
+    surface: Color(0xFFFAF9F6),
+    surfaceSunken: Color(0xFFF2EFE9),
     textPrimary: Color(0xFF26231E),
     textSecondary: Color(0xFF5A554B),
     textTertiary: Color(0xFF746E62),
-    border: Color(0x1426231E),
-    borderStrong: Color(0x2926231E),
+    border: Color(0x0926231E),
+    borderStrong: Color(0x1126231E),
+    borderSeparator: Color(0x0E26231E),
+    cardHeaderBg: Color(0x0626231E),
     accent: Color(0xFF3D6A4C),
     accentContrast: Color(0xFFFFFFFF),
     accentTint: Color(0x213D6A4C),
@@ -70,14 +79,17 @@ class SecwetPalette {
   );
 
   static const dark = SecwetPalette(
-    bg: Color(0xFF1A1916),
-    surface: Color(0xFF22211E),
-    surfaceSunken: Color(0xFF151412),
+    sidebarBg: Color(0xFF1A1916),
+    bg: Color(0xFF131210),
+    surface: Color(0xFF1C1B18),
+    surfaceSunken: Color(0xFF0E0D0C),
     textPrimary: Color(0xFFEDEAE3),
     textSecondary: Color(0xFFB5B0A5),
     textTertiary: Color(0xFF8E897E),
-    border: Color(0x14EDEAE3),
-    borderStrong: Color(0x29EDEAE3),
+    border: Color(0x09EDEAE3),
+    borderStrong: Color(0x11EDEAE3),
+    borderSeparator: Color(0x0EEDEAE3),
+    cardHeaderBg: Color(0x08EDEAE3),
     accent: Color(0xFF8FBE9C),
     accentContrast: Color(0xFF13201A),
     accentTint: Color(0x268FBE9C),
@@ -120,7 +132,8 @@ abstract final class SecwetRadius {
   static const double control = 8.0;
   static const double card = 8.0;
   static const double dialog = 12.0;
-  static const double pill = 999.0;
+  static const double pill = 8.0;
+  static const double count = 4.0;
 }
 
 abstract final class SecwetControl {

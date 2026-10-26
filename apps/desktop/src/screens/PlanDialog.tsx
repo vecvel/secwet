@@ -18,12 +18,12 @@ const plans = [
   {
     id: "pro" as const,
     name: "Pro",
-    summary: "Your vault on every device you approve.",
+    summary: "Secwet on every device you approve.",
     features: [
       "Pair and revoke multiple devices",
       "Near real-time encrypted sync through the relay",
       "Offline devices catch up when they reconnect",
-      "Vault key rotation after removing a device",
+      "Encryption key rotation after removing a device",
     ],
   },
 ];
@@ -32,7 +32,7 @@ export function PlanDialog({ plan, reason, onClose }: { plan: Plan; reason?: str
   return (
     <Dialog
       title="Free and Pro"
-      description={reason ?? "Pro adds sync between devices. Your local vault works the same on both plans."}
+      description={reason ?? "Pro adds sync between devices. Your local data works the same on both plans."}
       onClose={onClose}
       footer={
         <Button variant="primary" onClick={onClose}>
@@ -56,7 +56,7 @@ export function PlanDialog({ plan, reason, onClose }: { plan: Plan; reason?: str
           </div>
         ))}
       </div>
-      <p className={styles.note}>If Pro ends, nothing is deleted or locked. Your local vault stays usable and exportable. Subscriptions are not available in this build yet.</p>
+      <p className={styles.note}>If Pro ends, nothing is deleted or locked. Your local data stays usable and exportable. Subscriptions are not available in this build yet.</p>
     </Dialog>
   );
 }

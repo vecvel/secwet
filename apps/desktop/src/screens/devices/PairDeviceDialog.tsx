@@ -16,7 +16,7 @@ type Phase = "waiting" | "found" | "expired";
 function newSession() {
   const digits = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   return {
-    // One-time session id and ephemeral public key. No vault key, no reusable credential.
+    // One-time session id and ephemeral public key. No encryption key, no reusable credential.
     payload: `secwet://pair?v=1&s=${randomToken(12)}&k=${randomToken(32)}`,
     code: String(digits).padStart(6, "0").replace(/(\d{3})(\d{3})/, "$1 $2"),
     expiresAt: Date.now() + LIFETIME_MS,
@@ -58,7 +58,7 @@ export function PairDeviceDialog({ onCancel, onApprove }: { onCancel: () => void
   return (
     <Dialog
       title="Pair a device"
-      description="Open Secwet on the new device, choose Join a vault, and scan this code."
+      description="Open Secwet on the new device, choose Join, and scan this code."
       onClose={onCancel}
       footer={
         <>
@@ -90,7 +90,7 @@ export function PairDeviceDialog({ onCancel, onApprove }: { onCancel: () => void
           <p className={styles.help}>
             {phase === "expired"
               ? "This code can no longer be used. Show a new one to keep pairing."
-              : `This code works once and expires in ${formatCountdown(remaining)}. It holds no vault key.`}
+              : `This code works once and expires in ${formatCountdown(remaining)}. It holds no encryption key.`}
           </p>
         </div>
       </div>

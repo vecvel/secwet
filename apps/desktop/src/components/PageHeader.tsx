@@ -13,10 +13,17 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+export function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className={styles.section}>
-      <h2 className={styles.sectionTitle}>{title}</h2>
+      {action ? (
+        <div className={styles.sectionHeaderRow}>
+          <h2 className={styles.sectionTitle}>{title}</h2>
+          {action}
+        </div>
+      ) : (
+        <h2 className={styles.sectionTitle}>{title}</h2>
+      )}
       {children}
     </section>
   );

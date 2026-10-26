@@ -22,7 +22,7 @@ export function RevokeDeviceDialog({ device, onCancel, onConfirm }: { device: De
     >
       <ul className={styles.points}>
         <li>Secrets already copied to {device.name} stay on it. Revoking can't erase them remotely.</li>
-        <li>Rotate the vault key afterwards so it can't read changes made from now on.</li>
+        <li>Rotate the encryption key afterwards so it can't read changes made from now on.</li>
         <li>If the device was lost or stolen, also change the secrets it held at their source.</li>
       </ul>
     </Dialog>

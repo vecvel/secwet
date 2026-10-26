@@ -80,7 +80,7 @@ fn test_record_type_postcard_wire_representation() {
         (RecordType::Item, "item"),
         (RecordType::Environment, "environment"),
         (RecordType::Secret, "secret"),
-        (RecordType::File, "file"),
+        (RecordType::Asset, "asset"),
         (RecordType::Note, "note"),
     ] {
         assert_eq!(rt.as_str(), expected_name);

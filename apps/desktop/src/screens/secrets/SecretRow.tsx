@@ -87,7 +87,7 @@ export function SecretRow({ secret, canCopy, onEdit, onCopyToEnvironment, onDele
   return (
     <li className={styles.row}>
       <div className={styles.identity}>
-        <span className={styles.name}>{secret.name}</span>
+        <span className={styles.name}>{secret.name?.trim() || "(Untitled secret)"}</span>
         <span className={styles.meta}>
           {kindLabels[secret.kind]}
           {secret.note ? `, ${secret.note}` : ""}

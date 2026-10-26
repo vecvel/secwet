@@ -4,7 +4,8 @@
   gap: var(--space-3);
   height: var(--layout-top-bar-height);
   padding: 0 var(--space-6);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  background: var(--color-bg);
   flex: none;
 }
 
@@ -20,6 +21,13 @@
   flex: 1;
   min-width: 0;
   font-size: var(--font-size-md);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
 }
 
 @media (max-width: 639px) {

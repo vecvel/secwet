@@ -4,34 +4,34 @@
   gap: var(--space-5);
 }
 
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.titles {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-}
-
-.subtitle {
-  color: var(--color-text-secondary);
-}
-
-.actions {
-  display: flex;
+.statusSimple {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.dotWarning {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
+
+.dotSuccess {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.quickActionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
 }
 
 .stats {
@@ -81,6 +81,7 @@
   border-radius: var(--radius-card);
   background: var(--color-surface);
   min-width: 0;
+  overflow: hidden;
 }
 
 .cardHead {
@@ -89,8 +90,9 @@
   justify-content: space-between;
   gap: var(--space-3);
   min-height: 48px;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-separator);
+  background: var(--color-card-header-bg);
 }
 
 .cardHead h2 {
@@ -107,7 +109,7 @@
 
 .list li + li,
 .step + .step {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-separator);
 }
 
 .row {

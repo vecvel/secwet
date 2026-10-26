@@ -1,0 +1,153 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.itemDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: -3px 0 calc(-1 * var(--space-2));
+  line-height: var(--line-height-normal);
+}
+
+.envBarRow {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* When tabs appear at the very top of the item screen (no description),
+   compensate for the tab container's 36px vertical centering (10px) so the optical
+   distance from the TopBar bottom line to the tab text matches the 24px left margin. */
+.screen > .envBarRow:first-child,
+.screen > .contentNavRow:first-child {
+  margin-top: -10px;
+}
+
+.contentNavRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.searchBar {
+  flex: 1;
+  min-width: 0;
+}
+
+.secretsContainer {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.secretsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.noteCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 104px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  overflow: hidden;
+}
+
+.noteCard:hover {
+  border-color: var(--color-border-strong);
+}
+
+.noteCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0 var(--space-4);
+}
+
+.noteTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+  flex: 1;
+}
+
+.noteDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.noteDeleteBtn:hover {
+  opacity: 1;
+  color: var(--color-danger);
+}
+
+.noteBody {
+  margin: var(--space-2) 0;
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.noteFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border-separator);
+  background: var(--color-card-header-bg);
+}
+
+.noteMeta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}

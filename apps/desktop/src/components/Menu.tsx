@@ -15,7 +15,17 @@ export interface MenuItem {
  * "More" button that opens a small action menu. Closes on outside click, Escape or selection.
  * Opens upward when there is no room below. Arrow keys move between items.
  */
-export function MoreMenu({ label, items }: { label: string; items: MenuItem[] }) {
+export function MoreMenu({
+  label,
+  items,
+  icon = "more",
+  className,
+}: {
+  label: string;
+  items: MenuItem[];
+  icon?: IconName;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -56,7 +66,7 @@ export function MoreMenu({ label, items }: { label: string; items: MenuItem[] })
   }
 
   return (
-    <div className={styles.wrap} ref={wrap}>
+    <div className={[styles.wrap, className].filter(Boolean).join(" ")} ref={wrap}>
       <button
         ref={trigger}
         type="button"
@@ -67,7 +77,7 @@ export function MoreMenu({ label, items }: { label: string; items: MenuItem[] })
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <Icon name="more" size={18} />
+        <Icon name={icon} size={18} />
       </button>
       {open && (
         <div role="menu" aria-label={label} className={[styles.menu, up && styles.up].filter(Boolean).join(" ")} onKeyDown={onMenuKey}>

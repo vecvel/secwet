@@ -11,6 +11,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build.workspace = true
+cc = "1.0"
 
 [dependencies]
 tauri.workspace = true

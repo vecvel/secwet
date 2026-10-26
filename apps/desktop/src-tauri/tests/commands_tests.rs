@@ -518,3 +518,77 @@ async fn test_error_mappings_and_edge_cases() {
     assert_eq!(err_name.code, "invalid");
     assert_eq!(err_name.field.as_deref(), Some("device_name"));
 }
+
+#[tokio::test]
+async fn test_secret_deserialization_general_secret_variations() {
+    let dir = tempdir().unwrap();
+    let keystore = Arc::new(MemoryStore::new());
+    let state = AppState::new(dir.path().to_path_buf(), keystore);
+
+    vault_create_impl(None, &state, Some("TestDevice".into())).unwrap();
+    let label = label_create_impl(None, &state, "General".into(), None).unwrap();
+    let item = item_create_impl(None, &state, label.id, "MyApp".into(), None).unwrap();
+
+    // 1. JSON with environment_id: null
+    let json_null = format!(
+        r#"{{"item_id": "{}", "environment_id": null, "name": "API_NULL", "kind": "env_var", "value": "val_null"}}"#,
+        item.id
+    );
+    let dto_null: SecretDraftDto = serde_json::from_str(&json_null).expect("Failed to deserialize null env");
+    assert_eq!(dto_null.environment_id, None);
+    let sec_null = secret_create_impl(None, &state, dto_null).expect("Failed to create secret with null env");
+    assert_eq!(sec_null.environment_id, None);
+    assert_eq!(sec_null.name, "API_NULL");
+
+    // 2. JSON with environment_id: "" (empty string - previously rejected by serde UUID)
+    let json_empty = format!(
+        r#"{{"item_id": "{}", "environment_id": "", "name": "API_EMPTY", "kind": "env_var", "value": "val_empty"}}"#,
+        item.id
+    );
+    let dto_empty: SecretDraftDto = serde_json::from_str(&json_empty).expect("Failed to deserialize empty string env");
+    assert_eq!(dto_empty.environment_id, None);
+    let sec_empty = secret_create_impl(None, &state, dto_empty).expect("Failed to create secret with empty string env");
+    assert_eq!(sec_empty.environment_id, None);
+    assert_eq!(sec_empty.name, "API_EMPTY");
+
+    // 3. JSON with omitted environment_id
+    let json_omitted = format!(
+        r#"{{"item_id": "{}", "name": "API_OMITTED", "kind": "api_key", "value": "val_omitted"}}"#,
+        item.id
+    );
+    let dto_omitted: SecretDraftDto = serde_json::from_str(&json_omitted).expect("Failed to deserialize omitted env");
+    assert_eq!(dto_omitted.environment_id, None);
+    let sec_omitted = secret_create_impl(None, &state, dto_omitted).expect("Failed to create secret with omitted env");
+    assert_eq!(sec_omitted.environment_id, None);
+    assert_eq!(sec_omitted.name, "API_OMITTED");
+
+    // 4. JSON with legacy project_id and environment_id: ""
+    let json_legacy = format!(
+        r#"{{"project_id": "{}", "environment_id": "", "name": "API_LEGACY", "kind": "access_token", "value": "val_legacy"}}"#,
+        item.id
+    );
+    let dto_legacy: SecretDraftDto = serde_json::from_str(&json_legacy).expect("Failed to deserialize legacy project_id");
+    assert_eq!(dto_legacy.environment_id, None);
+    assert_eq!(dto_legacy.item_id, Some(item.id));
+    let sec_legacy = secret_create_impl(None, &state, dto_legacy).expect("Failed to create secret with legacy project_id");
+    assert_eq!(sec_legacy.environment_id, None);
+    assert_eq!(sec_legacy.name, "API_LEGACY");
+
+    // 5. Verify list_secrets returns all 4 General secrets
+    let secrets = secrets_list_impl(&state, Some(item.id), None).expect("list_secrets");
+    assert_eq!(secrets.len(), 4);
+
+    // 6. Verify reveal for each
+    assert_eq!(secret_reveal_impl(&state, sec_null.id).unwrap(), "val_null");
+    assert_eq!(secret_reveal_impl(&state, sec_empty.id).unwrap(), "val_empty");
+    assert_eq!(secret_reveal_impl(&state, sec_omitted.id).unwrap(), "val_omitted");
+    assert_eq!(secret_reveal_impl(&state, sec_legacy.id).unwrap(), "val_legacy");
+
+    // 7. Verify SQLite persistence across lock/unlock
+    vault_lock_impl(None, &state).unwrap();
+    vault_unlock_impl(None, &state).unwrap();
+    let secrets_reopened = secrets_list_impl(&state, Some(item.id), None).expect("list_secrets after reopen");
+    assert_eq!(secrets_reopened.len(), 4);
+    assert_eq!(secret_reveal_impl(&state, sec_empty.id).unwrap(), "val_empty");
+}
+

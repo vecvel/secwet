@@ -1,4 +1,4 @@
-// Sample data for the UI while the vault is stubbed. All values are fake.
+// Sample data for the UI while the backend is stubbed. All values are fake.
 
 export type SecretKind = "password" | "api_key" | "access_token" | "env_var" | "ssh_key" | "certificate";
 
@@ -24,15 +24,16 @@ export interface Project {
 
 export interface Secret {
   id: string;
-  projectId: string;
-  environmentId: string;
+  projectId?: string;
+  environmentId?: string | null;
   name: string;
   kind: SecretKind;
   value: string;
   note?: string;
-  updatedAt: number;
+  updatedAt?: number;
   project_id?: string;
-  environment_id?: string;
+  environment_id?: string | null;
+  item_id?: string;
   updated_at?: number;
   value_tail?: string;
 }
@@ -84,7 +85,7 @@ export const initialSecrets: Secret[] = [
 
 export type Plan = "free" | "pro";
 
-export const thisDevice = { name: "MacBook Pro" };
+export const thisDevice = { name: "Desktop" };
 
 export interface Device {
   id: string;
@@ -99,9 +100,7 @@ export interface Device {
 }
 
 export const initialDevices: Device[] = [
-  { id: "d1", name: "MacBook Pro", platform: "macOS", fingerprint: "7F3A 18E0 91C2", addedAt: now - 21 * 24 * h, current: true },
-  { id: "d2", name: "Pixel 9", platform: "Android", fingerprint: "C04B 5D12 E7A9", addedAt: now - 12 * 24 * h, lastSyncAt: now - 3 * h },
-  { id: "d3", name: "Old ThinkPad", platform: "Linux", fingerprint: "2A9E 0F44 B318", addedAt: now - 90 * 24 * h, revokedAt: now - 39 * 24 * h },
+  { id: "d1", name: "Desktop", platform: "macOS", fingerprint: "7F3A 18E0 91C2", addedAt: now - 21 * 24 * h, current: true },
 ];
 
 /** Device that "scans" the pairing code in the mock flow. */

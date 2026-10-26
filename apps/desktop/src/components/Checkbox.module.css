@@ -22,7 +22,7 @@
   margin: 0;
   border: 1px solid var(--color-border-strong);
   border-radius: 5px;
-  background: var(--color-surface-sunken);
+  background: var(--input-bg, var(--color-surface));
   cursor: pointer;
 }
 

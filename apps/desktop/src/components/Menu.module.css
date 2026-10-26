@@ -14,7 +14,7 @@
 }
 
 .open {
-  background: var(--color-accent-tint);
+  background: var(--color-accent-tint-soft);
   color: var(--color-text-primary);
 }
 

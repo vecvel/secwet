@@ -4024,6 +4024,7 @@ dependencies = [
 name = "secwet-desktop"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "directories",
  "objc2",
  "objc2-app-kit",

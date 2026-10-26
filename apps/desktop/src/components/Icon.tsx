@@ -18,11 +18,18 @@ const paths = {
       <path d="M10.5 10h7M15 10v2.75M17.5 10v2" />
     </>
   ),
-  // Laptop screen with a short centered foot; no keyboard, no second device.
   devices: (
     <>
-      <rect x="3" y="4" width="14" height="9.5" rx="1.75" />
-      <path d="M7.25 16h5.5" />
+      <rect x="5.5" y="2.5" width="9" height="15" rx="2" />
+      <path d="M8.75 4.5h2.5" strokeWidth={1.2} />
+      <circle cx="10" cy="14.75" r="0.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  device: (
+    <>
+      <rect x="5.5" y="2.5" width="9" height="15" rx="2" />
+      <path d="M8.75 4.5h2.5" strokeWidth={1.2} />
+      <circle cx="10" cy="14.75" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
   recovery: (
@@ -33,6 +40,12 @@ const paths = {
     </>
   ),
   settings: (
+    <>
+      <circle cx="10" cy="10" r="2.75" />
+      <path d="M9.2 3.25h1.6l.35 1.65a5.5 5.5 0 0 1 1.25.72l1.55-.7 1.13 1.13-.7 1.55c.3.38.54.8.72 1.25l1.65.35v1.6l-1.65.35a5.5 5.5 0 0 1-.72 1.25l.7 1.55-1.13 1.13-1.55-.7a5.5 5.5 0 0 1-1.25.72l-.35 1.65H9.2l-.35-1.65a5.5 5.5 0 0 1-1.25-.72l-1.55.7-1.13-1.13.7-1.55a5.5 5.5 0 0 1-.72-1.25L3.25 10.8v-1.6l1.65-.35c.18-.45.42-.87.72-1.25l-.7-1.55 1.13-1.13 1.55.7c.38-.3.8-.54 1.25-.72z" />
+    </>
+  ),
+  customize: (
     <>
       <path d="M3 6h7.5M14.5 6H17M3 14h2.5M9.5 14H17" />
       <circle cx="12.5" cy="6" r="2" />
@@ -62,6 +75,12 @@ const paths = {
       <path d="M13 7V4.75C13 3.78 12.22 3 11.25 3h-6.5C3.78 3 3 3.78 3 4.75v6.5c0 .97.78 1.75 1.75 1.75H7" />
     </>
   ),
+  download: (
+    <>
+      <path d="M10 3.5v9M6.5 9.5l3.5 3.5 3.5-3.5" />
+      <path d="M4 14.5v1.25c0 .69.56 1.25 1.25 1.25h9.5c.69 0 1.25-.56 1.25-1.25V14.5" />
+    </>
+  ),
   eye: (
     <>
       <path d="M2 10s3-5.25 8-5.25S18 10 18 10s-3 5.25-8 5.25S2 10 2 10z" />
@@ -77,6 +96,20 @@ const paths = {
   check: <path d="M4.5 10.5l3.5 3.5 7.5-8.5" />,
   close: <path d="M5 5l10 10M15 5L5 15" />,
   chevronDown: <path d="M6 8l4 4 4-4" />,
+  chevronRight: <path d="M8 6l4 4-4 4" />,
+  file: (
+    <>
+      <path d="M4.5 3.5h7l4 4v9a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 3 16.5v-11.5A1.5 1.5 0 0 1 4.5 3.5z" />
+      <path d="M11.5 3.5v4h4" />
+    </>
+  ),
+  document: (
+    <>
+      <path d="M4.5 3.5h7l4 4v9a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 3 16.5v-11.5A1.5 1.5 0 0 1 4.5 3.5z" />
+      <path d="M11.5 3.5v4h4" />
+      <path d="M6.5 10.5h7M6.5 13.5h5" />
+    </>
+  ),
   lock: (
     <>
       <rect x="4.5" y="9" width="11" height="8" rx="1.75" />
@@ -84,6 +117,7 @@ const paths = {
     </>
   ),
   arrowRight: <path d="M4 10h12M11.5 5.5L16 10l-4.5 4.5" />,
+  dot: <circle cx="10" cy="10" r="2.5" fill="currentColor" stroke="none" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof paths;

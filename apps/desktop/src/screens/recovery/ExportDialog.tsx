@@ -35,7 +35,7 @@ export function ExportDialog({ secretCount, projectCount, onClose }: { secretCou
       </dl>
       {attempted && (
         <p className={styles.unavailable} role="status">
-          Saving exports isn't available in this build yet. It arrives with the vault engine.
+          Saving exports isn't available in this build yet.
         </p>
       )}
     </Dialog>

@@ -3,6 +3,29 @@ node_modules/
 dist/
 apps/desktop/src-tauri/gen/
 .DS_Store
+
+# Documentation & notes
+docs/
+*.log
+
+# Scripts & temporary verification scripts
+scripts/
+**/scripts/
+scratch/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+
 # Flutter
 apps/mobile/.dart_tool/
 apps/mobile/build/

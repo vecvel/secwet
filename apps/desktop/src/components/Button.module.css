@@ -17,8 +17,20 @@
 }
 
 .secondary {
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+  background: color-mix(in srgb, var(--color-text-primary) 5%, transparent);
   color: var(--color-text-primary);
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+
+.secondary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  background: color-mix(in srgb, var(--color-text-primary) 9%, transparent);
+}
+
+.secondary:active:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--color-text-primary) 13%, transparent);
 }
 
 .danger {

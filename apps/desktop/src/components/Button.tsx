@@ -11,14 +11,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   arrow?: boolean;
 }
 
-/** primary: filled accent. secondary: outlined. tertiary: text link with arrow. danger: filled, for destructive confirms. */
 export function Button({ variant = "secondary", icon, arrow, className, children, type = "button", ...rest }: ButtonProps) {
-  const showArrow = arrow ?? variant === "tertiary";
+  const showArrow = arrow ?? (variant === "tertiary" && Boolean(children));
   return (
     <button type={type} className={[styles.button, styles[variant], className].filter(Boolean).join(" ")} {...rest}>
       {icon && <Icon name={icon} />}
-      <span>{children}</span>
-      {showArrow && <Icon name="arrowRight" size={14} />}
+      {children && <span>{children}</span>}
+      {showArrow && <Icon name="chevronRight" size={14} />}
     </button>
   );
 }

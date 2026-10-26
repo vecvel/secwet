@@ -1,0 +1,46 @@
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  padding: var(--space-6);
+}
+
+.header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--layout-top-bar-height);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--space-6);
+  z-index: 10;
+}
+
+:global([data-titlebar="overlay"]) .header {
+  padding-left: var(--titlebar-controls-width);
+}
+
+.brand {
+  display: flex;
+  margin-left: auto;
+  color: var(--color-accent);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 400px;
+}
+
+.errorNotice {
+  width: 100%;
+  margin-bottom: var(--space-2);
+}

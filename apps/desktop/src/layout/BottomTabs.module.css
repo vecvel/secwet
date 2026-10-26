@@ -11,7 +11,7 @@
     bottom: 0;
     z-index: 5;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
   }
 }

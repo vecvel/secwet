@@ -29,9 +29,9 @@ use rusqlite::{params, Connection};
 use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox, SecretString};
 pub use secwet_proto::Settings;
 use secwet_proto::{
-    DashboardConfig, EnvironmentBody, EnvironmentView, FileMetaBody, FileMetaView, FilePayload,
-    ItemBody, ItemView, LabelBody, LabelView, NoteBody, NoteMetaView, NoteView, ProjectBody,
-    ProjectView, RecordAad, RecordType, SecretBody, SecretMeta, VaultStatus,
+    AssetMetaBody, AssetMetaView, AssetPayload, DashboardConfig, EnvironmentBody, EnvironmentView,
+    FileMetaView, ItemBody, ItemView, LabelBody, LabelView, NoteBody, NoteMetaView, NoteView,
+    ProjectBody, ProjectView, RecordAad, RecordType, SecretBody, SecretMeta, VaultStatus,
 };
 use sha2::Digest;
 use std::collections::{HashMap, HashSet};
@@ -1906,32 +1906,32 @@ impl Vault {
     // Files Management (F5b)
     // ========================================================================
 
-    /// Lists metadata for all active files associated with an item or environment.
+    /// Lists metadata for all active assets associated with an item or environment.
     ///
-    /// Invariant: Strictly returns `FileMetaView` containing file size and SHA-256 fingerprint.
-    /// NEVER returns raw file bytes.
-    pub fn list_files(
+    /// Invariant: Strictly returns `AssetMetaView` containing asset size and SHA-256 fingerprint.
+    /// NEVER returns raw asset bytes.
+    pub fn list_assets(
         &self,
         item_id: Uuid,
         environment_id: Option<Uuid>,
-    ) -> Result<Vec<FileMetaView>> {
+    ) -> Result<Vec<AssetMetaView>> {
         self.validate_container(item_id, environment_id)?;
 
-        let rows = query_content_records(&self.db, item_id, environment_id, RecordType::File)?;
-        let mut files = Vec::with_capacity(rows.len());
+        let rows = query_content_records(&self.db, item_id, environment_id, RecordType::Asset)?;
+        let mut assets = Vec::with_capacity(rows.len());
 
         for row in rows {
             let blob = row.blob.as_ref().ok_or(Error::Storage)?;
             let aad = RecordAad::new(
                 self.vault_id.as_bytes(),
                 row.id.as_bytes(),
-                RecordType::File,
+                RecordType::Asset,
                 row.key_epoch,
             );
             let bytes = open_record(self.k_rec.expose_secret(), &aad, blob)?;
-            let payload: FilePayload = postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
+            let payload: AssetPayload = postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
 
-            files.push(FileMetaView::new(
+            assets.push(AssetMetaView::new(
                 row.id,
                 payload.meta.item_id,
                 payload.meta.environment_id,
@@ -1943,38 +1943,47 @@ impl Vault {
             ));
         }
 
-        files.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
-        Ok(files)
+        assets.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
+        Ok(assets)
     }
 
-    /// Uploads, validates, hashes, and encrypts a file onto local device storage.
+    #[inline]
+    pub fn list_files(
+        &self,
+        item_id: Uuid,
+        environment_id: Option<Uuid>,
+    ) -> Result<Vec<FileMetaView>> {
+        self.list_assets(item_id, environment_id)
+    }
+
+    /// Uploads, validates, hashes, and encrypts an asset onto local device storage.
     ///
     /// Invariants:
     /// - Max size: <= 50 MiB (52,428,800 bytes).
-    /// - Filename: 1..=255 characters, trimmed, unique per container.
+    /// - Asset name: 1..=255 characters, trimmed, unique per container.
     /// - Payload encrypted with XChaCha20Poly1305 bound by `RecordAad` (type 5).
-    pub fn upload_file(
+    pub fn upload_asset(
         &mut self,
         item_id: Uuid,
         environment_id: Option<Uuid>,
         name: &str,
         data: &[u8],
         mime_type: Option<&str>,
-    ) -> Result<FileMetaView> {
+    ) -> Result<AssetMetaView> {
         self.validate_container(item_id, environment_id)?;
 
-        let clean_name = secwet_proto::validate_file_name(name).map_err(|err| match err {
+        let clean_name = secwet_proto::validate_asset_name(name).map_err(|err| match err {
             secwet_proto::ValidationError::EmptyField(_) => Error::Invalid {
                 field: "name",
-                message: "Enter a file name.".to_string(),
+                message: "Enter an asset name.".to_string(),
             },
             secwet_proto::ValidationError::TooLong { .. } => Error::Invalid {
                 field: "name",
-                message: "Keep the file name under 255 characters.".to_string(),
+                message: "Keep the asset name under 255 characters.".to_string(),
             },
             _ => Error::Invalid {
                 field: "name",
-                message: "Enter a valid file name.".to_string(),
+                message: "Enter a valid asset name.".to_string(),
             },
         })?;
 
@@ -1984,22 +1993,22 @@ impl Vault {
             .unwrap_or(&clean_name)
             .to_string();
 
-        secwet_proto::validate_file_size(data.len() as u64).map_err(|_| Error::Invalid {
+        secwet_proto::validate_asset_size(data.len() as u64).map_err(|_| Error::Invalid {
             field: "size",
-            message: "File exceeds maximum allowed size of 50 MiB.".to_string(),
+            message: "Asset exceeds maximum allowed size of 50 MiB.".to_string(),
         })?;
 
-        let siblings = query_content_records(&self.db, item_id, environment_id, RecordType::File)?;
+        let siblings = query_content_records(&self.db, item_id, environment_id, RecordType::Asset)?;
         for sib in siblings {
             let blob = sib.blob.as_ref().ok_or(Error::Storage)?;
             let aad = RecordAad::new(
                 self.vault_id.as_bytes(),
                 sib.id.as_bytes(),
-                RecordType::File,
+                RecordType::Asset,
                 sib.key_epoch,
             );
             let bytes = open_record(self.k_rec.expose_secret(), &aad, blob)?;
-            let sib_payload: FilePayload =
+            let sib_payload: AssetPayload =
                 postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
             if sib_payload
                 .meta
@@ -2012,14 +2021,14 @@ impl Vault {
         }
 
         let sha256: [u8; 32] = sha2::Sha256::digest(data).into();
-        let file_id = Uuid::now_v7();
+        let asset_id = Uuid::now_v7();
         let mime = mime_type
             .map(|m| m.trim())
             .filter(|m| !m.is_empty())
             .unwrap_or("application/octet-stream")
             .to_string();
 
-        let meta_body = FileMetaBody::new(
+        let meta_body = AssetMetaBody::new(
             item_id,
             environment_id,
             sanitized_name.clone(),
@@ -2027,13 +2036,13 @@ impl Vault {
             mime.clone(),
             sha256,
         );
-        let payload = FilePayload::new(meta_body, data.to_vec());
+        let payload = AssetPayload::new(meta_body, data.to_vec());
         let payload_bytes = postcard::to_stdvec(&payload).map_err(|_| Error::Storage)?;
 
         let aad = RecordAad::new(
             self.vault_id.as_bytes(),
-            file_id.as_bytes(),
-            RecordType::File,
+            asset_id.as_bytes(),
+            RecordType::Asset,
             self.key_epoch,
         );
         let blob = seal_record(self.k_rec.expose_secret(), &aad, &payload_bytes)?;
@@ -2042,8 +2051,8 @@ impl Vault {
         let lamport = next_lamport(&self.db)?;
         let now_ms = current_time_ms();
         let record = RecordRow::new_active(
-            file_id,
-            RecordType::File,
+            asset_id,
+            RecordType::Asset,
             Some(parent_id),
             self.key_epoch,
             blob,
@@ -2053,8 +2062,8 @@ impl Vault {
         );
         insert_record(&self.db, &record)?;
 
-        Ok(FileMetaView::new(
-            file_id,
+        Ok(AssetMetaView::new(
+            asset_id,
             item_id,
             environment_id,
             sanitized_name,
@@ -2065,10 +2074,22 @@ impl Vault {
         ))
     }
 
-    /// Fetches, verifies MAC authenticity, and decrypts raw file bytes.
-    pub fn download_file(&self, id: Uuid) -> Result<(FileMetaView, Vec<u8>)> {
+    #[inline]
+    pub fn upload_file(
+        &mut self,
+        item_id: Uuid,
+        environment_id: Option<Uuid>,
+        name: &str,
+        data: &[u8],
+        mime_type: Option<&str>,
+    ) -> Result<FileMetaView> {
+        self.upload_asset(item_id, environment_id, name, data, mime_type)
+    }
+
+    /// Fetches, verifies MAC authenticity, and decrypts raw asset bytes.
+    pub fn download_asset(&self, id: Uuid) -> Result<(AssetMetaView, Vec<u8>)> {
         let row = get_record(&self.db, id)?.ok_or(Error::NotFound)?;
-        if row.deleted || row.record_type != RecordType::File {
+        if row.deleted || row.record_type != RecordType::Asset {
             return Err(Error::NotFound);
         }
 
@@ -2076,11 +2097,11 @@ impl Vault {
         let aad = RecordAad::new(
             self.vault_id.as_bytes(),
             row.id.as_bytes(),
-            RecordType::File,
+            RecordType::Asset,
             row.key_epoch,
         );
         let bytes = open_record(self.k_rec.expose_secret(), &aad, blob)?;
-        let payload: FilePayload = postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
+        let payload: AssetPayload = postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
 
         // Verify data integrity against embedded SHA-256
         let actual_hash: [u8; 32] = sha2::Sha256::digest(&payload.data).into();
@@ -2088,7 +2109,7 @@ impl Vault {
             return Err(Error::Crypto);
         }
 
-        let meta_view = FileMetaView::new(
+        let meta_view = AssetMetaView::new(
             row.id,
             payload.meta.item_id,
             payload.meta.environment_id,
@@ -2102,20 +2123,25 @@ impl Vault {
         Ok((meta_view, payload.data))
     }
 
-    /// Renames an existing file within its container.
-    pub fn rename_file(&mut self, id: Uuid, name: &str) -> Result<FileMetaView> {
-        let clean_name = secwet_proto::validate_file_name(name).map_err(|err| match err {
+    #[inline]
+    pub fn download_file(&self, id: Uuid) -> Result<(FileMetaView, Vec<u8>)> {
+        self.download_asset(id)
+    }
+
+    /// Renames an existing asset within its container.
+    pub fn rename_asset(&mut self, id: Uuid, name: &str) -> Result<AssetMetaView> {
+        let clean_name = secwet_proto::validate_asset_name(name).map_err(|err| match err {
             secwet_proto::ValidationError::EmptyField(_) => Error::Invalid {
                 field: "name",
-                message: "Enter a file name.".to_string(),
+                message: "Enter an asset name.".to_string(),
             },
             secwet_proto::ValidationError::TooLong { .. } => Error::Invalid {
                 field: "name",
-                message: "Keep the file name under 255 characters.".to_string(),
+                message: "Keep the asset name under 255 characters.".to_string(),
             },
             _ => Error::Invalid {
                 field: "name",
-                message: "Enter a valid file name.".to_string(),
+                message: "Enter a valid asset name.".to_string(),
             },
         })?;
 
@@ -2126,7 +2152,7 @@ impl Vault {
             .to_string();
 
         let row = get_record(&self.db, id)?.ok_or(Error::NotFound)?;
-        if row.deleted || row.record_type != RecordType::File {
+        if row.deleted || row.record_type != RecordType::Asset {
             return Err(Error::NotFound);
         }
 
@@ -2134,27 +2160,27 @@ impl Vault {
         let aad = RecordAad::new(
             self.vault_id.as_bytes(),
             row.id.as_bytes(),
-            RecordType::File,
+            RecordType::Asset,
             row.key_epoch,
         );
         let bytes = open_record(self.k_rec.expose_secret(), &aad, blob)?;
-        let mut payload: FilePayload = postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
+        let mut payload: AssetPayload = postcard::from_bytes(&bytes).map_err(|_| Error::Storage)?;
 
         // Sibling uniqueness check
         let siblings = query_records_by_parent(&self.db, row.parent_id, false)?;
         for sib in siblings {
-            if sib.id == id || sib.record_type != RecordType::File {
+            if sib.id == id || sib.record_type != RecordType::Asset {
                 continue;
             }
             let s_blob = sib.blob.as_ref().ok_or(Error::Storage)?;
             let s_aad = RecordAad::new(
                 self.vault_id.as_bytes(),
                 sib.id.as_bytes(),
-                RecordType::File,
+                RecordType::Asset,
                 sib.key_epoch,
             );
             let s_bytes = open_record(self.k_rec.expose_secret(), &s_aad, s_blob)?;
-            let s_payload: FilePayload =
+            let s_payload: AssetPayload =
                 postcard::from_bytes(&s_bytes).map_err(|_| Error::Storage)?;
             if s_payload
                 .meta
@@ -2171,7 +2197,7 @@ impl Vault {
         let new_aad = RecordAad::new(
             self.vault_id.as_bytes(),
             row.id.as_bytes(),
-            RecordType::File,
+            RecordType::Asset,
             row.key_epoch,
         );
         let new_blob = seal_record(self.k_rec.expose_secret(), &new_aad, &payload_bytes)?;
@@ -2179,7 +2205,7 @@ impl Vault {
         let now_ms = current_time_ms();
         update_record_blob(&self.db, id, &new_blob, &self.device_id, now_ms)?;
 
-        Ok(FileMetaView::new(
+        Ok(AssetMetaView::new(
             row.id,
             payload.meta.item_id,
             payload.meta.environment_id,
@@ -2191,14 +2217,24 @@ impl Vault {
         ))
     }
 
-    /// Soft-deletes a file record and immediately zeroes ciphertext blob.
-    pub fn delete_file(&mut self, id: Uuid) -> Result<()> {
+    #[inline]
+    pub fn rename_file(&mut self, id: Uuid, name: &str) -> Result<FileMetaView> {
+        self.rename_asset(id, name)
+    }
+
+    /// Soft-deletes an asset record and immediately zeroes ciphertext blob.
+    pub fn delete_asset(&mut self, id: Uuid) -> Result<()> {
         let existing = get_record(&self.db, id)?.ok_or(Error::NotFound)?;
-        if existing.deleted || existing.record_type != RecordType::File {
+        if existing.deleted || existing.record_type != RecordType::Asset {
             return Err(Error::NotFound);
         }
         soft_delete_record(&self.db, id, &self.device_id, current_time_ms())?;
         Ok(())
+    }
+
+    #[inline]
+    pub fn delete_file(&mut self, id: Uuid) -> Result<()> {
+        self.delete_asset(id)
     }
 
     // ========================================================================
@@ -3025,6 +3061,7 @@ impl Vault {
             projects_count: items_count as usize,
             environments_count: environments_count as usize,
             secrets_count: secrets_count as usize,
+            assets_count: files_count as usize,
             files_count: files_count as usize,
             notes_count: notes_count as usize,
             active_devices_count: active_devices_count as usize,

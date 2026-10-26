@@ -18,7 +18,7 @@ pub enum RecordType {
     Item = 2,
     Environment = 3,
     Secret = 4,
-    File = 5,
+    Asset = 5,
     Note = 6,
 }
 
@@ -27,13 +27,17 @@ impl RecordType {
     #[allow(non_upper_case_globals)]
     pub const Project: RecordType = RecordType::Item;
 
+    /// Backwards compatibility alias for code migrating from legacy files.
+    #[allow(non_upper_case_globals)]
+    pub const File: RecordType = RecordType::Asset;
+
     pub const fn as_str(&self) -> &'static str {
         match self {
             RecordType::Label => "label",
             RecordType::Item => "item",
             RecordType::Environment => "environment",
             RecordType::Secret => "secret",
-            RecordType::File => "file",
+            RecordType::Asset => "asset",
             RecordType::Note => "note",
         }
     }
@@ -48,7 +52,7 @@ impl TryFrom<u8> for RecordType {
             2 => Ok(RecordType::Item),
             3 => Ok(RecordType::Environment),
             4 => Ok(RecordType::Secret),
-            5 => Ok(RecordType::File),
+            5 => Ok(RecordType::Asset),
             6 => Ok(RecordType::Note),
             other => Err(other),
         }
@@ -283,9 +287,9 @@ impl std::fmt::Debug for SecretBody {
     }
 }
 
-/// Body of a File metadata record (type 5).
+/// Body of an Asset metadata record (type 5).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileMetaBody {
+pub struct AssetMetaBody {
     pub item_id: Uuid,
     pub environment_id: Option<Uuid>,
     pub name: String,
@@ -294,7 +298,7 @@ pub struct FileMetaBody {
     pub sha256: [u8; 32],
 }
 
-impl FileMetaBody {
+impl AssetMetaBody {
     pub fn new(
         item_id: Uuid,
         environment_id: Option<Uuid>,
@@ -314,18 +318,22 @@ impl FileMetaBody {
     }
 }
 
-/// Sealed payload in records.blob containing both metadata and raw file bytes.
+pub type FileMetaBody = AssetMetaBody;
+
+/// Sealed payload in records.blob containing both metadata and raw asset bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FilePayload {
-    pub meta: FileMetaBody,
+pub struct AssetPayload {
+    pub meta: AssetMetaBody,
     pub data: Vec<u8>,
 }
 
-impl FilePayload {
-    pub fn new(meta: FileMetaBody, data: Vec<u8>) -> Self {
+impl AssetPayload {
+    pub fn new(meta: AssetMetaBody, data: Vec<u8>) -> Self {
         Self { meta, data }
     }
 }
+
+pub type FilePayload = AssetPayload;
 
 /// Body of a Rich-Text Note record (type 6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -670,6 +678,7 @@ pub struct ItemView {
     pub position: u32,
     pub environments_count: usize,
     pub secrets_count: usize,
+    pub assets_count: usize,
     pub files_count: usize,
     pub notes_count: usize,
 }
@@ -684,7 +693,7 @@ impl ItemView {
         position: u32,
         environments_count: usize,
         secrets_count: usize,
-        files_count: usize,
+        assets_count: usize,
         notes_count: usize,
     ) -> Self {
         Self {
@@ -695,7 +704,8 @@ impl ItemView {
             position,
             environments_count,
             secrets_count,
-            files_count,
+            assets_count,
+            files_count: assets_count,
             notes_count,
         }
     }
@@ -810,9 +820,9 @@ impl std::ops::Deref for SecretMeta {
     }
 }
 
-/// View model for file metadata.
+/// View model for asset metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileMetaView {
+pub struct AssetMetaView {
     pub id: Uuid,
     pub item_id: Uuid,
     pub environment_id: Option<Uuid>,
@@ -823,7 +833,7 @@ pub struct FileMetaView {
     pub updated_at: i64,
 }
 
-impl FileMetaView {
+impl AssetMetaView {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: Uuid,
@@ -847,6 +857,8 @@ impl FileMetaView {
         }
     }
 }
+
+pub type FileMetaView = AssetMetaView;
 
 /// Lightweight view model for note list / preview snippet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1272,15 +1284,15 @@ pub fn validate_item_description(desc: Option<&str>) -> Result<(), ValidationErr
     Ok(())
 }
 
-pub fn validate_file_name(name: &str) -> Result<String, ValidationError> {
+pub fn validate_asset_name(name: &str) -> Result<String, ValidationError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err(ValidationError::EmptyField("file_name"));
+        return Err(ValidationError::EmptyField("asset_name"));
     }
     let char_count = trimmed.chars().count();
     if char_count > 255 {
         return Err(ValidationError::TooLong {
-            field: "file_name",
+            field: "asset_name",
             max: 255,
             actual: char_count,
         });
@@ -1288,17 +1300,21 @@ pub fn validate_file_name(name: &str) -> Result<String, ValidationError> {
     Ok(trimmed.to_string())
 }
 
-pub fn validate_file_size(size_bytes: u64) -> Result<(), ValidationError> {
-    const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50 MiB = 52,428,800 bytes
-    if size_bytes > MAX_FILE_SIZE {
+pub use validate_asset_name as validate_file_name;
+
+pub fn validate_asset_size(size_bytes: u64) -> Result<(), ValidationError> {
+    const MAX_ASSET_SIZE: u64 = 50 * 1024 * 1024; // 50 MiB = 52,428,800 bytes
+    if size_bytes > MAX_ASSET_SIZE {
         return Err(ValidationError::TooLong {
-            field: "file_size",
-            max: MAX_FILE_SIZE as usize,
+            field: "asset_size",
+            max: MAX_ASSET_SIZE as usize,
             actual: size_bytes as usize,
         });
     }
     Ok(())
 }
+
+pub use validate_asset_size as validate_file_size;
 
 pub fn validate_note_title(title: &str) -> Result<String, ValidationError> {
     let trimmed = title.trim();

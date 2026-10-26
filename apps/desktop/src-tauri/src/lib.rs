@@ -1,5 +1,6 @@
 //! Desktop host. Connects the UI to `secwet-core` via Tauri 2 commands.
 
+pub mod biometric;
 pub mod clipboard;
 pub mod commands;
 mod dock_icon;
@@ -30,7 +31,12 @@ pub fn run() {
             commands::vault_create,
             commands::vault_unlock,
             commands::vault_lock,
-            // 2. Labels
+            // 2. Groups & Labels
+            commands::groups_list,
+            commands::group_create,
+            commands::group_rename,
+            commands::group_delete,
+            commands::group_reorder,
             commands::labels_list,
             commands::label_create,
             commands::label_rename,
@@ -54,7 +60,12 @@ pub fn run() {
             commands::secret_update,
             commands::secret_delete,
             commands::secret_copy_to_environment,
-            // 6. Files
+            // 6. Assets & Files
+            commands::assets_list,
+            commands::asset_upload,
+            commands::asset_download,
+            commands::asset_rename,
+            commands::asset_delete,
             commands::files_list,
             commands::file_upload,
             commands::file_download,
@@ -75,6 +86,9 @@ pub fn run() {
             // 9. Settings
             commands::settings_get,
             commands::settings_set,
+            commands::system_device_name,
+            commands::biometric_status,
+            commands::biometric_authenticate,
             // 10. Backward Compatibility (Projects)
             commands::projects_list,
             commands::project_create,

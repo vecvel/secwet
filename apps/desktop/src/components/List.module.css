@@ -5,6 +5,8 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface);
+  overflow: hidden;
+  --input-bg: var(--color-bg);
 }
 
 .row {
@@ -17,7 +19,7 @@
 }
 
 .row + .row {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-separator);
 }
 
 .text {

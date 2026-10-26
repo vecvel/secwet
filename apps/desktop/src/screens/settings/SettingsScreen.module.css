@@ -8,6 +8,17 @@
   width: 160px;
 }
 
+.input {
+  width: 220px;
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+}
+
 .code {
   font-family: inherit;
   font-size: var(--font-size-sm);
@@ -17,4 +28,22 @@
 .hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
+}
+
+.footnote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+.limits {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.limits li + li {
+  margin-top: var(--space-2);
 }

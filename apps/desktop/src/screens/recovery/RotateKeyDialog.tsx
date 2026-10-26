@@ -5,8 +5,8 @@ import styles from "./RecoveryScreen.module.css";
 export function RotateKeyDialog({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
   return (
     <Dialog
-      title="Rotate vault key?"
-      description="A new vault key is created on this device and shared only with your active devices."
+      title="Rotate encryption key?"
+      description="A new encryption key is created on this device and shared only with your active devices."
       onClose={onCancel}
       footer={
         <>

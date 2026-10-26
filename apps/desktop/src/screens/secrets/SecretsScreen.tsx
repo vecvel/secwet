@@ -7,10 +7,10 @@ import { MoreMenu, type MenuItem } from "../../components/Menu";
 import { NameDialog } from "../../components/NameDialog";
 import { SegmentedTabs } from "../../components/SegmentedTabs";
 import type { Project, Secret } from "../../data/mock";
-import { environmentNameError, newId, projectNameError, type VaultAction } from "../../data/vault";
+import { environmentNameError, newId, projectNameError, type Action } from "../../data/validation";
 import { type SecretMeta } from "../../lib/api";
 import { plural } from "../../lib/format";
-import { vaultStore } from "../../lib/store";
+import { store } from "../../lib/store";
 import { CopySecretDialog } from "./CopySecretDialog";
 import { SecretDialog } from "./SecretDialog";
 import { SecretRow } from "./SecretRow";
@@ -22,7 +22,7 @@ interface Props {
   environmentId: string;
   onEnvironmentChange: (id: string) => void;
   secrets: (Secret | SecretMeta)[];
-  dispatch: Dispatch<VaultAction>;
+  dispatch: Dispatch<Action>;
   onNewProject: () => void;
   /** Opens the add-secret dialog on mount (used by Overview's Add secret). */
   startAdding?: boolean;
@@ -142,13 +142,16 @@ export function SecretsScreen({
           onChange={onEnvironmentChange}
           onAdd={() => setModal({ kind: "newEnvironment" })}
           addLabel="New environment"
-        />
-        <SearchInput
-          className={styles.search}
-          placeholder="Filter by name"
-          aria-label={`Filter ${envName} secrets by name`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          separatorAfterId="all"
+          extra={
+            <SearchInput
+              className={styles.search}
+              placeholder="Filter by name"
+              aria-label={`Filter ${envName} secrets by name`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          }
         />
       </div>
 
@@ -198,9 +201,11 @@ export function SecretsScreen({
           existing={projectSecrets}
           initial={modal.kind === "editSecret" ? modal.secret : undefined}
           onCancel={close}
-          onSave={async (draft) => {
+          onSave={async (draftOrDrafts) => {
+            const drafts = Array.isArray(draftOrDrafts) ? draftOrDrafts : [draftOrDrafts];
             if (modal.kind === "editSecret") {
-              await vaultStore.updateSecret(modal.secret.id, {
+              const draft = drafts[0];
+              await store.updateSecret(modal.secret.id, {
                 project_id: project.id,
                 environment_id: draft.environmentId,
                 name: draft.name,
@@ -209,16 +214,20 @@ export function SecretsScreen({
                 note: draft.note,
               });
             } else {
-              await vaultStore.addSecret({
-                project_id: project.id,
-                environment_id: draft.environmentId,
-                name: draft.name,
-                kind: draft.kind,
-                value: draft.value,
-                note: draft.note,
-              });
+              for (const draft of drafts) {
+                await store.addSecret({
+                  project_id: project.id,
+                  environment_id: draft.environmentId,
+                  name: draft.name,
+                  kind: draft.kind,
+                  value: draft.value,
+                  note: draft.note,
+                });
+              }
             }
-            onEnvironmentChange(draft.environmentId);
+            if (drafts[0]?.environmentId) {
+              onEnvironmentChange(drafts[0].environmentId);
+            }
             setQuery("");
             close();
           }}
@@ -233,7 +242,7 @@ export function SecretsScreen({
           onCancel={close}
           onCopy={async (targetId) => {
             try {
-              await vaultStore.copySecretToEnvironment(modal.secret.id, targetId);
+              await store.copySecretToEnvironment(modal.secret.id, targetId);
             } catch (e) {
               console.error("Failed to copy secret via backend:", e);
               dispatch({
@@ -266,7 +275,7 @@ export function SecretsScreen({
           confirmLabel="Delete secret"
           onCancel={close}
           onConfirm={async () => {
-            await vaultStore.deleteSecret(modal.secret.id);
+            await store.deleteSecret(modal.secret.id);
             close();
           }}
         />
@@ -281,7 +290,7 @@ export function SecretsScreen({
           validate={(v) => projectNameError(v, projects, project.id)}
           onCancel={close}
           onSubmit={async (name) => {
-            await vaultStore.renameProject(project.id, name);
+            await store.renameProject(project.id, name);
             close();
           }}
         />
@@ -292,7 +301,7 @@ export function SecretsScreen({
           title={`Delete ${project.name}?`}
           body={
             <p>
-              This deletes {plural(projectSecrets.length, "secret")} in {plural(project.environments.length, "environment")} from this vault, and from paired devices on their next sync. Copies
+              This deletes {plural(projectSecrets.length, "secret")} in {plural(project.environments.length, "environment")} from Secwet, and from paired devices on their next sync. Copies
               already on a revoked device can't be removed.
             </p>
           }
@@ -300,7 +309,7 @@ export function SecretsScreen({
           confirmLabel="Delete project"
           onCancel={close}
           onConfirm={async () => {
-            await vaultStore.deleteProject(project.id);
+            await store.deleteProject(project.id);
             close();
           }}
         />
@@ -316,7 +325,7 @@ export function SecretsScreen({
           validate={(v) => environmentNameError(v, project)}
           onCancel={close}
           onSubmit={async (name) => {
-            const env = await vaultStore.addEnvironment(project.id, name);
+            const env = await store.addEnvironment(project.id, name);
             onEnvironmentChange(env.id);
             close();
           }}
@@ -332,7 +341,7 @@ export function SecretsScreen({
           validate={(v) => environmentNameError(v, project, env.id)}
           onCancel={close}
           onSubmit={async (name) => {
-            await vaultStore.renameEnvironment(project.id, env.id, name);
+            await store.renameEnvironment(project.id, env.id, name);
             close();
           }}
         />
@@ -346,7 +355,7 @@ export function SecretsScreen({
           confirmLabel="Delete environment"
           onCancel={close}
           onConfirm={async () => {
-            await vaultStore.deleteEnvironment(project.id, env.id);
+            await store.deleteEnvironment(project.id, env.id);
             const remaining = project.environments.filter((e) => e.id !== env.id);
             if (remaining[0]) {
               onEnvironmentChange(remaining[0].id);

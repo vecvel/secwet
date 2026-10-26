@@ -12,6 +12,61 @@ body,
   height: 100%;
 }
 
+:root {
+  --input-bg: var(--color-surface);
+  --scrollbar-thumb: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+}
+
+/* Global thin scrollbar: 5px, flat ends, transparent track, zero spread on hover/focus/active */
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active,
+*::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-hover) !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* On elevated surfaces, dialogs, cards, and lists, controls use canvas bg for an inset cavity */
+[data-surface],
+[class*="Dialog_panel"],
+[class*="List_list"],
+[class*="panel"],
+[class*="card"] {
+  --input-bg: var(--color-bg);
+}
+
 body {
   margin: 0;
   background: var(--color-bg);
@@ -42,12 +97,17 @@ input,
 select,
 textarea,
 a,
+code,
+pre,
+kbd,
+samp,
 [role="button"],
 [role="tab"],
 [role="menuitem"] {
   outline: none;
   -webkit-tap-highlight-color: transparent;
   font: inherit;
+  font-family: inherit;
   color: inherit;
 }
 
@@ -71,6 +131,14 @@ input,
 select,
 textarea {
   appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  box-shadow: none;
 }
 
 .visually-hidden {

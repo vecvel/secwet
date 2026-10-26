@@ -27,7 +27,7 @@
 .current {
   font-size: var(--font-size-xs);
   padding: 1px var(--space-2);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: var(--color-accent-tint);
   color: var(--color-text-primary);
 }

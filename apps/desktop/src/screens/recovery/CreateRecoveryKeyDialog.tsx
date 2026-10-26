@@ -6,7 +6,7 @@ import styles from "./CreateRecoveryKeyDialog.module.css";
 
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32, no I, L, O, U
 
-/** 25 random characters in groups of five. Display-only until the vault engine derives it. */
+/** 25 random characters in groups of five. Display-only until the Secwet engine derives it. */
 function generateKey() {
   const bytes = crypto.getRandomValues(new Uint8Array(25));
   const chars = Array.from(bytes, (b) => ALPHABET[b % 32]).join("");

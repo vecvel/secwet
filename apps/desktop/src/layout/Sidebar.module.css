@@ -4,7 +4,7 @@
   width: var(--layout-sidebar-width);
   height: 100%;
   border-right: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-sidebar-bg);
   padding-left: var(--safe-left);
 }
 
@@ -31,7 +31,7 @@
 .nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   padding: var(--space-2) var(--space-3);
   overflow-y: auto;
   flex: 1;
@@ -43,24 +43,62 @@
   gap: 2px;
 }
 
+.groupsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .groupLabel {
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 22px;
-  padding: 0 var(--space-1) var(--space-1) 6px;
+  padding: 0 var(--space-1) 2px 6px;
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
+}
+
+.groupTitleBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.groupTitleBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.groupTitleActive {
+  color: var(--color-accent);
 }
 
 .groupAdd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--radius-small);
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.groupAdd:hover {
+  color: var(--color-text-primary);
 }
 
 .item {
@@ -75,6 +113,83 @@
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
   text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.item:hover {
+  color: var(--color-text-primary);
+}
+
+.nestedItem {
+  height: 36px;
+  padding: 0 6px;
+  font-size: var(--font-size-md);
+}
+
+.emptyItemHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  height: 28px;
+  margin: 2px 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-small);
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.emptyItemHint:hover {
+  color: var(--color-text-primary);
+}
+
+.newGroupContainer {
+  display: flex;
+  width: 100%;
+}
+
+.newGroupBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--color-text-primary) 22%, transparent);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.newGroupBtn:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+.newGroupIconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+.newGroupText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .itemLabel {
@@ -93,7 +208,7 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent);
 }
 
 .device {
@@ -143,18 +258,36 @@
   .brandName,
   .groupLabel,
   .itemLabel,
-  .expandedOnly {
+  .expandedOnly,
+  .newGroupText,
+  .emptyItemHint {
     display: none;
   }
   .railOnly {
     display: flex;
   }
   .nav {
-    gap: 2px;
-    padding: var(--space-2);
+    gap: 4px;
+    padding: var(--space-2) 0;
+    align-items: center;
+  }
+  .groupsContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    align-items: center;
+  }
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    align-items: center;
   }
   .footer {
-    padding: var(--space-2);
+    padding: var(--space-2) 0;
+    align-items: center;
   }
   .item {
     justify-content: center;
@@ -162,6 +295,32 @@
     height: 40px;
     margin: 0 auto;
     padding: 0;
+  }
+  .newGroupContainer {
+    justify-content: center;
+    width: 100%;
+    padding: 0;
+  }
+  .newGroupBtn {
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin: 0 auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-control);
+  }
+  .newGroupIconWrap {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-small);
+    border: 1px dashed color-mix(in srgb, var(--color-text-primary) 22%, transparent);
+    color: var(--color-text-tertiary);
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .newGroupBtn:hover .newGroupIconWrap {
+    border-color: var(--color-text-secondary);
+    color: var(--color-text-primary);
   }
   /* Rail widens so the window buttons get equal space on both sides. */
   :global([data-titlebar="overlay"]) .sidebar {

@@ -37,16 +37,50 @@ const tile = (bg, fg, { small = false, rx = 14.3 } = {}) => svg(`<rect width="64
 function macTile(small, dark = false) {
   // Light: cream. Dark: a dark gradient with only a touch of warmth (also used for Icon.icon's dark base).
   const plate = dark ? "url(#plateDark)" : C.cream;
-  const hairline = dark ? C.cream : C.ink;
   const mark = dark ? C.mossLight : C.moss;
   const s = (824 / 1024) * 64;
   const o = (64 - s) / 2;
+  const rx = s * 0.2237;
+
+  // In dark tiles: directional top-left-to-right specular rim highlight and subtle ambient bevel
+  const darkRim =
+    `<linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">` +
+      `<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.48"/>` +
+      `<stop offset="25%" stop-color="#FFFFFF" stop-opacity="0.34"/>` +
+      `<stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.18"/>` +
+      `<stop offset="75%" stop-color="#FFFFFF" stop-opacity="0.06"/>` +
+      `<stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0"/>` +
+    `</linearGradient>` +
+    `<linearGradient id="bevelGrad" x1="0%" y1="0%" x2="100%" y2="100%">` +
+      `<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.20"/>` +
+      `<stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.12"/>` +
+      `<stop offset="60%" stop-color="#FFFFFF" stop-opacity="0.02"/>` +
+      `<stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0"/>` +
+    `</linearGradient>`;
+
+  // In light tiles: specular top-left highlight and subtle dark bottom bezel
+  const lightRim =
+    `<linearGradient id="lightRimGrad" x1="0%" y1="0%" x2="100%" y2="100%">` +
+      `<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.70"/>` +
+      `<stop offset="40%" stop-color="#FFFFFF" stop-opacity="0.35"/>` +
+      `<stop offset="70%" stop-color="${C.ink}" stop-opacity="0.06"/>` +
+      `<stop offset="100%" stop-color="${C.ink}" stop-opacity="0.16"/>` +
+    `</linearGradient>`;
+
+  const rimDefs = dark ? darkRim : lightRim;
+  const rimStroke = dark ? "url(#rimGrad)" : "url(#lightRimGrad)";
+  const bevel = dark
+    ? `<rect x="${o + 0.18}" y="${o + 0.18}" width="${s - 0.36}" height="${s - 0.36}" rx="${rx - 0.18}" fill="none" stroke="url(#bevelGrad)" stroke-width="0.36"/>`
+    : "";
+
   return svg(
     `<defs><filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="0.6" stdDeviation="0.7" flood-color="#000" flood-opacity="0.28"/></filter>` +
-      `<linearGradient id="plateDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.plateDarkTop}"/><stop offset="1" stop-color="${C.plateDarkBottom}"/></linearGradient></defs>` +
-      `<rect x="${o}" y="${o}" width="${s}" height="${s}" rx="${s * 0.2237}" fill="${plate}" filter="url(#sh)"/>` +
-      // Faint 8% hairline just inside the plate edge.
-      `<rect x="${o + 0.09}" y="${o + 0.09}" width="${s - 0.18}" height="${s - 0.18}" rx="${s * 0.2237 - 0.09}" fill="none" stroke="${hairline}" stroke-opacity="0.08" stroke-width="0.19"/>` +
+      `<linearGradient id="plateDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.plateDarkTop}"/><stop offset="1" stop-color="${C.plateDarkBottom}"/></linearGradient>` +
+      rimDefs +
+    `</defs>` +
+      `<rect x="${o}" y="${o}" width="${s}" height="${s}" rx="${rx}" fill="${plate}" filter="url(#sh)"/>` +
+      bevel +
+      `<rect x="${o + 0.09}" y="${o + 0.09}" width="${s - 0.18}" height="${s - 0.18}" rx="${rx - 0.09}" fill="none" stroke="${rimStroke}" stroke-width="0.19"/>` +
       `<g transform="translate(${o} ${o}) scale(${s / 64})">${markSvg(mark, { small })}</g>`,
   );
 }
@@ -188,9 +222,59 @@ if (process.platform === "darwin") {
   }
 }
 
-// Dock images for the running app: the desktop host swaps these when macOS switches light and dark.
-write(`${iconsDir}/dock-light.png`, png(macTile(false, false), 512));
-write(`${iconsDir}/dock-dark.png`, png(macTile(false, true), 512));
+// Dock images for the running app: generate ultra-smooth, Apple-grade dithered 1024x1024 Retina images.
+const sPlate = (824 / 1024) * 64;
+const oPlate = (64 - sPlate) / 2;
+const rxPlate = sPlate * 0.2237;
+
+const shadowSvg = svg(
+  `<defs><filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="0.6" stdDeviation="0.7" flood-color="#000" flood-opacity="0.28"/></filter></defs>` +
+    `<rect x="${oPlate}" y="${oPlate}" width="${sPlate}" height="${sPlate}" rx="${rxPlate}" fill="#000" filter="url(#sh)"/>`,
+);
+const maskSvg = svg(`<rect x="${oPlate}" y="${oPlate}" width="${sPlate}" height="${sPlate}" rx="${rxPlate}" fill="#FFF"/>`);
+const fgDarkSvg = svg(
+  `<defs>` +
+    `<linearGradient id="dockRimGrad" x1="0%" y1="0%" x2="100%" y2="100%">` +
+      `<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.48"/>` +
+      `<stop offset="25%" stop-color="#FFFFFF" stop-opacity="0.34"/>` +
+      `<stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.18"/>` +
+      `<stop offset="75%" stop-color="#FFFFFF" stop-opacity="0.06"/>` +
+      `<stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0"/>` +
+    `</linearGradient>` +
+    `<linearGradient id="dockBevelGrad" x1="0%" y1="0%" x2="100%" y2="100%">` +
+      `<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.20"/>` +
+      `<stop offset="30%" stop-color="#FFFFFF" stop-opacity="0.12"/>` +
+      `<stop offset="60%" stop-color="#FFFFFF" stop-opacity="0.02"/>` +
+      `<stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0"/>` +
+    `</linearGradient>` +
+  `</defs>` +
+  `<rect x="${oPlate + 0.18}" y="${oPlate + 0.18}" width="${sPlate - 0.36}" height="${sPlate - 0.36}" rx="${rxPlate - 0.18}" fill="none" stroke="url(#dockBevelGrad)" stroke-width="0.36"/>` +
+  `<rect x="${oPlate + 0.09}" y="${oPlate + 0.09}" width="${sPlate - 0.18}" height="${sPlate - 0.18}" rx="${rxPlate - 0.09}" fill="none" stroke="url(#dockRimGrad)" stroke-width="0.19"/>` +
+  `<g transform="translate(${oPlate} ${oPlate}) scale(${sPlate / 64})">${markSvg(C.mossLight, { small: false })}</g>`,
+);
+
+const { tmpdir } = await import("node:os");
+const { mkdtempSync } = await import("node:fs");
+const tmpDir = mkdtempSync(join(tmpdir(), "secwet-dock-"));
+const shadowPath = join(tmpDir, "shadow.png");
+const maskPath = join(tmpDir, "mask.png");
+const fgDarkPath = join(tmpDir, "fgDark.png");
+const darkDockPath = resolve(root, `${iconsDir}/dock-dark.png`);
+
+writeFileSync(shadowPath, png(shadowSvg, 1024));
+writeFileSync(maskPath, png(maskSvg, 1024));
+writeFileSync(fgDarkPath, png(fgDarkSvg, 1024));
+write(`${iconsDir}/dock-light.png`, png(macTile(false, false), 1024));
+
+try {
+  const { execFileSync } = await import("node:child_process");
+  execFileSync("python3", [resolve(here, "generate_smooth_dock_icon.py"), shadowPath, maskPath, fgDarkPath, darkDockPath], { stdio: "inherit" });
+} catch (err) {
+  console.warn("brand: fallback to standard dock images:", err.message);
+  write(`${iconsDir}/dock-dark.png`, png(macTile(false, true), 1024));
+} finally {
+  rmSync(tmpDir, { recursive: true, force: true });
+}
 for (const [name, size] of [["Square30x30Logo", 30], ["Square44x44Logo", 44], ["Square71x71Logo", 71], ["Square89x89Logo", 89], ["Square107x107Logo", 107], ["Square142x142Logo", 142], ["Square150x150Logo", 150], ["Square284x284Logo", 284], ["Square310x310Logo", 310], ["StoreLogo", 50]]) {
   write(`${iconsDir}/${name}.png`, desk(size));
 }
