@@ -33,15 +33,6 @@ import styles from "./ShareDialog.module.css";
 
 const ROLES: TreeRole[] = ["admin", "editor", "viewer", "no_access"];
 
-const KIND_LABELS: Record<TreeNodeKind, string> = {
-  workspace: "Workspace",
-  space: "Space",
-  group: "Group",
-  item: "Item",
-  general: "Item-wide",
-  environment: "Environment",
-};
-
 interface Props {
   spaces: SpaceView[];
   /** Space to share. Null or missing shows a space picker (Members > Invite). */
@@ -57,33 +48,50 @@ interface Props {
   onSaved?: (member: MemberView) => void;
 }
 
-type Guide = "pipe" | "blank" | "tee" | "end";
+interface ItemBlock {
+  item: ScopeNodeView;
+  /** General first, then environments. */
+  children: ScopeNodeView[];
+}
 
-/**
- * Connector columns for each row of a depth-first tree: a vertical line for
- * every ancestor that still has siblings below, then a tee or an end elbow
- * into the row itself.
- */
-function treeGuides(nodes: ScopeNodeView[]): Guide[][] {
-  const isLast = nodes.map((n, i) => {
-    for (let j = i + 1; j < nodes.length; j++) {
-      if (nodes[j].depth < n.depth) return true;
-      if (nodes[j].depth === n.depth) return false;
+interface GroupBlock {
+  group: ScopeNodeView;
+  items: ItemBlock[];
+}
+
+/** Groups the depth-first scope list into space, groups, items and their scopes. */
+function groupTree(nodes: ScopeNodeView[]): { space: ScopeNodeView | null; groups: GroupBlock[] } {
+  const space = nodes.find((n) => n.kind === "space") ?? null;
+  const groups: GroupBlock[] = [];
+  for (const n of nodes) {
+    if (n.kind === "group") {
+      groups.push({ group: n, items: [] });
+    } else if (n.kind === "item") {
+      groups[groups.length - 1]?.items.push({ item: n, children: [] });
+    } else if (n.kind === "general" || n.kind === "environment") {
+      const g = groups[groups.length - 1];
+      g?.items[g.items.length - 1]?.children.push(n);
     }
-    return true;
-  });
-  return nodes.map((n, i) => {
-    if (n.depth === 0) return [];
-    const columns: Guide[] = [];
-    for (let level = 1; level < n.depth; level++) {
-      // Nearest ancestor at this level: does its branch continue below?
-      let ancestor = i - 1;
-      while (ancestor >= 0 && nodes[ancestor].depth !== level) ancestor--;
-      columns.push(ancestor >= 0 && !isLast[ancestor] ? "pipe" : "blank");
-    }
-    columns.push(isLast[i] ? "end" : "tee");
-    return columns;
-  });
+  }
+  return { space, groups };
+}
+
+/** One line describing an item's General and environment roles. */
+function itemSummary(children: ScopeNodeView[], draft: GrantDraft): string {
+  let restricted = 0;
+  let custom = 0;
+  for (const c of children) {
+    const role = draft[nodeKey(c)];
+    if (role === "no_access") restricted++;
+    else if (role) custom++;
+  }
+  const parts: string[] = [];
+  if (restricted) parts.push(`${restricted} restricted`);
+  if (custom) parts.push(`${custom} set separately`);
+  if (parts.length) return parts.join(", ");
+  const envs = children.filter((c) => c.kind === "environment").length;
+  if (envs === 0) return "General inherits";
+  return `General and ${envs} ${envs === 1 ? "environment" : "environments"} inherit`;
 }
 
 export function ShareDialog({
@@ -124,7 +132,35 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
 
   const nodes = nodesBySpace[spaceId] ?? [];
-  const guides = useMemo(() => treeGuides(nodes), [nodes]);
+  const tree = useMemo(() => groupTree(nodes), [nodes]);
+  /** User's expand or collapse choice per item; otherwise items with a role
+      set on General or an environment start expanded. */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  function roleSelect(node: ScopeNodeView) {
+    const explicit = draft[nodeKey(node)];
+    const inherited = inheritedRole(nodes, draft, node, keptGrants);
+    const isRoot = node.kind === "space";
+    return (
+      <div className={styles.roleSelect}>
+        <SelectControl
+          aria-label={`Role for ${node.label}`}
+          value={explicit ?? ""}
+          disabled={busy}
+          onChange={(e) => setRole(node, e.target.value as TreeRole | "")}
+        >
+          <option value="">
+            {isRoot && inherited === "no_access" ? "Not shared" : `Inherit (${ROLE_LABELS[inherited]})`}
+          </option>
+          {ROLES.filter((r) => !(isRoot && r === "no_access")).map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </SelectControl>
+      </div>
+    );
+  }
   const draft = drafts[spaceId] ?? {};
 
   /** Every node of every loaded space, so kept grants exclude all of them. */
@@ -386,49 +422,72 @@ export function ShareDialog({
                 ))}
               </dl>
             )}
-            <ul className={styles.scopeList} aria-label="Access by scope" aria-busy={loadingNodes}>
-              {loadingNodes && nodes.length === 0 && <li className={styles.loading}>Loading…</li>}
-              {nodes.map((node, index) => {
-                const key = nodeKey(node);
-                const explicit = draft[key];
-                const inherited = inheritedRole(nodes, draft, node, keptGrants);
-                const isRoot = node.kind === "space";
-                return (
-                  <li key={key} className={styles.scopeRow}>
-                    <div className={styles.scopeLead}>
-                      {guides[index].length > 0 && (
-                        <span className={styles.guides} aria-hidden="true">
-                          {guides[index].map((g, col) => (
-                            <span key={col} className={`${styles.guide} ${styles[g]}`} />
-                          ))}
-                        </span>
-                      )}
-                      <div className={styles.scopeText}>
-                        <span className={styles.scopeName}>{node.label}</span>
-                        <span className={styles.subtle}>{KIND_LABELS[node.kind]}</span>
+            <div className={styles.scopeTree} aria-label="Access by scope" aria-busy={loadingNodes}>
+              {loadingNodes && nodes.length === 0 && <p className={styles.loading}>Loading…</p>}
+              {tree.space && (
+                <div className={styles.card}>
+                  <div className={styles.cardRow}>
+                    <div className={styles.scopeText}>
+                      <span className={styles.scopeName}>{tree.space.label}</span>
+                      <span className={styles.subtle}>Whole space</span>
+                    </div>
+                    {roleSelect(tree.space)}
+                  </div>
+                </div>
+              )}
+              {tree.groups.map(({ group, items }) => (
+                <section key={nodeKey(group)} className={styles.groupBlock} aria-label={`Group ${group.label}`}>
+                  <div className={styles.groupHeader}>
+                    <span className={styles.groupName}>Group · {group.label}</span>
+                    {roleSelect(group)}
+                  </div>
+                  {items.map(({ item, children }) => {
+                    const key = nodeKey(item);
+                    const hasChildRole = children.some((c) => draft[nodeKey(c)]);
+                    const open = expanded[key] ?? hasChildRole;
+                    const panelId = `share-item-${item.id}`;
+                    return (
+                      <div key={key} className={styles.card}>
+                        <div className={styles.cardRow}>
+                          <button
+                            type="button"
+                            className={styles.itemToggle}
+                            aria-expanded={open}
+                            aria-controls={panelId}
+                            onClick={() => setExpanded((prev) => ({ ...prev, [key]: !open }))}
+                          >
+                            <span className={styles.chevron} aria-hidden="true">
+                              <Icon name={open ? "chevronDown" : "chevronRight"} size={16} />
+                            </span>
+                            <span className={styles.scopeText}>
+                              <span className={styles.scopeName}>{item.label}</span>
+                              <span className={styles.subtle}>{itemSummary(children, draft)}</span>
+                            </span>
+                          </button>
+                          {roleSelect(item)}
+                        </div>
+                        {open && (
+                          <ul id={panelId} className={styles.childList}>
+                            {children.map((child, i) => (
+                              <li key={nodeKey(child)} className={styles.cardRow}>
+                                <span className={styles.childLead}>
+                                  <span
+                                    className={`${styles.thread} ${i === children.length - 1 ? styles.threadEnd : ""}`}
+                                    aria-hidden="true"
+                                  />
+                                  <span className={styles.childName}>{child.label}</span>
+                                </span>
+                                {roleSelect(child)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
-                    </div>
-                    <div className={styles.roleSelect}>
-                      <SelectControl
-                        aria-label={`Role for ${node.label}`}
-                        value={explicit ?? ""}
-                        disabled={busy}
-                        onChange={(e) => setRole(node, e.target.value as TreeRole | "")}
-                      >
-                        <option value="">
-                          {isRoot && inherited === "no_access" ? "Not shared" : `Inherit (${ROLE_LABELS[inherited]})`}
-                        </option>
-                        {ROLES.filter((r) => !(isRoot && r === "no_access")).map((r) => (
-                          <option key={r} value={r}>
-                            {ROLE_LABELS[r]}
-                          </option>
-                        ))}
-                      </SelectControl>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    );
+                  })}
+                </section>
+              ))}
+            </div>
             {scopeError && (
               <p className={styles.error} role="alert">
                 {scopeError}
