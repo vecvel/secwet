@@ -7,14 +7,14 @@ import { EmptyState } from "../../components/EmptyState";
 import { List, ListRow } from "../../components/List";
 import { MoreMenu, type MenuItem } from "../../components/Menu";
 import { Notice } from "../../components/Notice";
-import { Section } from "../../components/PageHeader";
+import { Dialog } from "../../components/Dialog";
 import { isShareableSpace, permissionsFor, spaceOfGrant, summarizeGrants } from "../../lib/access";
 import { api, formatUiError, type MemberStatus, type MemberView, type SpaceView } from "../../lib/api";
 import { formatAgo, plural } from "../../lib/format";
 import { useStore } from "../../lib/store";
 import { useReadOnly } from "../../lib/useAccess";
 import { ShareDialog } from "../sharing/ShareDialog";
-import styles from "./SettingsScreen.module.css";
+import styles from "../settings/SettingsScreen.module.css";
 
 const STATUS: Record<MemberStatus, { label: string; tone: "neutral" | "accent" | "success" | "warning" | "danger" }> = {
   invited: { label: "Invited", tone: "warning" },
@@ -33,7 +33,13 @@ function memberMeta(m: MemberView): string {
 }
 
 /** Settings > Members: owners and admins see who has access and manage it. */
-export function MembersSection() {
+/**
+ * People with access to one space, opened from that space's menu in the space
+ * switcher. Lists members with a grant anywhere inside the space or on the
+ * whole workspace. Only one dialog shows at a time: while invite, change
+ * access or a confirmation is open, the list steps aside.
+ */
+export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: () => void }) {
   const [state, store] = useStore();
   const readOnly = useReadOnly();
   const [members, setMembers] = useState<MemberView[] | null>(null);
@@ -155,16 +161,30 @@ export function MembersSection() {
     return items;
   }
 
-  const visible = (members ?? []).filter((m) => m.status !== "removed");
+  const visible = (members ?? []).filter(
+    (m) =>
+      m.status !== "removed" &&
+      m.grants.some((g) => g.kind === "workspace" || spaceOfGrant(g, state.groups, state.items) === space.id)
+  );
+
+  const childOpen = Boolean(inviting || editing || removing || revokingInvite);
 
   return (
     <>
-      <Section
-        title="Members"
-        action={
-          <Button variant="primary" icon="plus" disabled={readOnly} onClick={() => setInviting(true)}>
-            Invite
-          </Button>
+      {!childOpen && (
+      <Dialog
+        title={`Members of ${space.name}`}
+        description="People with access to this space."
+        onClose={onClose}
+        footer={
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+            <Button variant="primary" icon="plus" disabled={readOnly} onClick={() => setInviting(true)}>
+              Invite
+            </Button>
+          </>
         }
       >
         {error && (
@@ -195,7 +215,7 @@ export function MembersSection() {
           <EmptyState
             icon="user"
             title="Only you so far"
-            body="Invite people to a space. Each person gets their own key and only sees what you share."
+            body="Invite people to this space. Each person gets their own key and only sees what you share."
           />
         ) : (
           <List label="Members">
@@ -215,11 +235,13 @@ export function MembersSection() {
             ))}
           </List>
         )}
-      </Section>
+      </Dialog>
+      )}
 
       {inviting && (
         <ShareDialog
           spaces={state.spaces}
+          initialSpaceId={space.id}
           canShareSpace={canShareSpace}
           onClose={() => setInviting(false)}
           onInvited={() => load()}
@@ -230,11 +252,7 @@ export function MembersSection() {
         <ShareDialog
           spaces={state.spaces}
           member={editing}
-          initialSpaceId={
-            editing.grants
-              .map((g) => spaceOfGrant(g, state.groups, state.items))
-              .find((id) => id && state.spaces.some((s) => s.id === id && canShareSpace(s))) ?? null
-          }
+          initialSpaceId={space.id}
           canShareSpace={canShareSpace}
           onClose={() => setEditing(null)}
           onSaved={() => {

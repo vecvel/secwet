@@ -18,6 +18,8 @@ interface Props {
   onShareSpace?: (space: SpaceView) => void;
   /** Whether "Share space…" shows for a space. Defaults to every space. */
   canShareSpace?: (space: SpaceView) => boolean;
+  /** Opens the members of a space; shown where sharing is allowed. */
+  onOpenMembers?: (space: SpaceView) => void;
 }
 
 export function SpaceSwitcher({
@@ -30,6 +32,7 @@ export function SpaceSwitcher({
   totalGroupsCount = 0,
   onShareSpace,
   canShareSpace = () => true,
+  onOpenMembers,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeMenuSpaceId, setActiveMenuSpaceId] = useState<string | null>(null);
@@ -90,6 +93,7 @@ export function SpaceSwitcher({
   const menuActionsFor = (s: SpaceView) => ({
     edit: Boolean(onRenameSpace),
     share: Boolean(onShareSpace) && canShareSpace(s),
+    members: Boolean(onOpenMembers) && canShareSpace(s),
     remove: !s.is_default && Boolean(onDeleteSpace),
   });
 
@@ -126,7 +130,8 @@ export function SpaceSwitcher({
               const iconName: IconName = (s.icon as IconName) || (s.is_default ? "user" : "folder");
               const isMenuOpen = activeMenuSpaceId === s.id;
               const actions = menuActionsFor(s);
-              const actionCount = Number(actions.edit) + Number(actions.share) + Number(actions.remove);
+              const actionCount =
+                Number(actions.edit) + Number(actions.share) + Number(actions.members) + Number(actions.remove);
 
               return (
                 <div
@@ -270,6 +275,21 @@ export function SpaceSwitcher({
                   >
                     <Icon name="user" size={13} />
                     <span>Share space…</span>
+                  </button>
+                )}
+                {actions.members && onOpenMembers && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.contextMenuItem}
+                    onClick={() => {
+                      setActiveMenuSpaceId(null);
+                      setOpen(false);
+                      onOpenMembers(targetSpace);
+                    }}
+                  >
+                    <Icon name="users" size={13} />
+                    <span>Members…</span>
                   </button>
                 )}
                 {actions.remove && (

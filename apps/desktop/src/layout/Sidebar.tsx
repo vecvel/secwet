@@ -32,6 +32,8 @@ interface Props {
   canEditSpaces?: boolean;
   canShareSpace?: (space: SpaceView) => boolean;
   onShareSpace?: (space: SpaceView) => void;
+  /** Opens the members of a space from its menu in the space switcher. */
+  onOpenMembers?: (space: SpaceView) => void;
 }
 
 interface ItemProps {
@@ -85,6 +87,7 @@ export function Sidebar({
   canEditSpaces = true,
   canShareSpace,
   onShareSpace,
+  onOpenMembers,
 }: Props) {
   const displayHome = homeLabel || "Overview";
   const userGroups = activeSpaceId
@@ -214,6 +217,7 @@ export function Sidebar({
             onDeleteSpace={canEditSpaces ? onDeleteSpace : undefined}
             canShareSpace={canShareSpace}
             onShareSpace={onShareSpace}
+            onOpenMembers={onOpenMembers}
             totalGroupsCount={groups.length}
           />
         )}

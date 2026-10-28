@@ -12,6 +12,7 @@ import { TopBar } from "./layout/TopBar";
 import { type Route } from "./layout/routes";
 import {
   canCreateSpace,
+  canManageMembers,
   canPairDevices,
   isShareableSpace,
   canRotateMasterKey,
@@ -31,6 +32,7 @@ import { NewSpaceDialog } from "./screens/spaces/NewSpaceDialog";
 import { OnboardingScreen } from "./screens/onboarding/OnboardingScreen";
 import { RestoreDialog } from "./screens/recovery/RestoreDialog";
 import { ShareDialog } from "./screens/sharing/ShareDialog";
+import { MembersDialog } from "./screens/members/MembersDialog";
 import styles from "./App.module.css";
 
 function toDevice(d: DeviceView): Device {
@@ -81,6 +83,7 @@ export function App() {
   }
   const [plan, setPlan] = useState<Plan>("free");
   const [devices, setDevices] = useState<Device[]>([]);
+  const [membersSpace, setMembersSpace] = useState<SpaceView | null>(null);
   const [sharing, setSharing] = useState<{ spaceId: string; focus?: { kind: TreeNodeKind; id: string } } | null>(
     null
   );
@@ -145,6 +148,7 @@ export function App() {
     setSettingsTab("general");
     setDevices([]);
     setSharing(null);
+    setMembersSpace(null);
     setCreatingSpace(false);
     setCreatingGroup(false);
     setCreatingItemGroupId(null);
@@ -157,6 +161,7 @@ export function App() {
   const access = appState.access;
   const readOnly = isReadOnly(appState.linkStatus);
   const canPair = canPairDevices(appState.access, readOnly);
+  const canManageMembersHere = canManageMembers(appState.access);
   const spacePerms = (spaceId: string | null | undefined) =>
     permissionsFor(access, readOnly, { spaceId: spaceId ?? null });
   const groupPerms = (groupId: string | null | undefined) => {
@@ -316,6 +321,7 @@ export function App() {
         canEditSpaces={canCreateSpaceHere}
         canShareSpace={(s: SpaceView) => isShareableSpace(s) && spacePerms(s.id).canShare}
         onShareSpace={(s: SpaceView) => setSharing({ spaceId: s.id })}
+        onOpenMembers={canManageMembersHere ? (s: SpaceView) => setMembersSpace(s) : undefined}
         canCreateGroup={canCreateGroupHere}
         canAddToGroup={(groupId) => groupPerms(groupId).canManage}
         groups={groups}
@@ -708,6 +714,8 @@ export function App() {
           }}
         />
       )}
+
+      {membersSpace && <MembersDialog space={membersSpace} onClose={() => setMembersSpace(null)} />}
 
       {sharing && (
         <ShareDialog

@@ -8,7 +8,7 @@ import { PageHeader, Section } from "../../components/PageHeader";
 import { SegmentedTabs, type TabItem } from "../../components/SegmentedTabs";
 import type { Device, Plan } from "../../data/mock";
 import { initialDevices, thisDevice } from "../../data/mock";
-import { canManageMembers, canPairDevices, canRotateMasterKey, isReadOnly } from "../../lib/access";
+import { canPairDevices, canRotateMasterKey, isReadOnly } from "../../lib/access";
 import { api, type CliInstallStatus, type RelayStatusDto } from "../../lib/api";
 import { formatAgo, formatDate } from "../../lib/format";
 import { useStore } from "../../lib/store";
@@ -18,7 +18,6 @@ import { PlanDialog } from "../PlanDialog";
 import { CreateRecoveryKeyDialog } from "../recovery/CreateRecoveryKeyDialog";
 import { ExportDialog } from "../recovery/ExportDialog";
 import { RotateKeyDialog } from "../recovery/RotateKeyDialog";
-import { MembersSection } from "./MembersSection";
 import styles from "./SettingsScreen.module.css";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -27,7 +26,6 @@ export type SettingsTab =
   | "cli"
   | "security"
   | "devices"
-  | "members"
   | "recovery"
   | "sync"
   | "subscription";
@@ -59,7 +57,6 @@ const SETTINGS_TABS: TabItem[] = [
   { id: "cli", label: "CLI" },
   { id: "security", label: "Security" },
   { id: "devices", label: "Devices" },
-  { id: "members", label: "Members" },
   { id: "recovery", label: "Recovery" },
   { id: "sync", label: "Sync" },
   { id: "subscription", label: "Plan" },
@@ -95,18 +92,14 @@ export function SettingsScreen(props: Props) {
   }, [props.initialTab]);
 
   const readOnly = isReadOnly(appState.linkStatus);
-  const showMembers = canManageMembers(appState.access);
   const canRotate = canRotateMasterKey(appState.access, readOnly);
   const canPair = canPairDevices(appState.access, readOnly);
   const isOwner = !appState.access || appState.access.is_owner;
   const keyStatus = appState.keyStatus;
   const rotationRecommended = Boolean(keyStatus?.rotation_recommended);
   const rotationReason = keyStatus?.pending_reason?.trim() || "A device was revoked.";
-  const tabs = SETTINGS_TABS.filter((t) => t.id !== "members" || showMembers);
+  const tabs = SETTINGS_TABS;
 
-  useEffect(() => {
-    if (activeTab === "members" && !showMembers) setActiveTab("general");
-  }, [activeTab, showMembers]);
 
   useEffect(() => {
     if (activeTab === "security" || activeTab === "devices") {
@@ -971,7 +964,6 @@ env = "development"`}
       )}
 
       {/* MEMBERS TAB (owners and admins) */}
-      {activeTab === "members" && showMembers && <MembersSection />}
 
       {/* 4. RECOVERY & BACKUPS TAB */}
       {activeTab === "recovery" && (

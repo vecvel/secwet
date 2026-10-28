@@ -38,7 +38,9 @@ export function MoreMenu({
       const r = trigger.current.getBoundingClientRect();
       setUp(r.bottom + menu.offsetHeight + 72 > window.innerHeight);
     }
-    menu?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    // The menu may render below the button for one frame before flipping
+    // up; focusing without scrolling keeps the app shell from jumping.
+    menu?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
     const onDown = (e: MouseEvent) => {
       if (!wrap.current?.contains(e.target as Node)) setOpen(false);
     };
