@@ -23,15 +23,15 @@ impl UiError {
         }
     }
 
-    pub fn vault_locked() -> Self {
-        Self::new("vault_locked", None, "Vault is locked.")
+    pub fn locked() -> Self {
+        Self::new("locked", None, "Secwet is locked.")
     }
 
     pub fn already_initialized() -> Self {
         Self::new(
             "already_initialized",
             None,
-            "A vault already exists on this device.",
+            "A Secwet already exists on this device.",
         )
     }
 
@@ -59,9 +59,9 @@ impl std::error::Error for UiError {}
 impl From<secwet_core::Error> for UiError {
     fn from(err: secwet_core::Error) -> Self {
         match err {
-            secwet_core::Error::Locked => UiError::vault_locked(),
-            secwet_core::Error::NoVault => {
-                UiError::new("no_vault", None, "No vault found on this device.")
+            secwet_core::Error::Locked => UiError::locked(),
+            secwet_core::Error::NotInitialized => {
+                UiError::new("not_initialized", None, "Secwet not initialized on this device.")
             }
             secwet_core::Error::AlreadyInitialized => UiError::already_initialized(),
             secwet_core::Error::NotFound => UiError::new("not_found", None, "Item not found."),
@@ -84,8 +84,11 @@ impl From<secwet_core::Error> for UiError {
             secwet_core::Error::DeviceLimit => {
                 UiError::new("device_limit", None, "Device limit reached.")
             }
-            secwet_core::Error::Revoked => {
+            secwet_core::Error::Revoked | secwet_core::Error::RevocationNotice(_) => {
                 UiError::new("revoked", None, "This device was revoked.")
+            }
+            secwet_core::Error::Forbidden => {
+                UiError::new("forbidden", None, "You don't have permission to do this.")
             }
             secwet_core::Error::RecoveryFailed => UiError::new(
                 "recovery_failed",

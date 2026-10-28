@@ -3,8 +3,8 @@
 //! Objectives:
 //! 1. High concurrency: Multiple threads simultaneously reading projects, listing secrets, and adding secrets via AppState helpers.
 //! 2. Lifecycle transitions: Uninitialized -> create -> unlock -> rapid lock/unlock cycles while concurrent reader/writer threads are active. Verify no deadlocks, panics, or SQLite locking errors occur.
-//! 3. Invariant enforcement: Calling commands while locked returns `vault_locked` without crashing.
-//! 4. Uninitialized to create race condition: Multiple threads racing to create a vault on a fresh directory.
+//! 3. Invariant enforcement: Calling commands while locked returns `locked` without crashing.
+//! 4. Uninitialized to create race condition: Multiple threads racing to create a secwet on a fresh directory.
 //! 5. Multi-instance WAL concurrency: Multiple independent AppState instances accessing the same database concurrently.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -20,10 +20,10 @@ use secwet_desktop_lib::commands::{
     project_create_impl, project_delete_impl, project_rename_impl, projects_list_impl,
     secret_copy_impl, secret_copy_to_environment_impl, secret_create_impl, secret_delete_impl,
     secret_reveal_impl, secret_update_impl, secrets_list_impl, settings_get_impl,
-    settings_set_impl, vault_create_impl, vault_lock_impl, vault_status_impl, vault_unlock_impl,
+    settings_set_impl, secwet_create_impl, secwet_lock_impl, secwet_status_impl, secwet_unlock_impl,
     SecretDraftDto, SettingsPatchDto,
 };
-use secwet_desktop_lib::state::{AppState, VaultStatusDto};
+use secwet_desktop_lib::state::{AppState, SecwetStatusDto};
 use tempfile::tempdir;
 use uuid::Uuid;
 
@@ -60,8 +60,8 @@ fn test_stress_high_concurrency_readers_and_writers() {
     let keystore = Arc::new(MemoryStore::new());
     let state = Arc::new(AppState::new(dir.path().to_path_buf(), keystore));
 
-    // Initialize vault and base structure
-    vault_create_impl(None, &state, Some("StressBench-1".into())).unwrap();
+    // Initialize secwet and base structure
+    secwet_create_impl(None, &state, Some("StressBench-1".into())).unwrap();
     let proj1 = project_create_impl(
         None,
         &state,
@@ -217,11 +217,11 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
     let keystore = Arc::new(MemoryStore::new());
     let state = Arc::new(AppState::new(dir.path().to_path_buf(), keystore));
 
-    // 1. Initialize vault and seed one secret
-    let create_status = vault_create_impl(None, &state, Some("LifecycleBench".into())).unwrap();
-    let vault_id = match create_status {
-        VaultStatusDto::Unlocked { vault_id } => vault_id,
-        _ => panic!("Expected unlocked vault"),
+    // 1. Initialize secwet and seed one secret
+    let create_status = secwet_create_impl(None, &state, Some("LifecycleBench".into())).unwrap();
+    let secwet_id = match create_status {
+        SecwetStatusDto::Unlocked { secwet_id } => secwet_id,
+        _ => panic!("Expected unlocked secwet"),
     };
 
     let proj =
@@ -271,7 +271,7 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                             assert!(!p.is_empty());
                             success_cnt.fetch_add(1, Ordering::Relaxed);
                         }
-                        Err(e) if e.code == "vault_locked" => {
+                        Err(e) if e.code == "locked" => {
                             locked_cnt.fetch_add(1, Ordering::Relaxed);
                         }
                         Err(e) => {
@@ -284,7 +284,7 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                             assert!(!secs.is_empty());
                             success_cnt.fetch_add(1, Ordering::Relaxed);
                         }
-                        Err(e) if e.code == "vault_locked" => {
+                        Err(e) if e.code == "locked" => {
                             locked_cnt.fetch_add(1, Ordering::Relaxed);
                         }
                         Err(e) => {
@@ -297,7 +297,7 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                             assert_eq!(val, "super_secret_seed_value");
                             success_cnt.fetch_add(1, Ordering::Relaxed);
                         }
-                        Err(e) if e.code == "vault_locked" => {
+                        Err(e) if e.code == "locked" => {
                             locked_cnt.fetch_add(1, Ordering::Relaxed);
                         }
                         Err(e) => {
@@ -310,7 +310,7 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                             assert!(ov.secrets_count >= 1);
                             success_cnt.fetch_add(1, Ordering::Relaxed);
                         }
-                        Err(e) if e.code == "vault_locked" => {
+                        Err(e) if e.code == "locked" => {
                             locked_cnt.fetch_add(1, Ordering::Relaxed);
                         }
                         Err(e) => {
@@ -323,7 +323,7 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                             assert_eq!(settings.device_name, "LifecycleBench");
                             success_cnt.fetch_add(1, Ordering::Relaxed);
                         }
-                        Err(e) if e.code == "vault_locked" => {
+                        Err(e) if e.code == "locked" => {
                             locked_cnt.fetch_add(1, Ordering::Relaxed);
                         }
                         Err(e) => {
@@ -332,21 +332,21 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                         }
                     },
                     5 => {
-                        // vault_status must NEVER return vault_locked; it returns Unlocked or Locked DTO
-                        match vault_status_impl(&s) {
-                            Ok(VaultStatusDto::Unlocked { vault_id: id }) => {
-                                assert_eq!(id, vault_id);
+                        // secwet_status must NEVER return locked; it returns Unlocked or Locked DTO
+                        match secwet_status_impl(&s) {
+                            Ok(SecwetStatusDto::Unlocked { secwet_id: id }) => {
+                                assert_eq!(id, secwet_id);
                                 success_cnt.fetch_add(1, Ordering::Relaxed);
                             }
-                            Ok(VaultStatusDto::Locked { vault_id: id }) => {
-                                assert_eq!(id, vault_id);
+                            Ok(SecwetStatusDto::Locked { secwet_id: id }) => {
+                                assert_eq!(id, secwet_id);
                                 locked_cnt.fetch_add(1, Ordering::Relaxed);
                             }
-                            Ok(VaultStatusDto::Uninitialized) => {
-                                panic!("Vault reported Uninitialized after being created!");
+                            Ok(SecwetStatusDto::Uninitialized) => {
+                                panic!("Secwet reported Uninitialized after being created!");
                             }
                             Err(e) => {
-                                eprintln!("Unexpected error in vault_status: {:?}", e);
+                                eprintln!("Unexpected error in secwet_status: {:?}", e);
                                 err_cnt.fetch_add(1, Ordering::Relaxed);
                             }
                         }
@@ -366,7 +366,7 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
                             Ok(_) => {
                                 success_cnt.fetch_add(1, Ordering::Relaxed);
                             }
-                            Err(e) if e.code == "vault_locked" => {
+                            Err(e) if e.code == "locked" => {
                                 locked_cnt.fetch_add(1, Ordering::Relaxed);
                             }
                             Err(e) => {
@@ -380,15 +380,15 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
         }));
     }
 
-    // Controller: Rapidly lock and unlock the vault 80 times
+    // Controller: Rapidly lock and unlock the secwet 80 times
     let cycles = 80;
     for _ in 0..cycles {
         // Lock
-        vault_lock_impl(None, &state).expect("vault_lock failed");
+        secwet_lock_impl(None, &state).expect("secwet_lock failed");
         thread::sleep(Duration::from_micros(300));
 
         // Unlock
-        vault_unlock_impl(None, &state).expect("vault_unlock failed");
+        secwet_unlock_impl(None, &state).expect("secwet_unlock failed");
         thread::sleep(Duration::from_micros(300));
     }
 
@@ -422,18 +422,18 @@ fn test_stress_lifecycle_rapid_lock_unlock_under_concurrent_readers_and_writers(
         "Expected worker threads to encounter unlocked successes"
     );
 
-    // Final verification: ensure vault is unlocked and fully functional
-    let final_status = vault_status_impl(&state).unwrap();
-    assert_eq!(final_status, VaultStatusDto::Unlocked { vault_id });
+    // Final verification: ensure secwet is unlocked and fully functional
+    let final_status = secwet_status_impl(&state).unwrap();
+    assert_eq!(final_status, SecwetStatusDto::Unlocked { secwet_id });
 
     let final_revealed = secret_reveal_impl(&state, seed_id).unwrap();
     assert_eq!(final_revealed, "super_secret_seed_value");
 
     // Lock again to verify clean termination
-    vault_lock_impl(None, &state).unwrap();
+    secwet_lock_impl(None, &state).unwrap();
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Locked { vault_id }
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Locked { secwet_id }
     );
 }
 
@@ -449,8 +449,8 @@ fn test_stress_uninitialized_to_create_race_condition() {
 
     // Initial status must be Uninitialized
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Uninitialized
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Uninitialized
     );
 
     let num_racers = 20;
@@ -470,8 +470,8 @@ fn test_stress_uninitialized_to_create_race_condition() {
 
         handles.push(thread::spawn(move || {
             b.wait();
-            match vault_create_impl(None, &s, Some(format!("racer-{}", i))) {
-                Ok(VaultStatusDto::Unlocked { .. }) => {
+            match secwet_create_impl(None, &s, Some(format!("racer-{}", i))) {
+                Ok(SecwetStatusDto::Unlocked { .. }) => {
                     succ.fetch_add(1, Ordering::SeqCst);
                 }
                 Ok(_) => {
@@ -503,7 +503,7 @@ fn test_stress_uninitialized_to_create_race_condition() {
 
     assert_eq!(
         successes, 1,
-        "Exactly one thread must successfully create the vault"
+        "Exactly one thread must successfully create the secwet"
     );
     assert_eq!(
         already_inits,
@@ -516,8 +516,8 @@ fn test_stress_uninitialized_to_create_race_condition() {
     );
 
     // Status is now Unlocked
-    match vault_status_impl(&state).unwrap() {
-        VaultStatusDto::Unlocked { .. } => {}
+    match secwet_status_impl(&state).unwrap() {
+        SecwetStatusDto::Unlocked { .. } => {}
         status => panic!("Expected Unlocked, got {:?}", status),
     }
 }
@@ -527,7 +527,7 @@ fn test_stress_uninitialized_to_create_race_condition() {
 // ============================================================================
 
 #[test]
-fn test_stress_invariant_all_commands_strictly_enforce_vault_locked() {
+fn test_stress_invariant_all_commands_strictly_enforce_locked() {
     let dir = tempdir().unwrap();
     let keystore = Arc::new(MemoryStore::new());
     let state = AppState::new(dir.path().to_path_buf(), keystore);
@@ -536,45 +536,45 @@ fn test_stress_invariant_all_commands_strictly_enforce_vault_locked() {
 
     // PHASE 1: Fresh uninitialized state
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Uninitialized
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Uninitialized
     );
 
-    // Calling unlock on uninitialized vault must fail cleanly with no_vault
-    let err_unlock = vault_unlock_impl(None, &state).unwrap_err();
-    assert_eq!(err_unlock.code, "no_vault");
+    // Calling unlock on uninitialized secwet must fail cleanly with not_initialized
+    let err_unlock = secwet_unlock_impl(None, &state).unwrap_err();
+    assert_eq!(err_unlock.code, "not_initialized");
 
-    // Calling lock on uninitialized vault is idempotent
-    vault_lock_impl(None, &state).unwrap();
+    // Calling lock on uninitialized secwet is idempotent
+    secwet_lock_impl(None, &state).unwrap();
 
-    // PHASE 2: Create vault, then lock it
-    let create_status = vault_create_impl(None, &state, Some("DeviceA".into())).unwrap();
-    let vault_id = match create_status {
-        VaultStatusDto::Unlocked { vault_id } => vault_id,
+    // PHASE 2: Create secwet, then lock it
+    let create_status = secwet_create_impl(None, &state, Some("DeviceA".into())).unwrap();
+    let secwet_id = match create_status {
+        SecwetStatusDto::Unlocked { secwet_id } => secwet_id,
         _ => panic!("Expected unlocked"),
     };
 
-    // Lock the vault
-    vault_lock_impl(None, &state).unwrap();
+    // Lock the secwet
+    secwet_lock_impl(None, &state).unwrap();
 
     // Verify status is Locked
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Locked { vault_id }
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Locked { secwet_id }
     );
 
     // Double locking is idempotent
-    vault_lock_impl(None, &state).unwrap();
+    secwet_lock_impl(None, &state).unwrap();
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Locked { vault_id }
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Locked { secwet_id }
     );
 
-    // Creating again when vault is on disk but locked returns already_initialized
-    let err_create = vault_create_impl(None, &state, None).unwrap_err();
+    // Creating again when secwet is on disk but locked returns already_initialized
+    let err_create = secwet_create_impl(None, &state, None).unwrap_err();
     assert_eq!(err_create.code, "already_initialized");
 
-    // Exhaustive invariant check: Every single command MUST return vault_locked
+    // Exhaustive invariant check: Every single command MUST return locked
     let dummy_draft = SecretDraftDto {
         item_id: Some(dummy_id),
         project_id: Some(dummy_id),
@@ -590,103 +590,103 @@ fn test_stress_invariant_all_commands_strictly_enforce_vault_locked() {
         device_name: Some("test".into()),
     };
 
-    assert_eq!(projects_list_impl(&state).unwrap_err().code, "vault_locked");
+    assert_eq!(projects_list_impl(&state).unwrap_err().code, "locked");
     assert_eq!(
         project_create_impl(None, &state, "P".into(), vec![])
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         project_rename_impl(None, &state, dummy_id, "P".into())
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         project_delete_impl(None, &state, dummy_id)
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
 
     assert_eq!(
         environment_add_impl(None, &state, dummy_id, "E".into())
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         environment_rename_impl(None, &state, dummy_id, "E".into())
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         environment_delete_impl(None, &state, dummy_id, None)
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
 
     assert_eq!(
         secrets_list_impl(&state, None, Some(dummy_id)).unwrap_err().code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         secret_reveal_impl(&state, dummy_id).unwrap_err().code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         secret_copy_impl(Arc::clone(&mock_cb), &state, dummy_id)
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         secret_create_impl(None, &state, dummy_draft.clone())
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         secret_update_impl(None, &state, dummy_id, dummy_draft)
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         secret_delete_impl(None, &state, dummy_id).unwrap_err().code,
-        "vault_locked"
+        "locked"
     );
     assert_eq!(
         secret_copy_to_environment_impl(None, &state, dummy_id, Some(dummy_id))
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
 
-    assert_eq!(overview_impl(&state).unwrap_err().code, "vault_locked");
-    assert_eq!(settings_get_impl(&state).unwrap_err().code, "vault_locked");
+    assert_eq!(overview_impl(&state).unwrap_err().code, "locked");
+    assert_eq!(settings_get_impl(&state).unwrap_err().code, "locked");
     assert_eq!(
         settings_set_impl(None, &state, dummy_patch)
             .unwrap_err()
             .code,
-        "vault_locked"
+        "locked"
     );
 
     // PHASE 3: Unlock again
-    vault_unlock_impl(None, &state).unwrap();
+    secwet_unlock_impl(None, &state).unwrap();
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Unlocked { vault_id }
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Unlocked { secwet_id }
     );
 
     // Double unlocking is idempotent
-    vault_unlock_impl(None, &state).unwrap();
+    secwet_unlock_impl(None, &state).unwrap();
     assert_eq!(
-        vault_status_impl(&state).unwrap(),
-        VaultStatusDto::Unlocked { vault_id }
+        secwet_status_impl(&state).unwrap(),
+        SecwetStatusDto::Unlocked { secwet_id }
     );
 
     // Commands now work
@@ -702,12 +702,12 @@ fn test_stress_multi_instance_wal_concurrency() {
     let dir = tempdir().unwrap();
     let keystore: Arc<dyn KeyStore> = Arc::new(MemoryStore::new());
 
-    // Instance 1: Creates the vault
+    // Instance 1: Creates the secwet
     let state1 = Arc::new(AppState::new(
         dir.path().to_path_buf(),
         Arc::clone(&keystore),
     ));
-    vault_create_impl(None, &state1, Some("Node-1".into())).unwrap();
+    secwet_create_impl(None, &state1, Some("Node-1".into())).unwrap();
     let proj =
         project_create_impl(None, &state1, "SharedProj".into(), vec!["Prod".into()]).unwrap();
     let env_id = proj.environments[0].id;
@@ -717,7 +717,7 @@ fn test_stress_multi_instance_wal_concurrency() {
         dir.path().to_path_buf(),
         Arc::clone(&keystore),
     ));
-    vault_unlock_impl(None, &state2).unwrap();
+    secwet_unlock_impl(None, &state2).unwrap();
 
     let barrier = Arc::new(Barrier::new(2));
     let t1_barrier = Arc::clone(&barrier);

@@ -1,14 +1,14 @@
 //! Target project, environment, and data directory resolution.
 
 use crate::config::SecwetConfig;
-use secwet_core::{EnvironmentView, Error, ProjectView, Result, Vault};
+use secwet_core::{EnvironmentView, Error, ProjectView, Result, Secwet};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-/// Resolves the vault storage directory according to precedence:
+/// Resolves the secwet storage directory according to precedence:
 /// 1. CLI flag `--data-dir`
 /// 2. Environment variable `SECWET_DATA_DIR`
-/// 3. Configuration file `.secwet.toml` `vault`
+/// 3. Configuration file `.secwet.toml` `data_dir`
 /// 4. Platform default: `app.secwet.Secwet` data directory.
 pub fn resolve_data_dir(
     cli_flag: Option<PathBuf>,
@@ -25,8 +25,8 @@ pub fn resolve_data_dir(
     }
 
     if let Some(cfg) = config {
-        if let Some(ref vault_path) = cfg.vault {
-            return Ok(vault_path.clone());
+        if let Some(dir) = cfg.data_dir() {
+            return Ok(dir.to_path_buf());
         }
     }
 
@@ -37,11 +37,11 @@ pub fn resolve_data_dir(
 
 /// Resolves the target item from CLI flag, configuration file, or fallback to the first item.
 pub fn resolve_item(
-    vault: &Vault,
+    secwet: &Secwet,
     cli_flag: Option<&str>,
     config: Option<&SecwetConfig>,
 ) -> Result<ProjectView> {
-    let items = vault.list_projects()?;
+    let items = secwet.list_projects()?;
     if items.is_empty() {
         return Err(Error::NotFound);
     }
@@ -69,11 +69,11 @@ pub fn resolve_item(
 /// Backwards compatibility alias for `resolve_item`.
 #[inline]
 pub fn resolve_project(
-    vault: &Vault,
+    secwet: &Secwet,
     cli_flag: Option<&str>,
     config: Option<&SecwetConfig>,
 ) -> Result<ProjectView> {
-    resolve_item(vault, cli_flag, config)
+    resolve_item(secwet, cli_flag, config)
 }
 
 /// Resolves the target environment within an item.
@@ -84,6 +84,24 @@ pub fn resolve_environment(
     cli_flag: Option<&str>,
     config: Option<&SecwetConfig>,
 ) -> Result<Option<EnvironmentView>> {
+    resolve_environment_with_default(item, cli_flag, config, false)
+}
+
+/// Resolves the target environment with an option to default to General (`None`) if `--env` is omitted.
+pub fn resolve_environment_with_default(
+    item: &ProjectView,
+    cli_flag: Option<&str>,
+    config: Option<&SecwetConfig>,
+    default_to_general: bool,
+) -> Result<Option<EnvironmentView>> {
+    let target = cli_flag.or_else(|| config.and_then(|c| c.env.as_deref()));
+
+    if let Some(t) = target {
+        if t.eq_ignore_ascii_case("general") || t.eq_ignore_ascii_case("all") || t.eq_ignore_ascii_case("none") {
+            return Ok(None);
+        }
+    }
+
     if item.environments.is_empty() {
         if cli_flag.is_some() {
             return Err(Error::Invalid {
@@ -93,8 +111,6 @@ pub fn resolve_environment(
         }
         return Ok(None);
     }
-
-    let target = cli_flag.or_else(|| config.and_then(|c| c.env.as_deref()));
 
     match target {
         Some(t) => {
@@ -112,7 +128,9 @@ pub fn resolve_environment(
             Err(Error::NotFound)
         }
         None => {
-            if let Some(env) = item
+            if default_to_general {
+                Ok(None)
+            } else if let Some(env) = item
                 .environments
                 .iter()
                 .find(|e| e.name.eq_ignore_ascii_case("development"))
@@ -123,6 +141,29 @@ pub fn resolve_environment(
             }
         }
     }
+}
+
+/// Resolves both the item and environment, returning `secwet_core::Result`.
+pub fn resolve_item_and_env(
+    secwet: &Secwet,
+    item_flag: Option<&str>,
+    env_flag: Option<&str>,
+    config: Option<&SecwetConfig>,
+    default_to_general: bool,
+) -> Result<(ProjectView, Option<EnvironmentView>)> {
+    let item = resolve_item(secwet, item_flag, config)?;
+    let env = resolve_environment_with_default(&item, env_flag, config, default_to_general)?;
+    Ok((item, env))
+}
+
+/// Formats a Unix timestamp (seconds or milliseconds) to an ISO 8601 UTC string.
+pub fn format_timestamp(ts: i64) -> String {
+    let ms = if ts < 10_000_000_000 {
+        ts * 1000
+    } else {
+        ts
+    };
+    format_timestamp_ms(ms)
 }
 
 /// Formats a Unix timestamp in milliseconds to an ISO 8601 UTC string.

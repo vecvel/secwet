@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { BrandMark } from "./Icon";
-import { Notice } from "./Notice";
+import { Toast } from "./Toast";
 import { formatUiError } from "../lib/api";
 import { onWindowDragMouseDown } from "../lib/windowDrag";
 import styles from "./UnlockScreen.module.css";
@@ -10,9 +10,10 @@ import styles from "./UnlockScreen.module.css";
 interface UnlockScreenProps {
   onUnlock: () => Promise<void> | void;
   deviceName?: string;
+  onRestore?: () => void;
 }
 
-export function UnlockScreen({ onUnlock, deviceName }: UnlockScreenProps) {
+export function UnlockScreen({ onUnlock, deviceName, onRestore }: UnlockScreenProps) {
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,14 +45,18 @@ export function UnlockScreen({ onUnlock, deviceName }: UnlockScreenProps) {
         </span>
       </header>
 
+      {error && (
+        <div className={styles.toastContainer}>
+          <Toast
+            tone="warning"
+            onDismiss={() => setError(null)}
+          >
+            {error}
+          </Toast>
+        </div>
+      )}
+
       <div className={styles.content}>
-        {error && (
-          <div className={styles.errorNotice}>
-            <Notice tone="warning" label="Unlock error">
-              {error}
-            </Notice>
-          </div>
-        )}
         <EmptyState
           icon="lock"
           title="Secwet is locked"
@@ -61,9 +66,16 @@ export function UnlockScreen({ onUnlock, deviceName }: UnlockScreenProps) {
               : "Idle timer expired. Unlock to access your encrypted secrets."
           }
           action={
-            <Button variant="primary" disabled={unlocking} onClick={handleUnlock}>
-              {unlocking ? "Unlocking…" : "Unlock"}
-            </Button>
+            <div className={styles.actions}>
+              <Button variant="primary" disabled={unlocking} onClick={handleUnlock}>
+                {unlocking ? "Unlocking…" : "Unlock"}
+              </Button>
+              {onRestore && (
+                <Button variant="secondary" disabled={unlocking} onClick={onRestore}>
+                  Restore from backup
+                </Button>
+              )}
+            </div>
           }
         />
       </div>

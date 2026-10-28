@@ -14,21 +14,21 @@
 use secrecy::ExposeSecret;
 use secwet_core::keys::MemoryStore;
 use secwet_core::records::open_connection;
-use secwet_core::{Error, SecretDraft, SecretKind, Vault};
+use secwet_core::{Error, SecretDraft, SecretKind, Secwet};
 use sha2::{Digest, Sha256};
 use tempfile::tempdir;
 use uuid::Uuid;
 
-fn create_challenge_vault() -> (tempfile::TempDir, Vault, MemoryStore, Uuid, Uuid) {
+fn create_challenge_secwet() -> (tempfile::TempDir, Secwet, MemoryStore, Uuid, Uuid) {
     let dir = tempdir().expect("tempdir");
     let keystore = MemoryStore::new();
-    let mut vault =
-        Vault::create(dir.path(), "challenger-device", &keystore).expect("vault create");
+    let mut secwet =
+        Secwet::create(dir.path(), "challenger-device", &keystore).expect("secwet create");
 
-    let labels = vault.list_labels().expect("list labels");
+    let labels = secwet.list_labels().expect("list labels");
     let default_label_id = labels[0].id;
 
-    let item = vault
+    let item = secwet
         .create_item(
             default_label_id,
             "Challenger Test Item",
@@ -36,7 +36,7 @@ fn create_challenge_vault() -> (tempfile::TempDir, Vault, MemoryStore, Uuid, Uui
         )
         .expect("create item");
 
-    (dir, vault, keystore, default_label_id, item.id)
+    (dir, secwet, keystore, default_label_id, item.id)
 }
 
 // ============================================================================
@@ -45,7 +45,7 @@ fn create_challenge_vault() -> (tempfile::TempDir, Vault, MemoryStore, Uuid, Uui
 
 #[test]
 fn test_adversarial_file_upload_boundary_and_names() {
-    let (_dir, mut vault, _ks, _label_id, item_id) = create_challenge_vault();
+    let (_dir, mut secwet, _ks, _label_id, item_id) = create_challenge_secwet();
 
     // --- 1.1: 50 MiB Boundary (52,428,800 bytes) ---
     // Exact 50 MiB must succeed
@@ -57,7 +57,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
         data_encoding::HEXLOWER.encode(&hasher.finalize())
     };
 
-    let meta_50 = vault
+    let meta_50 = secwet
         .upload_file(
             item_id,
             None,
@@ -72,7 +72,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
     assert_eq!(meta_50.name, "max_exact_50mib.bin");
 
     // Download and verify exact length and byte content
-    let (dl_meta, dl_data) = vault
+    let (dl_meta, dl_data) = secwet
         .download_file(meta_50.id)
         .expect("download 50 MiB file");
     assert_eq!(dl_meta.id, meta_50.id);
@@ -83,7 +83,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
     // --- 1.2: 50 MiB + 1 Byte Boundary (52,428,801 bytes) ---
     // Must be rejected with Error::Invalid { field: "size" }
     let oversized_data = vec![0x5Au8; fifty_mib + 1];
-    let err_oversized = vault.upload_file(
+    let err_oversized = secwet.upload_file(
         item_id,
         None,
         "oversized_50mib_plus_1.bin",
@@ -107,7 +107,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
     let empty_data = b"";
     let empty_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-    let meta_empty = vault
+    let meta_empty = secwet
         .upload_file(
             item_id,
             None,
@@ -120,7 +120,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
     assert_eq!(meta_empty.size_bytes, 0);
     assert_eq!(meta_empty.sha256, empty_sha256);
 
-    let (dl_empty_meta, dl_empty_data) = vault
+    let (dl_empty_meta, dl_empty_data) = secwet
         .download_file(meta_empty.id)
         .expect("download empty file");
     assert_eq!(dl_empty_meta.size_bytes, 0);
@@ -128,31 +128,31 @@ fn test_adversarial_file_upload_boundary_and_names() {
 
     // --- 1.4: Invalid File Names ---
     // A) Empty filename
-    let err_empty = vault.upload_file(item_id, None, "", b"some bytes", None);
+    let err_empty = secwet.upload_file(item_id, None, "", b"some bytes", None);
     assert!(matches!(
         err_empty,
         Err(Error::Invalid { field: "name", .. })
     ));
 
     // B) Whitespace-only filename
-    let err_ws = vault.upload_file(item_id, None, "   \t \r\n   ", b"some bytes", None);
+    let err_ws = secwet.upload_file(item_id, None, "   \t \r\n   ", b"some bytes", None);
     assert!(matches!(err_ws, Err(Error::Invalid { field: "name", .. })));
 
     // C) Filename > 255 characters (256 chars)
     let name_256 = "f".repeat(256);
-    let err_len = vault.upload_file(item_id, None, &name_256, b"some bytes", None);
+    let err_len = secwet.upload_file(item_id, None, &name_256, b"some bytes", None);
     assert!(matches!(err_len, Err(Error::Invalid { field: "name", .. })));
 
     // D) Filename exactly 255 characters must succeed
     let name_255 = format!("{}.txt", "a".repeat(251));
     assert_eq!(name_255.chars().count(), 255);
-    let meta_255 = vault
+    let meta_255 = secwet
         .upload_file(item_id, None, &name_255, b"valid content", None)
         .expect("255-character filename must succeed");
     assert_eq!(meta_255.name, name_255);
 
     // E) Sibling filename collision (case-insensitive in same container)
-    let err_dup = vault.upload_file(
+    let err_dup = secwet.upload_file(
         item_id,
         None,
         "MAX_EXACT_50MIB.BIN",
@@ -162,7 +162,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
     assert!(matches!(err_dup, Err(Error::Duplicate { field: "name" })));
 
     // F) Path traversal in filename: path is sanitized to file_name() component
-    let traversal_meta = vault
+    let traversal_meta = secwet
         .upload_file(
             item_id,
             None,
@@ -174,8 +174,8 @@ fn test_adversarial_file_upload_boundary_and_names() {
     assert_eq!(traversal_meta.name, "passwd");
 
     // G) Sibling in a DIFFERENT container (e.g. inside an environment) is allowed!
-    let env = vault.add_environment(item_id, "staging").expect("add env");
-    let env_file = vault
+    let env = secwet.add_environment(item_id, "staging").expect("add env");
+    let env_file = secwet
         .upload_file(
             item_id,
             Some(env.id),
@@ -188,19 +188,19 @@ fn test_adversarial_file_upload_boundary_and_names() {
     assert_eq!(env_file.name, "max_exact_50mib.bin");
 
     // H) Rename validation
-    let err_rename_empty = vault.rename_file(meta_empty.id, "   ");
+    let err_rename_empty = secwet.rename_file(meta_empty.id, "   ");
     assert!(matches!(
         err_rename_empty,
         Err(Error::Invalid { field: "name", .. })
     ));
 
-    let err_rename_256 = vault.rename_file(meta_empty.id, &"x".repeat(256));
+    let err_rename_256 = secwet.rename_file(meta_empty.id, &"x".repeat(256));
     assert!(matches!(
         err_rename_256,
         Err(Error::Invalid { field: "name", .. })
     ));
 
-    let err_rename_dup = vault.rename_file(meta_empty.id, "max_exact_50mib.bin");
+    let err_rename_dup = secwet.rename_file(meta_empty.id, "max_exact_50mib.bin");
     assert!(matches!(
         err_rename_dup,
         Err(Error::Duplicate { field: "name" })
@@ -213,7 +213,7 @@ fn test_adversarial_file_upload_boundary_and_names() {
 
 #[test]
 fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
-    let (dir, mut vault, ks, _label_id, item_id) = create_challenge_vault();
+    let (dir, mut secwet, ks, _label_id, item_id) = create_challenge_secwet();
 
     // Prepare known payload
     let mut payload = Vec::with_capacity(65536);
@@ -226,7 +226,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
         data_encoding::HEXLOWER.encode(&hasher.finalize())
     };
 
-    let meta = vault
+    let meta = secwet
         .upload_file(
             item_id,
             None,
@@ -238,15 +238,15 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
 
     assert_eq!(meta.sha256, expected_sha256);
 
-    let vault_id = vault.vault_id();
+    let secwet_id = secwet.secwet_id();
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
 
-    // Lock vault to release any exclusive write handles
-    vault.lock();
+    // Lock secwet to release any exclusive write handles
+    secwet.lock();
 
     // Query clean blob
     let clean_blob: Vec<u8> = {
@@ -275,7 +275,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
         tampered[0] ^= 0x01; // Flip lowest bit of byte 0
         write_blob(&tampered);
 
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock after tamper 0");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock after tamper 0");
         let dl_result = unlocked.download_file(meta.id);
         assert!(
             matches!(dl_result, Err(Error::Crypto)),
@@ -293,7 +293,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
         tampered[mid] ^= 0x80; // Flip highest bit of middle byte
         write_blob(&tampered);
 
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock after tamper mid");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock after tamper mid");
         let dl_result = unlocked.download_file(meta.id);
         assert!(
             matches!(dl_result, Err(Error::Crypto)),
@@ -311,7 +311,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
         tampered[last] ^= 0x40; // Flip bit in MAC tag
         write_blob(&tampered);
 
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock after tamper MAC tag");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock after tamper MAC tag");
         let dl_result = unlocked.download_file(meta.id);
         assert!(
             matches!(dl_result, Err(Error::Crypto)),
@@ -331,7 +331,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
         )
         .expect("tamper key_epoch");
 
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock after epoch tamper");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock after epoch tamper");
         let dl_result = unlocked.download_file(meta.id);
         assert!(
             matches!(dl_result, Err(Error::Crypto)),
@@ -351,7 +351,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
 
     // --- Attack 2.5: AAD Mismatch by swapping blobs between two distinct records ---
     {
-        let mut unlocked = Vault::unlock(dir.path(), &ks).expect("unlock");
+        let mut unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock");
         let file2 = unlocked
             .upload_file(
                 item_id,
@@ -379,7 +379,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
         )
         .expect("swap blob");
 
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock after swap");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock after swap");
         let dl_result = unlocked.download_file(meta.id);
         assert!(
             matches!(dl_result, Err(Error::Crypto)),
@@ -394,7 +394,7 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
 
     // --- Verify Clean State Restored ---
     {
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock clean");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock clean");
         let (dl_meta, dl_data) = unlocked
             .download_file(meta.id)
             .expect("download clean file");
@@ -409,17 +409,17 @@ fn test_adversarial_file_sha256_and_sqlite_bit_flips() {
 
 #[test]
 fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
-    let (dir, mut vault, ks, _label_id, item_id) = create_challenge_vault();
+    let (dir, mut secwet, ks, _label_id, item_id) = create_challenge_secwet();
 
     // --- 3.1: Title Boundary Testing ---
     // A) Empty title
-    let err_empty_title = vault.create_note(item_id, None, "", "Valid content");
+    let err_empty_title = secwet.create_note(item_id, None, "", "Valid content");
     assert!(matches!(
         err_empty_title,
         Err(Error::Invalid { field: "title", .. })
     ));
 
-    let err_ws_title = vault.create_note(item_id, None, "   \t\n  ", "Valid content");
+    let err_ws_title = secwet.create_note(item_id, None, "   \t\n  ", "Valid content");
     assert!(matches!(
         err_ws_title,
         Err(Error::Invalid { field: "title", .. })
@@ -427,14 +427,14 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
 
     // B) Exact 128 characters title must succeed
     let title_128 = "A".repeat(128);
-    let note_128 = vault
+    let note_128 = secwet
         .create_note(item_id, None, &title_128, "Content for note 128")
         .expect("128-char title must succeed");
     assert_eq!(note_128.title, title_128);
 
     // C) 129 characters title must be rejected
     let title_129 = "A".repeat(129);
-    let err_title_129 = vault.create_note(item_id, None, &title_129, "Content for note 129");
+    let err_title_129 = secwet.create_note(item_id, None, &title_129, "Content for note 129");
     assert!(matches!(
         err_title_129,
         Err(Error::Invalid { field: "title", .. })
@@ -443,14 +443,14 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
     // D) Unicode title character boundary (128 unicode code points vs 129 code points)
     let uni_title_128 = "🦀".repeat(128);
     assert_eq!(uni_title_128.chars().count(), 128);
-    let note_uni = vault
+    let note_uni = secwet
         .create_note(item_id, None, &uni_title_128, "Emoji title content")
         .expect("128 emoji title must succeed");
     assert_eq!(note_uni.title, uni_title_128);
 
     let uni_title_129 = "🦀".repeat(129);
     assert_eq!(uni_title_129.chars().count(), 129);
-    let err_uni_129 = vault.create_note(item_id, None, &uni_title_129, "Too many emojis");
+    let err_uni_129 = secwet.create_note(item_id, None, &uni_title_129, "Too many emojis");
     assert!(matches!(
         err_uni_129,
         Err(Error::Invalid { field: "title", .. })
@@ -458,21 +458,21 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
 
     // --- 3.2: Content Boundary Testing ---
     // A) Empty content is allowed
-    let note_empty_content = vault
+    let note_empty_content = secwet
         .create_note(item_id, None, "Empty Content Note", "")
         .expect("Empty note content is valid");
     assert_eq!(note_empty_content.content, "");
 
     // B) Content exactly 1,000,000 characters must succeed
     let content_1m: String = "X".repeat(1_000_000);
-    let note_1m = vault
+    let note_1m = secwet
         .create_note(item_id, None, "Million Char Note", &content_1m)
         .expect("1,000,000 char note content must succeed");
     assert_eq!(note_1m.content.len(), 1_000_000);
 
     // C) Content exceeding 1,000,000 characters (1,000,001 chars) must be rejected
     let content_1m_plus = "X".repeat(1_000_001);
-    let err_1m_plus = vault.create_note(item_id, None, "Oversized Note", &content_1m_plus);
+    let err_1m_plus = secwet.create_note(item_id, None, "Oversized Note", &content_1m_plus);
     assert!(matches!(
         err_1m_plus,
         Err(Error::Invalid {
@@ -497,12 +497,12 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
 </div>
 "#;
 
-    let rich_note = vault
+    let rich_note = secwet
         .create_note(item_id, None, "Architecture Note", complex_markup)
         .expect("create rich note");
 
     // 1. Verify list_notes generates clean plain-text snippet without HTML tags
-    let notes_list = vault.list_notes(item_id, None).expect("list notes");
+    let notes_list = secwet.list_notes(item_id, None).expect("list notes");
     let target_meta = notes_list
         .into_iter()
         .find(|n| n.id == rich_note.id)
@@ -536,20 +536,20 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
     );
 
     // 2. Verify get_note returns RAW markup byte-for-byte intact
-    let fetched = vault.get_note(rich_note.id).expect("get full note");
+    let fetched = secwet.get_note(rich_note.id).expect("get full note");
     assert_eq!(
         fetched.content, complex_markup,
         "get_note MUST preserve raw HTML markup exactly without alterations"
     );
 
     // --- 3.4: Note Ciphertext Tampering Attack ---
-    let vault_id = vault.vault_id();
+    let secwet_id = secwet.secwet_id();
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
-    vault.lock();
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
+    secwet.lock();
 
     {
         let conn = open_connection(&db_path).expect("open SQLite");
@@ -573,7 +573,7 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
     }
 
     {
-        let unlocked = Vault::unlock(dir.path(), &ks).expect("unlock after note tamper");
+        let unlocked = Secwet::unlock(dir.path(), &ks).expect("unlock after note tamper");
         let get_res = unlocked.get_note(rich_note.id);
         assert!(
             matches!(get_res, Err(Error::Crypto)),
@@ -594,25 +594,25 @@ fn test_adversarial_rich_text_note_boundaries_and_html_stripping() {
 
 #[test]
 fn test_adversarial_delete_only_environment_preserve_content_true() {
-    let (dir, mut vault, _ks, label_id, _orig_item_id) = create_challenge_vault();
+    let (dir, mut secwet, _ks, label_id, _orig_item_id) = create_challenge_secwet();
 
     // Create a dedicated item
-    let item = vault
+    let item = secwet
         .create_item(label_id, "Preserve Test Item", None)
         .expect("create item");
 
     // Add exactly ONE environment
-    let only_env = vault
+    let only_env = secwet
         .add_environment(item.id, "isolated_env")
         .expect("add only environment");
 
     // Verify item has exactly 1 environment
-    let envs_before = vault.list_environments(item.id).expect("list envs");
+    let envs_before = secwet.list_environments(item.id).expect("list envs");
     assert_eq!(envs_before.len(), 1);
     assert_eq!(envs_before[0].id, only_env.id);
 
     // Create child Secret under only_env
-    let secret = vault
+    let secret = secwet
         .create_secret(SecretDraft::new(
             item.id,
             Some(only_env.id),
@@ -625,7 +625,7 @@ fn test_adversarial_delete_only_environment_preserve_content_true() {
 
     // Upload child File under only_env
     let file_data = b"%PDF-1.7 Confidential Engineering Spec".to_vec();
-    let file = vault
+    let file = secwet
         .upload_file(
             item.id,
             Some(only_env.id),
@@ -636,7 +636,7 @@ fn test_adversarial_delete_only_environment_preserve_content_true() {
         .expect("upload file in env");
 
     // Create child Note under only_env
-    let note = vault
+    let note = secwet
         .create_note(
             item.id,
             Some(only_env.id),
@@ -646,57 +646,57 @@ fn test_adversarial_delete_only_environment_preserve_content_true() {
         .expect("create note in env");
 
     // Pre-condition check: item level (environment_id = None) has 0 secrets, files, notes
-    assert!(vault
+    assert!(secwet
         .list_secrets(item.id, None)
         .expect("item secrets")
         .is_empty());
-    assert!(vault
+    assert!(secwet
         .list_files(item.id, None)
         .expect("item files")
         .is_empty());
-    assert!(vault
+    assert!(secwet
         .list_notes(item.id, None)
         .expect("item notes")
         .is_empty());
 
     // Environment-level listings contain the records
     assert_eq!(
-        vault
+        secwet
             .list_secrets(item.id, Some(only_env.id))
             .unwrap()
             .len(),
         1
     );
     assert_eq!(
-        vault.list_files(item.id, Some(only_env.id)).unwrap().len(),
+        secwet.list_files(item.id, Some(only_env.id)).unwrap().len(),
         1
     );
     assert_eq!(
-        vault.list_notes(item.id, Some(only_env.id)).unwrap().len(),
+        secwet.list_notes(item.id, Some(only_env.id)).unwrap().len(),
         1
     );
 
     // --- ACTION: Delete the ONLY environment with preserve_content: true ---
-    vault
+    secwet
         .delete_environment_with_options(only_env.id, true)
         .expect(
             "delete_environment_with_options must succeed even for the only environment on an item",
         );
 
     // --- Post-condition 1: Environment is deleted; item now has 0 environments ---
-    let envs_after = vault.list_environments(item.id).expect("list envs after");
+    let envs_after = secwet.list_environments(item.id).expect("list envs after");
     assert!(
         envs_after.is_empty(),
         "Item must have 0 environments after deleting the only environment"
     );
 
     // --- Post-condition 2: SQLite database verification ---
-    let vault_id = vault.vault_id();
+    let secwet_id = secwet.secwet_id();
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
 
     {
         let conn = open_connection(&db_path).expect("open SQLite");
@@ -762,34 +762,34 @@ fn test_adversarial_delete_only_environment_preserve_content_true() {
     }
 
     // --- Post-condition 3: Secret accessible at item level ---
-    let item_secrets = vault
+    let item_secrets = secwet
         .list_secrets(item.id, None)
         .expect("list item secrets");
     assert_eq!(item_secrets.len(), 1);
     assert_eq!(item_secrets[0].id, secret.id);
     assert_eq!(item_secrets[0].name, "DATABASE_PASSWORD");
-    let revealed = vault
+    let revealed = secwet
         .reveal_secret(secret.id)
         .expect("reveal preserved secret");
     assert_eq!(revealed.expose_secret(), "super_secret_db_pass_9988");
 
     // --- Post-condition 4: File accessible at item level ---
-    let item_files = vault.list_files(item.id, None).expect("list item files");
+    let item_files = secwet.list_files(item.id, None).expect("list item files");
     assert_eq!(item_files.len(), 1);
     assert_eq!(item_files[0].id, file.id);
     assert_eq!(item_files[0].name, "spec.pdf");
-    let (dl_meta, dl_data) = vault
+    let (dl_meta, dl_data) = secwet
         .download_file(file.id)
         .expect("download preserved file");
     assert_eq!(dl_meta.id, file.id);
     assert_eq!(dl_data, file_data);
 
     // --- Post-condition 5: Note accessible at item level ---
-    let item_notes = vault.list_notes(item.id, None).expect("list item notes");
+    let item_notes = secwet.list_notes(item.id, None).expect("list item notes");
     assert_eq!(item_notes.len(), 1);
     assert_eq!(item_notes[0].id, note.id);
     assert_eq!(item_notes[0].title, "Deployment Runbook");
-    let fetched_note = vault.get_note(note.id).expect("get preserved note");
+    let fetched_note = secwet.get_note(note.id).expect("get preserved note");
     assert_eq!(
         fetched_note.content,
         "<p>Runbook steps: 1. Deploy 2. Verify</p>"
@@ -797,25 +797,25 @@ fn test_adversarial_delete_only_environment_preserve_content_true() {
 
     // Querying with old environment_id now returns NotFound
     assert!(matches!(
-        vault.list_secrets(item.id, Some(only_env.id)),
+        secwet.list_secrets(item.id, Some(only_env.id)),
         Err(Error::NotFound)
     ));
 }
 
 #[test]
 fn test_adversarial_delete_only_environment_preserve_content_false() {
-    let (dir, mut vault, _ks, label_id, _orig_item_id) = create_challenge_vault();
+    let (dir, mut secwet, _ks, label_id, _orig_item_id) = create_challenge_secwet();
 
     // Create item with 1 environment
-    let item = vault
+    let item = secwet
         .create_item(label_id, "Cascade Delete Test Item", None)
         .expect("create item");
 
-    let only_env = vault
+    let only_env = secwet
         .add_environment(item.id, "to_be_purged")
         .expect("add env");
 
-    let secret = vault
+    let secret = secwet
         .create_secret(SecretDraft::new(
             item.id,
             Some(only_env.id),
@@ -826,7 +826,7 @@ fn test_adversarial_delete_only_environment_preserve_content_false() {
         ))
         .expect("create secret");
 
-    let file = vault
+    let file = secwet
         .upload_file(
             item.id,
             Some(only_env.id),
@@ -836,7 +836,7 @@ fn test_adversarial_delete_only_environment_preserve_content_false() {
         )
         .expect("upload file");
 
-    let note = vault
+    let note = secwet
         .create_note(
             item.id,
             Some(only_env.id),
@@ -846,21 +846,21 @@ fn test_adversarial_delete_only_environment_preserve_content_false() {
         .expect("create note");
 
     // --- ACTION: Delete the ONLY environment with preserve_content: false ---
-    vault
+    secwet
         .delete_environment_with_options(only_env.id, false)
         .expect("delete with preserve_content: false must succeed");
 
     // Item has 0 environments
-    let envs = vault.list_environments(item.id).expect("list envs");
+    let envs = secwet.list_environments(item.id).expect("list envs");
     assert!(envs.is_empty());
 
     // In SQLite: all records must have deleted = 1 and blob IS NULL
-    let vault_id = vault.vault_id();
+    let secwet_id = secwet.secwet_id();
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
 
     {
         let conn = open_connection(&db_path).expect("open SQLite");
@@ -888,21 +888,21 @@ fn test_adversarial_delete_only_environment_preserve_content_false() {
         }
     }
 
-    // Vault listings at item level are empty
-    assert!(vault
+    // Secwet listings at item level are empty
+    assert!(secwet
         .list_secrets(item.id, None)
         .expect("secrets")
         .is_empty());
-    assert!(vault.list_files(item.id, None).expect("files").is_empty());
-    assert!(vault.list_notes(item.id, None).expect("notes").is_empty());
+    assert!(secwet.list_files(item.id, None).expect("files").is_empty());
+    assert!(secwet.list_notes(item.id, None).expect("notes").is_empty());
 
     // Direct fetches fail with NotFound
     assert!(matches!(
-        vault.reveal_secret(secret.id),
+        secwet.reveal_secret(secret.id),
         Err(Error::NotFound)
     ));
-    assert!(matches!(vault.download_file(file.id), Err(Error::NotFound)));
-    assert!(matches!(vault.get_note(note.id), Err(Error::NotFound)));
+    assert!(matches!(secwet.download_file(file.id), Err(Error::NotFound)));
+    assert!(matches!(secwet.get_note(note.id), Err(Error::NotFound)));
 }
 
 // ============================================================================
@@ -911,19 +911,19 @@ fn test_adversarial_delete_only_environment_preserve_content_false() {
 
 #[test]
 fn test_adversarial_single_environment_legacy_delete_protection() {
-    let (_dir, mut vault, _ks, label_id, _orig_item_id) = create_challenge_vault();
+    let (_dir, mut secwet, _ks, label_id, _orig_item_id) = create_challenge_secwet();
 
-    let item = vault
+    let item = secwet
         .create_item(label_id, "Legacy Env Delete Test Item", None)
         .expect("create item");
 
-    let single_env = vault
+    let single_env = secwet
         .add_environment(item.id, "lone_env")
         .expect("add single env");
 
     // Calling legacy delete_environment (which enforces last-environment protection)
     // MUST return Error::LastEnvironment
-    let err_legacy = vault.delete_environment(single_env.id);
+    let err_legacy = secwet.delete_environment(single_env.id);
     assert!(
         matches!(err_legacy, Err(Error::LastEnvironment)),
         "Legacy delete_environment on the only environment must return Error::LastEnvironment, got: {:?}",
@@ -931,7 +931,7 @@ fn test_adversarial_single_environment_legacy_delete_protection() {
     );
 
     // But delete_environment_with_options succeeds!
-    let res_options = vault.delete_environment_with_options(single_env.id, true);
+    let res_options = secwet.delete_environment_with_options(single_env.id, true);
     assert!(
         res_options.is_ok(),
         "delete_environment_with_options must succeed where legacy delete_environment is protected"

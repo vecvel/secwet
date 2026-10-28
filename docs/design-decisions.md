@@ -29,6 +29,6 @@ Approved 2026-10-23. Tokens live in `packages/design-tokens/tokens.json`; run `p
 | Recovery and backup (recovery key, encrypted export, key rotation) | Built with mock data; export saving not wired |
 | Settings (plan, appearance, auto-lock, CLI snippet) | Built with mock data |
 
-Pairing QR payload: `secwet://pair?v=1&s=<one-time session>&k=<ephemeral public key>`. It never carries the vault key or a reusable credential.
+Pairing QR payload: `secwet://pair?v=1&s=<one-time session>&k=<ephemeral public key>`. It never carries the master key or a reusable credential.
 
 Keyboard users currently get no visible focus indicator. This was a deliberate choice; adding one subtle `:focus-visible` treatment in the shared control styles is the fix if that changes.

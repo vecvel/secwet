@@ -5,3 +5,13 @@
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
 }
+
+.target {
+  display: inline-block;
+  vertical-align: baseline;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary); 
+  word-break: break-all;
+  user-select: all;
+}

@@ -3,9 +3,9 @@ import { Icon } from "./Icon";
 import styles from "./Field.module.css";
 
 interface FieldFrameProps {
-  label: string;
+  label: ReactNode;
   help?: ReactNode;
-  error?: string;
+  error?: ReactNode;
   id: string;
   children: ReactNode;
 }
@@ -31,9 +31,9 @@ function FieldFrame({ label, help, error, id, children }: FieldFrameProps) {
 }
 
 interface CommonProps {
-  label: string;
+  label: ReactNode;
   help?: ReactNode;
-  error?: string;
+  error?: ReactNode;
 }
 
 export function TextField({ label, help, error, className, ...rest }: CommonProps & InputHTMLAttributes<HTMLInputElement>) {

@@ -1,3 +1,9 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -15,7 +21,19 @@
   color: var(--color-text-primary);
 }
 
-.unavailable {
+.summaryBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-sunken);
   font-size: var(--font-size-sm);
-  color: var(--color-warning);
+}
+
+.filePath {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  word-break: break-all;
 }

@@ -9,7 +9,7 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin: -3px 0 calc(-1 * var(--space-2));
-  line-height: var(--line-height-normal);
+  line-height: var(--line-height-base);
 }
 
 .envBarRow {
@@ -80,10 +80,6 @@
   overflow: hidden;
 }
 
-.noteCard:hover {
-  border-color: var(--color-border-strong);
-}
-
 .noteCardHeader {
   display: flex;
   align-items: flex-start;
@@ -116,11 +112,6 @@
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 
-.noteDeleteBtn:hover {
-  opacity: 1;
-  color: var(--color-danger);
-}
-
 .noteBody {
   margin: var(--space-2) 0;
   padding: 0 var(--space-4);
@@ -150,4 +141,8 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
+}
+
+.typeTabsRow {
+  width: 100%;
 }

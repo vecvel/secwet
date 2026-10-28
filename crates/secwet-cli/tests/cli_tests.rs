@@ -1,18 +1,18 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use secwet_cli::keystore::FileKeyStore;
-use secwet_core::{SecretDraft, SecretKind, Vault};
+use secwet_core::{SecretDraft, SecretKind, Secwet};
 use std::path::Path;
 use tempfile::tempdir;
 
-fn setup_vault_with_project(data_dir: &Path, project_name: &str, envs: &[&str]) -> Vault {
+fn setup_secwet_with_project(data_dir: &Path, project_name: &str, envs: &[&str]) -> Secwet {
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(data_dir, "test-device-1", &keystore).expect("create vault");
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).expect("create secwet");
     let env_strings: Vec<String> = envs.iter().map(|s| s.to_string()).collect();
-    vault
+    secwet
         .create_project(project_name, &env_strings)
         .expect("create project");
-    vault
+    secwet
 }
 
 #[test]
@@ -20,8 +20,8 @@ fn cli_list_hides_values() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let draft = SecretDraft::new(
@@ -32,8 +32,8 @@ fn cli_list_hides_values() {
         "SECRET_VALUE_DO_NOT_LEAK_12345",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -52,8 +52,8 @@ fn cli_run_injects_env_and_forwards_exit_code() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let draft = SecretDraft::new(
@@ -64,8 +64,8 @@ fn cli_run_injects_env_and_forwards_exit_code() {
         "injected_payload_xyz",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -96,14 +96,14 @@ fn cli_reads_project_from_secwet_toml() {
     std::fs::write(
         &config_path,
         format!(
-            "project = \"payments-api\"\nenv = \"staging\"\nvault = \"{}\"\n",
+            "project = \"payments-api\"\nenv = \"staging\"\ndata_dir = \"{}\"\n",
             root.display()
         ),
     )
     .unwrap();
 
-    let mut vault = setup_vault_with_project(root, "payments-api", &["staging"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_secwet_with_project(root, "payments-api", &["staging"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let draft = SecretDraft::new(
@@ -114,8 +114,8 @@ fn cli_reads_project_from_secwet_toml() {
         "postgres.internal",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let deep_dir = root.join("services").join("web");
     std::fs::create_dir_all(&deep_dir).unwrap();
@@ -134,8 +134,8 @@ fn cli_import_dotenv_parses_quotes_and_comments() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_vault_with_project(data_dir, "payments", &["production"]);
-    vault.lock();
+    let secwet = setup_secwet_with_project(data_dir, "payments", &["production"]);
+    secwet.lock();
 
     let env_file = data_dir.join("test.env");
     let env_content = r#"
@@ -214,12 +214,40 @@ ESCAPED_NEWLINE="line1\nline2"
 }
 
 #[test]
+fn cli_import_dotenv_from_stdin_with_dash() {
+    let temp = tempdir().unwrap();
+    let data_dir = temp.path();
+
+    let secwet = setup_secwet_with_project(data_dir, "piped-item", &["staging"]);
+    secwet.lock();
+
+    let env_content = "PIPED_KEY=piped_secret_val\nOTHER_KEY=\"hello from stdin\"";
+
+    let mut cmd = Command::cargo_bin("secwet").unwrap();
+    cmd.env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args(["import", "-", "-i", "piped-item", "-e", "staging"])
+        .write_stdin(env_content)
+        .assert()
+        .success();
+
+    let mut get_cmd = Command::cargo_bin("secwet").unwrap();
+    let output = get_cmd
+        .env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args(["get", "PIPED_KEY", "-i", "piped-item", "-e", "staging"])
+        .assert()
+        .success();
+    assert_eq!(output.get_output().stdout, b"piped_secret_val");
+}
+
+#[test]
 fn cli_get_outputs_without_newline_when_piped() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let draft = SecretDraft::new(
@@ -230,8 +258,8 @@ fn cli_get_outputs_without_newline_when_piped() {
         "clean_token_no_newline",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     let output = cmd
@@ -250,9 +278,9 @@ fn cli_status_displays_details() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    let vault_id = vault.vault_id().to_string();
-    vault.lock();
+    let secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    let secwet_id = secwet.secwet_id().to_string();
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -260,7 +288,7 @@ fn cli_status_displays_details() {
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::contains(&vault_id))
+        .stdout(predicate::str::contains(&secwet_id))
         .stdout(predicate::str::contains("test-device-1"))
         .stdout(predicate::str::contains("free"))
         .stdout(predicate::str::contains("offline"));
@@ -272,7 +300,7 @@ fn cli_status_displays_details() {
         .args(["status", "--json"])
         .assert()
         .success()
-        .stdout(predicate::str::contains(&vault_id))
+        .stdout(predicate::str::contains(&secwet_id))
         .stdout(predicate::str::contains("\"free\""))
         .stdout(predicate::str::contains("\"offline\""));
 }
@@ -282,8 +310,8 @@ fn cli_set_creates_and_updates_secret() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    vault.lock();
+    let secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    secwet.lock();
 
     // Create via set with stdin pipe
     let mut cmd_create = Command::cargo_bin("secwet").unwrap();
@@ -325,9 +353,9 @@ fn cli_set_creates_and_updates_secret() {
 }
 
 #[test]
-fn cli_locked_or_missing_vault_exits_code_2() {
+fn cli_locked_or_missing_secwet_exits_code_2() {
     let temp = tempdir().unwrap();
-    let data_dir = temp.path().join("nonexistent_vault");
+    let data_dir = temp.path().join("nonexistent_secwet");
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", &data_dir)
@@ -335,7 +363,7 @@ fn cli_locked_or_missing_vault_exits_code_2() {
         .arg("list")
         .assert()
         .code(2)
-        .stderr(predicate::str::contains("no vault on this device"));
+        .stderr(predicate::str::contains("secwet not initialized on this device"));
 }
 
 #[test]
@@ -349,8 +377,8 @@ fn cli_run_conflicting_env_var_wins() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let draft = SecretDraft::new(
@@ -358,11 +386,11 @@ fn cli_run_conflicting_env_var_wins() {
         env.id,
         "TEST_CONFLICT",
         SecretKind::EnvVar,
-        "vault_wins",
+        "secwet_wins",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -381,7 +409,7 @@ fn cli_run_conflicting_env_var_wins() {
         ])
         .assert()
         .success()
-        .stdout("vault_wins");
+        .stdout("secwet_wins");
 }
 
 #[test]
@@ -389,8 +417,8 @@ fn cli_get_not_found_exits_code_1() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    vault.lock();
+    let secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -406,8 +434,8 @@ fn cli_set_invalid_secret_name_exits_code_1() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    vault.lock();
+    let secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -424,8 +452,8 @@ fn cli_set_value_exceeding_64k_exits_code_1() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_vault_with_project(data_dir, "backend", &["development"]);
-    vault.lock();
+    let secwet = setup_secwet_with_project(data_dir, "backend", &["development"]);
+    secwet.lock();
 
     let huge_val = "x".repeat(65_537);
 
@@ -444,8 +472,8 @@ fn cli_export_dotenv_and_json_roundtrip() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_vault_with_project(data_dir, "export-test", &["production"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_secwet_with_project(data_dir, "export-test", &["production"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let d1 = SecretDraft::new(
@@ -464,16 +492,25 @@ fn cli_export_dotenv_and_json_roundtrip() {
         "p@ss\"word\nmultiline",
         None,
     );
-    vault.create_secret(d1).unwrap();
-    vault.create_secret(d2).unwrap();
-    vault.lock();
+    secwet.create_secret(d1).unwrap();
+    secwet.create_secret(d2).unwrap();
+    secwet.lock();
 
     // 1. Export dotenv to stdout
     Command::cargo_bin("secwet")
         .unwrap()
         .env("SECWET_DATA_DIR", data_dir)
         .env("SECWET_TEST_KEYSTORE", "memory")
-        .args(["export", "-p", "export-test", "-e", "production", "-f", "dotenv"])
+        .args([
+            "export",
+            "-p",
+            "export-test",
+            "-e",
+            "production",
+            "-f",
+            "dotenv",
+            "--plaintext",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("API_KEY=\"sk_live_12345\"\n"))
@@ -493,6 +530,7 @@ fn cli_export_dotenv_and_json_roundtrip() {
             "production",
             "-f",
             "json",
+            "--plaintext",
             "-o",
             json_file.to_str().unwrap(),
         ])
@@ -505,14 +543,13 @@ fn cli_export_dotenv_and_json_roundtrip() {
 }
 
 #[test]
-fn cli_concurrency_with_open_vault() {
+fn cli_concurrency_with_open_secwet() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(data_dir, "test-device-1", &keystore).unwrap();
-    let project = vault
-        .create_project("concurrency-test", &["staging".to_string()])
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).unwrap();
+    let project = secwet.create_project("concurrency-test", &["staging".to_string()])
         .unwrap();
 
     let draft = SecretDraft::new(
@@ -523,9 +560,9 @@ fn cli_concurrency_with_open_vault() {
         "concurrent_val",
         None,
     );
-    vault.create_secret(draft).unwrap();
+    secwet.create_secret(draft).unwrap();
 
-    // While vault is still open and held in this process, invoke CLI command
+    // While secwet is still open and held in this process, invoke CLI command
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
         .env("SECWET_TEST_KEYSTORE", "memory")
@@ -534,7 +571,7 @@ fn cli_concurrency_with_open_vault() {
         .success()
         .stdout(predicate::str::contains("CONCURRENT_KEY"));
 
-    // And also perform a set while the test vault is open
+    // And also perform a set while the test secwet is open
     let mut cmd_set = Command::cargo_bin("secwet").unwrap();
     cmd_set
         .env("SECWET_DATA_DIR", data_dir)
@@ -551,7 +588,7 @@ fn cli_concurrency_with_open_vault() {
         .assert()
         .success();
 
-    vault.lock();
+    secwet.lock();
 }
 
 // =========================================================================
@@ -564,10 +601,10 @@ fn cli_item_without_environments_crud_roundtrip() {
     let data_dir = temp.path();
 
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(data_dir, "test-device-1", &keystore).unwrap();
-    let label = vault.create_label("General", None).unwrap();
-    let _item = vault.create_item(label.id, "standalone-item", None).unwrap();
-    vault.lock();
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).unwrap();
+    let label = secwet.create_label("General", None).unwrap();
+    let _item = secwet.create_item(label.id, "standalone-item", None).unwrap();
+    secwet.lock();
 
     // 1. Set secret on item with 0 environments (stdin pipe)
     let mut cmd_set = Command::cargo_bin("secwet").unwrap();
@@ -626,10 +663,10 @@ fn cli_item_without_environments_errors_when_env_explicitly_passed() {
     let data_dir = temp.path();
 
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(data_dir, "test-device-1", &keystore).unwrap();
-    let label = vault.create_label("General", None).unwrap();
-    let _item = vault.create_item(label.id, "no-env-item", None).unwrap();
-    vault.lock();
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).unwrap();
+    let label = secwet.create_label("General", None).unwrap();
+    let _item = secwet.create_item(label.id, "no-env-item", None).unwrap();
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -646,12 +683,12 @@ fn cli_item_flag_aliases_parity() {
     let data_dir = temp.path();
 
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(data_dir, "test-device-1", &keystore).unwrap();
-    let label = vault.create_label("Dev", None).unwrap();
-    let item = vault.create_item(label.id, "my-service", None).unwrap();
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).unwrap();
+    let label = secwet.create_label("Dev", None).unwrap();
+    let item = secwet.create_item(label.id, "my-service", None).unwrap();
     let draft = SecretDraft::new(item.id, None, "TOKEN", SecretKind::ApiKey, "abc", None);
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     // Verify --item
     Command::cargo_bin("secwet").unwrap()
@@ -696,16 +733,16 @@ fn cli_secwet_toml_item_and_project_key_support() {
     let root = temp.path();
 
     let keystore = FileKeyStore::new(root.join(".test_keystore.json"));
-    let mut vault = Vault::create(root, "test-device-1", &keystore).unwrap();
-    let label = vault.create_label("Work", None).unwrap();
-    let item = vault.create_item(label.id, "billing-service", None).unwrap();
+    let mut secwet = Secwet::create(root, "test-device-1", &keystore).unwrap();
+    let label = secwet.create_label("Work", None).unwrap();
+    let item = secwet.create_item(label.id, "billing-service", None).unwrap();
     let draft = SecretDraft::new(item.id, None, "STRIPE_KEY", SecretKind::ApiKey, "sk_123", None);
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     // Test with item = "billing-service"
     let toml_path = root.join(".secwet.toml");
-    std::fs::write(&toml_path, format!("item = \"billing-service\"\nvault = \"{}\"\n", root.display())).unwrap();
+    std::fs::write(&toml_path, format!("item = \"billing-service\"\ndata_dir = \"{}\"\n", root.display())).unwrap();
 
     Command::cargo_bin("secwet").unwrap()
         .current_dir(root)
@@ -716,7 +753,7 @@ fn cli_secwet_toml_item_and_project_key_support() {
         .stdout(predicate::str::contains("STRIPE_KEY"));
 
     // Test with legacy project = "billing-service"
-    std::fs::write(&toml_path, format!("project = \"billing-service\"\nvault = \"{}\"\n", root.display())).unwrap();
+    std::fs::write(&toml_path, format!("project = \"billing-service\"\ndata_dir = \"{}\"\n", root.display())).unwrap();
 
     Command::cargo_bin("secwet").unwrap()
         .current_dir(root)
@@ -733,21 +770,21 @@ fn cli_environment_overlay_and_inheritance() {
     let data_dir = temp.path();
 
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(data_dir, "test-device-1", &keystore).unwrap();
-    let label = vault.create_label("Work", None).unwrap();
-    let item = vault.create_item(label.id, "multi-env-item", None).unwrap();
-    let env_dev = vault.add_environment(item.id, "development").unwrap();
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).unwrap();
+    let label = secwet.create_label("Work", None).unwrap();
+    let item = secwet.create_item(label.id, "multi-env-item", None).unwrap();
+    let env_dev = secwet.add_environment(item.id, "development").unwrap();
 
     // 1. Item-level base secret (inherited by environments)
     let d1 = SecretDraft::new(item.id, None, "BASE_URL", SecretKind::EnvVar, "https://api.base.com", None);
-    vault.create_secret(d1).unwrap();
+    secwet.create_secret(d1).unwrap();
 
     // 2. Secret defined in both: env should override item
     let d2_base = SecretDraft::new(item.id, None, "DB_HOST", SecretKind::EnvVar, "base-db", None);
-    vault.create_secret(d2_base).unwrap();
+    secwet.create_secret(d2_base).unwrap();
     let d2_dev = SecretDraft::new(item.id, Some(env_dev.id), "DB_HOST", SecretKind::EnvVar, "dev-db", None);
-    vault.create_secret(d2_dev).unwrap();
-    vault.lock();
+    secwet.create_secret(d2_dev).unwrap();
+    secwet.lock();
 
     // Verification: get BASE_URL while targeting development environment finds it via inheritance
     let out_base = Command::cargo_bin("secwet").unwrap()
@@ -767,3 +804,194 @@ fn cli_environment_overlay_and_inheritance() {
         .success();
     assert_eq!(out_db.get_output().stdout, b"dev-db");
 }
+
+#[test]
+fn cli_set_codes_kind_and_default_general_environment() {
+    let temp = tempdir().unwrap();
+    let data_dir = temp.path();
+
+    let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
+    let mut secwet = Secwet::create(data_dir, "test-device-1", &keystore).unwrap();
+    let label = secwet.create_label("Security", None).unwrap();
+    let item = secwet.create_item(label.id, "vault-service", None).unwrap();
+    let _env = secwet.add_environment(item.id, "development").unwrap();
+    secwet.lock();
+
+    // 1. Set BACKUP_CODES without --env => defaults to General (env_id: None) with -k codes
+    Command::cargo_bin("secwet").unwrap()
+        .env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args(["set", "BACKUP_CODES", "--item", "vault-service", "-k", "codes"])
+        .write_stdin("code1,code2,code3")
+        .assert()
+        .success();
+
+    // 2. Set RECOVERY_KEY with explicit --env general and alias -k code
+    Command::cargo_bin("secwet").unwrap()
+        .env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args(["set", "RECOVERY_KEY", "--item", "vault-service", "-k", "code", "--env", "general"])
+        .write_stdin("rec-987654")
+        .assert()
+        .success();
+
+    // 3. Verify in database: both secrets exist in General (env_id == None) and kind == SecretKind::Codes
+    let secwet = Secwet::unlock(data_dir, &keystore).unwrap();
+    let general_secrets = secwet.list_secrets(item.id, None).unwrap();
+    assert_eq!(general_secrets.len(), 2);
+
+    let backup_sec = general_secrets.iter().find(|s| s.name == "BACKUP_CODES").unwrap();
+    assert_eq!(backup_sec.kind, SecretKind::Codes);
+
+    let recovery_sec = general_secrets.iter().find(|s| s.name == "RECOVERY_KEY").unwrap();
+    assert_eq!(recovery_sec.kind, SecretKind::Codes);
+}
+
+#[test]
+fn dotenv_export_requires_plaintext_flag() {
+    let temp = tempdir().unwrap();
+    let data_dir = temp.path();
+
+    let mut secwet = setup_secwet_with_project(data_dir, "auth-svc", &["production"]);
+    let project = secwet.list_projects().unwrap().remove(0);
+    let env = &project.environments[0];
+
+    secwet
+        .create_secret(SecretDraft::new(
+            project.id,
+            Some(env.id),
+            "DATABASE_PASSWORD",
+            SecretKind::Password,
+            "super-secret-db-pass",
+            None,
+        ))
+        .unwrap();
+    secwet.lock();
+
+    let out_file = data_dir.join(".env");
+
+    // 1. Export without --plaintext must abort immediately with exit code 1
+    Command::cargo_bin("secwet")
+        .unwrap()
+        .env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args([
+            "export",
+            "--env",
+            "production",
+            "--format",
+            "dotenv",
+            "--out",
+            out_file.to_str().unwrap(),
+            "-p",
+            "auth-svc",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("error: exporting plaintext secrets requires the explicit --plaintext flag"));
+
+    assert!(!out_file.exists());
+
+    // 2. Export with --plaintext must succeed and print warning to stderr
+    Command::cargo_bin("secwet")
+        .unwrap()
+        .env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args([
+            "export",
+            "--env",
+            "production",
+            "--format",
+            "dotenv",
+            "--plaintext",
+            "--out",
+            out_file.to_str().unwrap(),
+            "-p",
+            "auth-svc",
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning: exporting unencrypted plaintext secrets"));
+
+    assert!(out_file.exists());
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(content.contains("DATABASE_PASSWORD=\"super-secret-db-pass\""));
+}
+
+#[test]
+fn cli_export_secwet_envelope_roundtrip() {
+    let temp = tempdir().unwrap();
+    let data_dir = temp.path();
+
+    let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
+    let mut secwet = Secwet::create(data_dir, "cli-test-device", &keystore).expect("create secwet");
+    let recovery_key = secwet.create_recovery_key(&keystore).expect("create recovery key");
+    let recovery_key_str = secrecy::ExposeSecret::expose_secret(&recovery_key).to_string();
+
+    let _space = secwet.create_space("Engineering", Some("gear".to_string())).expect("create space");
+    let label = secwet.create_label("Infra", Some("cloud".to_string())).expect("create label");
+    let item = secwet.create_item(label.id, "database-cluster", None).expect("create item");
+    let env = secwet.add_environment(item.id, "production").expect("add env");
+
+    secwet
+        .create_secret(SecretDraft::new(
+            item.id,
+            Some(env.id),
+            "CLUSTER_ADMIN_KEY",
+            SecretKind::ApiKey,
+            "secret_adm_999888777",
+            None,
+        ))
+        .expect("create secret");
+    secwet.lock();
+
+    let backup_file = data_dir.join("cluster_backup.secwet");
+
+    // 1. Export workspace to .secwet providing recovery key via stdin
+    Command::cargo_bin("secwet")
+        .unwrap()
+        .env("SECWET_DATA_DIR", data_dir)
+        .env("SECWET_TEST_KEYSTORE", "memory")
+        .args(["export", "--out", backup_file.to_str().unwrap()])
+        .write_stdin(format!("{}\n", recovery_key_str))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Exported"));
+
+    assert!(backup_file.exists());
+
+    // 2. Invariant: exported file contains no plaintext secrets
+    let file_bytes = std::fs::read(&backup_file).unwrap();
+    let file_str = String::from_utf8_lossy(&file_bytes);
+    assert!(!file_str.contains("secret_adm_999888777"));
+
+    // 3. Restore the export into a clean target directory
+    let restore_temp = tempdir().unwrap();
+    let restore_data_dir = restore_temp.path();
+    let restore_keystore = FileKeyStore::new(restore_data_dir.join(".test_keystore.json"));
+
+    let restored_secwet = Secwet::restore_from_export(
+        restore_data_dir,
+        &backup_file,
+        &secrecy::SecretString::from(recovery_key_str.clone()),
+        "restored-cli-device",
+        &restore_keystore,
+    )
+    .expect("restore from export");
+
+    let restored_secrets = restored_secwet
+        .list_secrets(item.id, Some(env.id))
+        .expect("list secrets");
+    assert_eq!(restored_secrets.len(), 1);
+    assert_eq!(restored_secrets[0].name, "CLUSTER_ADMIN_KEY");
+
+    let revealed = restored_secwet
+        .reveal_secret(restored_secrets[0].id)
+        .expect("reveal secret");
+    assert_eq!(
+        secrecy::ExposeSecret::expose_secret(&revealed),
+        "secret_adm_999888777"
+    );
+}
+

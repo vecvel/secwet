@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Button, IconButton } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { MoreMenu, type MenuItem } from "../../components/Menu";
-import { api, type NoteView } from "../../lib/api";
+import { api, copyViaDocument, type NoteView } from "../../lib/api";
 import styles from "./RichTextEditor.module.css";
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   onSave: (title: string, content: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onClose: () => void;
+  /** Viewer role or read-only archive: show the note without editing controls. */
+  readOnly?: boolean;
 }
 
 /**
@@ -70,7 +72,7 @@ export function extractPlainTextFromHtml(html: string): string {
  * Includes formatting toolbar (headings, bold, italic, underline, lists, tables, code)
  * and dedicated "Copy as Plain Text" action.
  */
-export function RichTextEditor({ note, itemId: _itemId, environmentId: _environmentId, onSave, onDelete, onClose }: Props) {
+export function RichTextEditor({ note, itemId: _itemId, environmentId: _environmentId, onSave, onDelete, onClose, readOnly = false }: Props) {
   const [title, setTitle] = useState(note?.title || "");
   const [copiedState, setCopiedState] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -126,18 +128,7 @@ export function RichTextEditor({ note, itemId: _itemId, environmentId: _environm
     const html = editorRef.current?.innerHTML || "";
     const plainText = extractPlainTextFromHtml(html);
     try {
-      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-        const textBlob = new Blob([plainText], { type: "text/plain" });
-        const htmlBlob = new Blob([html], { type: "text/html" });
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            "text/plain": textBlob,
-            "text/html": htmlBlob,
-          }),
-        ]);
-      } else {
-        await api.clipboardCopyText(plainText);
-      }
+      copyViaDocument(plainText, html);
       setCopiedState(true);
       setTimeout(() => setCopiedState(false), 1500);
     } catch (err) {
@@ -163,6 +154,7 @@ export function RichTextEditor({ note, itemId: _itemId, environmentId: _environm
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (readOnly) return;
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setError("Enter a title for this note.");
@@ -187,7 +179,9 @@ export function RichTextEditor({ note, itemId: _itemId, environmentId: _environm
           type="text"
           className={styles.titleInput}
           placeholder="Note title..."
+          aria-label="Note title"
           value={title}
+          readOnly={readOnly}
           autoFocus={!note}
           onChange={(e) => {
             setTitle(e.target.value);
@@ -210,9 +204,14 @@ export function RichTextEditor({ note, itemId: _itemId, environmentId: _environm
         </div>
       </div>
 
-      {error && <span style={{ color: "var(--color-danger)", fontSize: "var(--font-size-xs)" }}>{error}</span>}
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
 
       {/* Formatting Toolbar */}
+      {!readOnly && (
       <div className={styles.toolbar} role="toolbar" aria-label="Formatting toolbar">
         <button
           type="button"
@@ -352,13 +351,15 @@ export function RichTextEditor({ note, itemId: _itemId, environmentId: _environm
           Redo
         </button>
       </div>
+      )}
 
       {/* Contenteditable WYSIWYG Area */}
       <div
         ref={editorRef}
         className={styles.contentArea}
-        contentEditable
+        contentEditable={!readOnly}
         role="textbox"
+        aria-readonly={readOnly || undefined}
         aria-multiline="true"
         aria-label="Note content"
         suppressContentEditableWarning
@@ -366,11 +367,13 @@ export function RichTextEditor({ note, itemId: _itemId, environmentId: _environm
 
       <div className={styles.actionsRow}>
         <Button variant="secondary" type="button" onClick={onClose}>
-          Cancel
+          {readOnly ? "Close" : "Cancel"}
         </Button>
-        <Button variant="primary" type="submit" disabled={saving}>
-          {saving ? "Saving..." : note ? "Save changes" : "Create note"}
-        </Button>
+        {!readOnly && (
+          <Button variant="primary" type="submit" disabled={saving}>
+            {saving ? "Saving..." : note ? "Save changes" : "Create note"}
+          </Button>
+        )}
       </div>
 
       {deleting && note && onDelete && (

@@ -1,0 +1,10 @@
+{
+  "format": "secwet-export",
+  "version": 1,
+  "secwet_id": "0192e200-0000-7000-8000-000000000001",
+  "created_at": 1730000000000,
+  "kdf": "hkdf-sha256",
+  "cipher": "xchacha20poly1305",
+  "nonce": "TKbNXRW+TuCA59FymGWtJvLkIwIlefig",
+  "ciphertext": "jx+lcxyXBJF9Nc8v9zYNYR9d/Nc1ETcEz3lPX5qCyjRaO3DuB8aFx9+etgYyq/202PRr15fyYhPWhEV1ss5KaAV0DwUERlH3lp9opt8pmm3cUzqB7GEJzmM9CtRzIenIYi8iqQ5hYUa5ZcJBHEruR+OP73JzhtOv5kl1qTA68jH3j+oB121osTTslSiIZ1ZuQjH7CeLehC+0ViiY8tI3nTkyHb116wEHi+WQ83tKXbPcCEfgK889X0LEiTQT12tM8PRC5rR9bHc="
+}

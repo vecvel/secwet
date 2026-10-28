@@ -40,7 +40,35 @@
   max-width: 400px;
 }
 
-.errorNotice {
-  width: 100%;
-  margin-bottom: var(--space-2);
+.toastContainer {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  z-index: 100;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 460px;
 }
+
+@media (max-width: 639px) {
+  .toastContainer {
+    bottom: var(--space-4);
+    right: var(--space-4);
+    left: var(--space-4);
+    max-width: none;
+    align-items: stretch;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  flex-wrap: wrap;
+}
+

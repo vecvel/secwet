@@ -1,0 +1,98 @@
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-overlay);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  max-width: 460px;
+  width: max-content;
+  pointer-events: auto;
+  will-change: transform, opacity;
+  animation: toastSlideInFromBottomRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast.exiting {
+  animation: toastSlideOutToBottomRight 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast :global([class*="badge"]) {
+  border-color: var(--color-border);
+}
+
+.message {
+  flex: 1;
+  min-width: 0;
+  line-height: var(--line-height-base);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.dismissBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-small);
+  border: none;
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease;
+}
+
+@keyframes toastSlideInFromBottomRight {
+  from {
+    opacity: 0;
+    transform: translate3d(24px, 20px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes toastSlideOutToBottomRight {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(20px, 16px, 0) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: toastFadeIn 0.15s ease-out forwards;
+  }
+  .toast.exiting {
+    animation: toastFadeOut 0.12s ease-out forwards;
+  }
+  @keyframes toastFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes toastFadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}
+

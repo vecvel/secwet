@@ -23,21 +23,21 @@
 
 use secwet_core::keys::MemoryStore;
 use secwet_core::records::open_connection;
-use secwet_core::{Error, Vault};
+use secwet_core::{Error, Secwet};
 use sha2::{Digest, Sha256};
 use tempfile::tempdir;
 use uuid::Uuid;
 
-fn create_test_vault() -> (tempfile::TempDir, Vault, MemoryStore, Uuid, Uuid) {
+fn create_test_secwet() -> (tempfile::TempDir, Secwet, MemoryStore, Uuid, Uuid) {
     let dir = tempdir().expect("tempdir");
     let keystore = MemoryStore::new();
-    let mut vault = Vault::create(dir.path(), "test-device", &keystore).expect("vault create");
+    let mut secwet = Secwet::create(dir.path(), "test-device", &keystore).expect("secwet create");
 
-    let labels = vault.list_labels().expect("list labels");
+    let labels = secwet.list_labels().expect("list labels");
     let default_label_id = labels[0].id;
 
     // Create a parent item for media/notes testing
-    let item = vault
+    let item = secwet
         .create_item(
             default_label_id,
             "Test Media Item",
@@ -45,7 +45,7 @@ fn create_test_vault() -> (tempfile::TempDir, Vault, MemoryStore, Uuid, Uuid) {
         )
         .expect("create item");
 
-    (dir, vault, keystore, default_label_id, item.id)
+    (dir, secwet, keystore, default_label_id, item.id)
 }
 
 // ============================================================================
@@ -54,7 +54,7 @@ fn create_test_vault() -> (tempfile::TempDir, Vault, MemoryStore, Uuid, Uuid) {
 
 #[test]
 fn test_file_upload_download_roundtrip_and_sha256() {
-    let (_dir, mut vault, _ks, _label_id, item_id) = create_test_vault();
+    let (_dir, mut secwet, _ks, _label_id, item_id) = create_test_secwet();
 
     // 1. Item-level file upload
     let file_data = b"Hello, encrypted secure storage! XChaCha20Poly1305 with SHA-256.".to_vec();
@@ -65,7 +65,7 @@ fn test_file_upload_download_roundtrip_and_sha256() {
     };
     let expected_sha_hex = data_encoding::HEXLOWER.encode(&expected_sha256);
 
-    let meta = vault
+    let meta = secwet
         .upload_file(
             item_id,
             None,
@@ -83,23 +83,23 @@ fn test_file_upload_download_roundtrip_and_sha256() {
     assert_eq!(meta.environment_id, None);
 
     // Verify listing
-    let files = vault.list_files(item_id, None).expect("list files");
+    let files = secwet.list_files(item_id, None).expect("list files");
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].id, meta.id);
     assert_eq!(files[0].name, "document.txt");
 
     // 2. Download and verify bytes
-    let (dl_meta, dl_data) = vault.download_file(meta.id).expect("download file");
+    let (dl_meta, dl_data) = secwet.download_file(meta.id).expect("download file");
     assert_eq!(dl_meta.id, meta.id);
     assert_eq!(dl_data, file_data);
 
     // 3. Environment-level file upload
-    let env = vault
+    let env = secwet
         .add_environment(item_id, "production")
         .expect("add env");
 
     let env_file_data = vec![0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE];
-    let env_file_meta = vault
+    let env_file_meta = secwet
         .upload_file(
             item_id,
             Some(env.id),
@@ -112,19 +112,19 @@ fn test_file_upload_download_roundtrip_and_sha256() {
     assert_eq!(env_file_meta.environment_id, Some(env.id));
 
     // Verify item-level listing does NOT contain env file
-    let item_files = vault.list_files(item_id, None).expect("list item files");
+    let item_files = secwet.list_files(item_id, None).expect("list item files");
     assert_eq!(item_files.len(), 1);
     assert_eq!(item_files[0].id, meta.id);
 
     // Verify env-level listing contains env file
-    let env_files = vault
+    let env_files = secwet
         .list_files(item_id, Some(env.id))
         .expect("list env files");
     assert_eq!(env_files.len(), 1);
     assert_eq!(env_files[0].id, env_file_meta.id);
 
     // Download env file
-    let (_, dl_env_data) = vault
+    let (_, dl_env_data) = secwet
         .download_file(env_file_meta.id)
         .expect("download env file");
     assert_eq!(dl_env_data, env_file_data);
@@ -132,9 +132,9 @@ fn test_file_upload_download_roundtrip_and_sha256() {
 
 #[test]
 fn test_file_rename_and_deletion() {
-    let (_dir, mut vault, _ks, _label_id, item_id) = create_test_vault();
+    let (_dir, mut secwet, _ks, _label_id, item_id) = create_test_secwet();
 
-    let meta = vault
+    let meta = secwet
         .upload_file(
             item_id,
             None,
@@ -145,53 +145,53 @@ fn test_file_rename_and_deletion() {
         .expect("upload");
 
     // Rename file
-    let renamed = vault
+    let renamed = secwet
         .rename_file(meta.id, "renamed.pdf")
         .expect("rename file");
     assert_eq!(renamed.id, meta.id);
     assert_eq!(renamed.name, "renamed.pdf");
 
-    let files = vault.list_files(item_id, None).expect("list files");
+    let files = secwet.list_files(item_id, None).expect("list files");
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].name, "renamed.pdf");
 
     // Rename with empty name should fail
-    let err_empty = vault.rename_file(meta.id, "   ");
+    let err_empty = secwet.rename_file(meta.id, "   ");
     assert!(matches!(
         err_empty,
         Err(Error::Invalid { field: "name", .. })
     ));
 
     // Delete file
-    vault.delete_file(meta.id).expect("delete file");
+    secwet.delete_file(meta.id).expect("delete file");
 
     // Listing should now be empty
-    let files_after = vault.list_files(item_id, None).expect("list after delete");
+    let files_after = secwet.list_files(item_id, None).expect("list after delete");
     assert!(files_after.is_empty());
 
     // Download should return NotFound
-    let err_dl = vault.download_file(meta.id);
+    let err_dl = secwet.download_file(meta.id);
     assert!(matches!(err_dl, Err(Error::NotFound)));
 
     // Deleting again should return NotFound
-    let err_del = vault.delete_file(meta.id);
+    let err_del = secwet.delete_file(meta.id);
     assert!(matches!(err_del, Err(Error::NotFound)));
 }
 
 #[test]
 fn test_file_size_limits_and_validation() {
-    let (_dir, mut vault, _ks, _label_id, item_id) = create_test_vault();
+    let (_dir, mut secwet, _ks, _label_id, item_id) = create_test_secwet();
 
     // 1. File exceeding 50 MiB limit (52,428,800 + 1 bytes)
     let oversized_data = vec![0u8; 50 * 1024 * 1024 + 1];
-    let err_size = vault.upload_file(item_id, None, "too_big.iso", &oversized_data, None);
+    let err_size = secwet.upload_file(item_id, None, "too_big.iso", &oversized_data, None);
     assert!(matches!(
         err_size,
         Err(Error::Invalid { field: "size", .. })
     ));
 
     // Empty name
-    let err_name = vault.upload_file(item_id, None, "", b"some data", None);
+    let err_name = secwet.upload_file(item_id, None, "", b"some data", None);
     assert!(matches!(
         err_name,
         Err(Error::Invalid { field: "name", .. })
@@ -199,7 +199,7 @@ fn test_file_size_limits_and_validation() {
 
     // Name too long (> 255 chars)
     let long_name = "a".repeat(256);
-    let err_long = vault.upload_file(item_id, None, &long_name, b"some data", None);
+    let err_long = secwet.upload_file(item_id, None, &long_name, b"some data", None);
     assert!(matches!(
         err_long,
         Err(Error::Invalid { field: "name", .. })
@@ -208,9 +208,9 @@ fn test_file_size_limits_and_validation() {
 
 #[test]
 fn test_file_poly1305_tampering_fails_to_open() {
-    let (dir, mut vault, ks, _label_id, item_id) = create_test_vault();
+    let (dir, mut secwet, ks, _label_id, item_id) = create_test_secwet();
 
-    let meta = vault
+    let meta = secwet
         .upload_file(
             item_id,
             None,
@@ -220,13 +220,13 @@ fn test_file_poly1305_tampering_fails_to_open() {
         )
         .expect("upload");
 
-    let vault_id = vault.vault_id();
+    let secwet_id = secwet.secwet_id();
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
-    vault.lock();
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
+    secwet.lock();
 
     // Tamper with file blob in SQLite database
     {
@@ -251,8 +251,8 @@ fn test_file_poly1305_tampering_fails_to_open() {
     }
 
     // Unlock and verify download fails with Crypto error
-    let vault = Vault::unlock(dir.path(), &ks).expect("unlock");
-    let result = vault.download_file(meta.id);
+    let secwet = Secwet::unlock(dir.path(), &ks).expect("unlock");
+    let result = secwet.download_file(meta.id);
     assert!(
         matches!(result, Err(Error::Crypto)),
         "Tampered encrypted file blob must fail authentication with Error::Crypto"
@@ -265,12 +265,12 @@ fn test_file_poly1305_tampering_fails_to_open() {
 
 #[test]
 fn test_note_crud_and_markdown_snippet_generation() {
-    let (_dir, mut vault, _ks, _label_id, item_id) = create_test_vault();
+    let (_dir, mut secwet, _ks, _label_id, item_id) = create_test_secwet();
 
     // 1. Create a note with rich-text content
     let rich_content = "<h1>Architecture Guidelines</h1>\n<p>All secrets must be encrypted with <strong>XChaCha20-Poly1305</strong> using authenticated additional data. Plaintext buffers must be explicitly zeroized.</p>";
 
-    let note = vault
+    let note = secwet
         .create_note(item_id, None, "Architecture Guidelines", rich_content)
         .expect("create note");
 
@@ -280,7 +280,7 @@ fn test_note_crud_and_markdown_snippet_generation() {
     assert_eq!(note.environment_id, None);
 
     // Verify snippet generation in list_notes
-    let notes = vault.list_notes(item_id, None).expect("list notes");
+    let notes = secwet.list_notes(item_id, None).expect("list notes");
     assert_eq!(notes.len(), 1);
     assert_eq!(notes[0].id, note.id);
     assert_eq!(notes[0].title, "Architecture Guidelines");
@@ -299,44 +299,44 @@ fn test_note_crud_and_markdown_snippet_generation() {
     );
 
     // 2. Get full note
-    let fetched = vault.get_note(note.id).expect("get note");
+    let fetched = secwet.get_note(note.id).expect("get note");
     assert_eq!(fetched.id, note.id);
     assert_eq!(fetched.title, "Architecture Guidelines");
     assert_eq!(fetched.content, rich_content);
 
     // 3. Update note content only
     let updated_content = "Short updated memo.";
-    let updated = vault
+    let updated = secwet
         .update_note(note.id, None, Some(updated_content))
         .expect("update note content");
     assert_eq!(updated.title, "Architecture Guidelines");
     assert_eq!(updated.content, updated_content);
 
     // 4. Update note title only
-    let updated_title = vault
+    let updated_title = secwet
         .update_note(note.id, Some("Updated Guidelines Title"), None)
         .expect("update note title");
     assert_eq!(updated_title.title, "Updated Guidelines Title");
     assert_eq!(updated_title.content, updated_content);
 
     // 5. Delete note
-    vault.delete_note(note.id).expect("delete note");
+    secwet.delete_note(note.id).expect("delete note");
 
-    let notes_after = vault
+    let notes_after = secwet
         .list_notes(item_id, None)
         .expect("list notes after delete");
     assert!(notes_after.is_empty());
 
-    let err_get = vault.get_note(note.id);
+    let err_get = secwet.get_note(note.id);
     assert!(matches!(err_get, Err(Error::NotFound)));
 }
 
 #[test]
 fn test_note_validation_limits() {
-    let (_dir, mut vault, _ks, _label_id, item_id) = create_test_vault();
+    let (_dir, mut secwet, _ks, _label_id, item_id) = create_test_secwet();
 
     // Empty title
-    let err_empty = vault.create_note(item_id, None, "   ", "Some content");
+    let err_empty = secwet.create_note(item_id, None, "   ", "Some content");
     assert!(matches!(
         err_empty,
         Err(Error::Invalid { field: "title", .. })
@@ -344,7 +344,7 @@ fn test_note_validation_limits() {
 
     // Title exceeding 128 characters
     let long_title = "T".repeat(129);
-    let err_title_len = vault.create_note(item_id, None, &long_title, "Some content");
+    let err_title_len = secwet.create_note(item_id, None, &long_title, "Some content");
     assert!(matches!(
         err_title_len,
         Err(Error::Invalid { field: "title", .. })
@@ -352,12 +352,12 @@ fn test_note_validation_limits() {
 
     // Exactly 128 characters title must succeed
     let max_title = "T".repeat(128);
-    let note = vault.create_note(item_id, None, &max_title, "Content");
+    let note = secwet.create_note(item_id, None, &max_title, "Content");
     assert!(note.is_ok());
 
     // Content exceeding 1,000,000 characters
     let huge_content = "X".repeat(1_000_001);
-    let err_content_len = vault.create_note(item_id, None, "Valid Title", &huge_content);
+    let err_content_len = secwet.create_note(item_id, None, "Valid Title", &huge_content);
     assert!(matches!(
         err_content_len,
         Err(Error::Invalid {
@@ -369,19 +369,19 @@ fn test_note_validation_limits() {
 
 #[test]
 fn test_note_poly1305_tampering_fails_to_open() {
-    let (dir, mut vault, ks, _label_id, item_id) = create_test_vault();
+    let (dir, mut secwet, ks, _label_id, item_id) = create_test_secwet();
 
-    let note = vault
+    let note = secwet
         .create_note(item_id, None, "Top Secret Note", "Do not tamper!")
         .expect("create note");
 
-    let vault_id = vault.vault_id();
+    let secwet_id = secwet.secwet_id();
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
-    vault.lock();
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
+    secwet.lock();
 
     // Tamper with note blob in SQLite
     {
@@ -405,8 +405,8 @@ fn test_note_poly1305_tampering_fails_to_open() {
         .expect("tamper blob");
     }
 
-    let vault = Vault::unlock(dir.path(), &ks).expect("unlock");
-    let result = vault.get_note(note.id);
+    let secwet = Secwet::unlock(dir.path(), &ks).expect("unlock");
+    let result = secwet.get_note(note.id);
     assert!(
         matches!(result, Err(Error::Crypto)),
         "Tampered encrypted note blob must fail Poly1305 authentication with Error::Crypto"

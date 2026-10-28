@@ -1,7 +1,7 @@
 //! Integration test suite for Secwet Tauri backend commands.
 //!
 //! Validates:
-//! 1. All commands enforce `vault_locked` when locked.
+//! 1. All commands enforce `locked` when locked.
 //! 2. Full lifecycle (status, create, unlock, lock).
 //! 3. Labels CRUD and reordering.
 //! 4. Items CRUD with 0 default environments.
@@ -27,12 +27,15 @@ use secwet_desktop_lib::commands::{
     label_rename_impl, label_reorder_impl, labels_list_impl, note_copy_plain_impl, note_create_impl,
     note_delete_impl, note_get_impl, note_update_impl, notes_list_impl, overview_impl,
     project_create_impl, project_delete_impl, project_rename_impl, projects_list_impl,
+    recovery_key_create_impl, recovery_key_replace_impl, recovery_status_impl,
     secret_copy_impl, secret_copy_to_environment_impl, secret_create_impl, secret_delete_impl,
     secret_reveal_impl, secret_update_impl, secrets_list_impl, settings_get_impl,
-    settings_set_impl, vault_create_impl, vault_lock_impl, vault_status_impl, vault_unlock_impl,
-    NoteDraftDto, NoteUpdateDto, SecretDraftDto, SettingsPatchDto,
+    settings_set_impl, space_create_impl, secwet_create_impl, secwet_lock_impl, secwet_status_impl,
+    secwet_unlock_impl, workspace_export_impl, workspace_restore_impl,
+    ExportSummaryDto, NoteDraftDto, NoteUpdateDto, RecoveryStatusDto, SecretDraftDto,
+    SettingsPatchDto,
 };
-use secwet_desktop_lib::state::{AppState, VaultStatusDto};
+use secwet_desktop_lib::state::{AppState, SecwetStatusDto};
 use tempfile::tempdir;
 use uuid::Uuid;
 
@@ -60,7 +63,7 @@ impl ClipboardPort for TestMockClipboard {
 }
 
 #[test]
-fn test_commands_enforce_vault_locked_when_not_unlocked() {
+fn test_commands_enforce_locked_when_not_unlocked() {
     let dir = tempdir().unwrap();
     let keystore = Arc::new(MemoryStore::new());
     let state = AppState::new(dir.path().to_path_buf(), keystore);
@@ -68,33 +71,33 @@ fn test_commands_enforce_vault_locked_when_not_unlocked() {
     let dummy_id = Uuid::new_v4();
 
     // 1. Status is Uninitialized, not locked yet
-    let status = vault_status_impl(&state).unwrap();
-    assert_eq!(status, VaultStatusDto::Uninitialized);
+    let status = secwet_status_impl(&state).unwrap();
+    assert_eq!(status, SecwetStatusDto::Uninitialized);
 
-    // 2. All data commands return vault_locked
+    // 2. All data commands return locked
     // Labels
-    assert_eq!(labels_list_impl(&state).unwrap_err().code, "vault_locked");
-    assert_eq!(label_create_impl(None, &state, "L".into(), None).unwrap_err().code, "vault_locked");
-    assert_eq!(label_rename_impl(None, &state, dummy_id, "L".into(), None).unwrap_err().code, "vault_locked");
-    assert_eq!(label_delete_impl(None, &state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(label_reorder_impl(None, &state, vec![dummy_id]).unwrap_err().code, "vault_locked");
+    assert_eq!(labels_list_impl(&state).unwrap_err().code, "locked");
+    assert_eq!(label_create_impl(None, &state, "L".into(), None).unwrap_err().code, "locked");
+    assert_eq!(label_rename_impl(None, &state, dummy_id, "L".into(), None).unwrap_err().code, "locked");
+    assert_eq!(label_delete_impl(None, &state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(label_reorder_impl(None, &state, vec![dummy_id]).unwrap_err().code, "locked");
 
     // Items
-    assert_eq!(items_list_impl(&state, None).unwrap_err().code, "vault_locked");
-    assert_eq!(item_create_impl(None, &state, dummy_id, "I".into(), None).unwrap_err().code, "vault_locked");
-    assert_eq!(item_rename_impl(None, &state, dummy_id, "I".into(), None).unwrap_err().code, "vault_locked");
-    assert_eq!(item_delete_impl(None, &state, dummy_id).unwrap_err().code, "vault_locked");
+    assert_eq!(items_list_impl(&state, None).unwrap_err().code, "locked");
+    assert_eq!(item_create_impl(None, &state, dummy_id, "I".into(), None).unwrap_err().code, "locked");
+    assert_eq!(item_rename_impl(None, &state, dummy_id, "I".into(), None).unwrap_err().code, "locked");
+    assert_eq!(item_delete_impl(None, &state, dummy_id).unwrap_err().code, "locked");
 
     // Environments
-    assert_eq!(environments_list_impl(&state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(environment_add_impl(None, &state, dummy_id, "E".into()).unwrap_err().code, "vault_locked");
-    assert_eq!(environment_rename_impl(None, &state, dummy_id, "E".into()).unwrap_err().code, "vault_locked");
-    assert_eq!(environment_delete_impl(None, &state, dummy_id, None).unwrap_err().code, "vault_locked");
+    assert_eq!(environments_list_impl(&state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(environment_add_impl(None, &state, dummy_id, "E".into()).unwrap_err().code, "locked");
+    assert_eq!(environment_rename_impl(None, &state, dummy_id, "E".into()).unwrap_err().code, "locked");
+    assert_eq!(environment_delete_impl(None, &state, dummy_id, None).unwrap_err().code, "locked");
 
     // Secrets
-    assert_eq!(secrets_list_impl(&state, Some(dummy_id), None).unwrap_err().code, "vault_locked");
-    assert_eq!(secret_reveal_impl(&state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(secret_copy_impl(Arc::clone(&mock_cb), &state, dummy_id).unwrap_err().code, "vault_locked");
+    assert_eq!(secrets_list_impl(&state, Some(dummy_id), None).unwrap_err().code, "locked");
+    assert_eq!(secret_reveal_impl(&state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(secret_copy_impl(Arc::clone(&mock_cb), &state, dummy_id).unwrap_err().code, "locked");
 
     let draft = SecretDraftDto {
         item_id: Some(dummy_id),
@@ -105,52 +108,52 @@ fn test_commands_enforce_vault_locked_when_not_unlocked() {
         value: "secret".into(),
         note: None,
     };
-    assert_eq!(secret_create_impl(None, &state, draft.clone()).unwrap_err().code, "vault_locked");
-    assert_eq!(secret_update_impl(None, &state, dummy_id, draft).unwrap_err().code, "vault_locked");
-    assert_eq!(secret_delete_impl(None, &state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(secret_copy_to_environment_impl(None, &state, dummy_id, Some(dummy_id)).unwrap_err().code, "vault_locked");
+    assert_eq!(secret_create_impl(None, &state, draft.clone()).unwrap_err().code, "locked");
+    assert_eq!(secret_update_impl(None, &state, dummy_id, draft).unwrap_err().code, "locked");
+    assert_eq!(secret_delete_impl(None, &state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(secret_copy_to_environment_impl(None, &state, dummy_id, Some(dummy_id)).unwrap_err().code, "locked");
 
     // Files
-    assert_eq!(files_list_impl(&state, dummy_id, None).unwrap_err().code, "vault_locked");
-    assert_eq!(file_upload_impl(None, &state, dummy_id, None, "f.txt".into(), None, vec![1, 2]).unwrap_err().code, "vault_locked");
-    assert_eq!(file_download_impl(&state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(file_rename_impl(None, &state, dummy_id, "g.txt".into()).unwrap_err().code, "vault_locked");
-    assert_eq!(file_delete_impl(None, &state, dummy_id).unwrap_err().code, "vault_locked");
+    assert_eq!(files_list_impl(&state, dummy_id, None).unwrap_err().code, "locked");
+    assert_eq!(file_upload_impl(None, &state, dummy_id, None, "f.txt".into(), None, vec![1, 2]).unwrap_err().code, "locked");
+    assert_eq!(file_download_impl(&state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(file_rename_impl(None, &state, dummy_id, "g.txt".into()).unwrap_err().code, "locked");
+    assert_eq!(file_delete_impl(None, &state, dummy_id).unwrap_err().code, "locked");
 
     // Notes
-    assert_eq!(notes_list_impl(&state, dummy_id, None).unwrap_err().code, "vault_locked");
-    assert_eq!(note_get_impl(&state, dummy_id).unwrap_err().code, "vault_locked");
+    assert_eq!(notes_list_impl(&state, dummy_id, None).unwrap_err().code, "locked");
+    assert_eq!(note_get_impl(&state, dummy_id).unwrap_err().code, "locked");
     let note_draft = NoteDraftDto {
         item_id: dummy_id,
         environment_id: None,
         title: "T".into(),
         content: "<p>body</p>".into(),
     };
-    assert_eq!(note_create_impl(None, &state, note_draft).unwrap_err().code, "vault_locked");
-    assert_eq!(note_update_impl(None, &state, dummy_id, NoteUpdateDto { title: None, content: None }).unwrap_err().code, "vault_locked");
-    assert_eq!(note_delete_impl(None, &state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(note_copy_plain_impl(Arc::clone(&mock_cb), &state, dummy_id).unwrap_err().code, "vault_locked");
-    assert_eq!(clipboard_copy_text_impl(Arc::clone(&mock_cb), &state, "some text".into()).unwrap_err().code, "vault_locked");
+    assert_eq!(note_create_impl(None, &state, note_draft).unwrap_err().code, "locked");
+    assert_eq!(note_update_impl(None, &state, dummy_id, NoteUpdateDto { title: None, content: None }).unwrap_err().code, "locked");
+    assert_eq!(note_delete_impl(None, &state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(note_copy_plain_impl(Arc::clone(&mock_cb), &state, dummy_id).unwrap_err().code, "locked");
+    assert_eq!(clipboard_copy_text_impl(Arc::clone(&mock_cb), &state, "some text".into()).unwrap_err().code, "locked");
 
     // Dashboard & Overview
-    assert_eq!(overview_impl(&state).unwrap_err().code, "vault_locked");
-    assert_eq!(dashboard_get_impl(&state).unwrap_err().code, "vault_locked");
-    assert_eq!(dashboard_set_impl(None, &state, DashboardConfig::default()).unwrap_err().code, "vault_locked");
+    assert_eq!(overview_impl(&state).unwrap_err().code, "locked");
+    assert_eq!(dashboard_get_impl(&state).unwrap_err().code, "locked");
+    assert_eq!(dashboard_set_impl(None, &state, DashboardConfig::default()).unwrap_err().code, "locked");
 
     // Settings
-    assert_eq!(settings_get_impl(&state).unwrap_err().code, "vault_locked");
+    assert_eq!(settings_get_impl(&state).unwrap_err().code, "locked");
     let patch = SettingsPatchDto {
         theme: Some("dark".into()),
         lock_timeout_minutes: Some(30),
         device_name: Some("dev".into()),
     };
-    assert_eq!(settings_set_impl(None, &state, patch).unwrap_err().code, "vault_locked");
+    assert_eq!(settings_set_impl(None, &state, patch).unwrap_err().code, "locked");
 
     // Compatibility (Projects)
-    assert_eq!(projects_list_impl(&state).unwrap_err().code, "vault_locked");
-    assert_eq!(project_create_impl(None, &state, "P".into(), vec![]).unwrap_err().code, "vault_locked");
-    assert_eq!(project_rename_impl(None, &state, dummy_id, "P".into()).unwrap_err().code, "vault_locked");
-    assert_eq!(project_delete_impl(None, &state, dummy_id).unwrap_err().code, "vault_locked");
+    assert_eq!(projects_list_impl(&state).unwrap_err().code, "locked");
+    assert_eq!(project_create_impl(None, &state, "P".into(), vec![]).unwrap_err().code, "locked");
+    assert_eq!(project_rename_impl(None, &state, dummy_id, "P".into()).unwrap_err().code, "locked");
+    assert_eq!(project_delete_impl(None, &state, dummy_id).unwrap_err().code, "locked");
 }
 
 #[tokio::test]
@@ -161,21 +164,21 @@ async fn test_full_lifecycle_and_crud_workflow() {
     let mock_cb = Arc::new(TestMockClipboard::default());
 
     // 1. Initial status
-    assert_eq!(vault_status_impl(&state).unwrap(), VaultStatusDto::Uninitialized);
+    assert_eq!(secwet_status_impl(&state).unwrap(), SecwetStatusDto::Uninitialized);
 
-    // 2. Create vault
-    let status = vault_create_impl(None, &state, Some("MacBook-Dev".into())).unwrap();
-    let vault_id = match status {
-        VaultStatusDto::Unlocked { vault_id } => vault_id,
+    // 2. Create secwet
+    let status = secwet_create_impl(None, &state, Some("MacBook-Dev".into())).unwrap();
+    let secwet_id = match status {
+        SecwetStatusDto::Unlocked { secwet_id } => secwet_id,
         _ => panic!("Expected Unlocked status after create"),
     };
 
     // Double create fails cleanly
-    let dup_err = vault_create_impl(None, &state, None).unwrap_err();
+    let dup_err = secwet_create_impl(None, &state, None).unwrap_err();
     assert_eq!(dup_err.code, "already_initialized");
 
     // Status is unlocked
-    assert_eq!(vault_status_impl(&state).unwrap(), VaultStatusDto::Unlocked { vault_id });
+    assert_eq!(secwet_status_impl(&state).unwrap(), SecwetStatusDto::Unlocked { secwet_id });
 
     // 3. Labels CRUD and reordering
     let label1 = label_create_impl(None, &state, "Infrastructure".into(), Some("server".into())).unwrap();
@@ -370,17 +373,17 @@ async fn test_full_lifecycle_and_crud_workflow() {
     environment_delete_impl(None, &state, dev_env.id, Some(false)).unwrap();
 
     // 13. Lock / Unlock cycle
-    vault_lock_impl(None, &state).unwrap();
-    assert_eq!(vault_status_impl(&state).unwrap(), VaultStatusDto::Locked { vault_id });
+    secwet_lock_impl(None, &state).unwrap();
+    assert_eq!(secwet_status_impl(&state).unwrap(), SecwetStatusDto::Locked { secwet_id });
 
-    vault_unlock_impl(None, &state).unwrap();
-    assert_eq!(vault_status_impl(&state).unwrap(), VaultStatusDto::Unlocked { vault_id });
+    secwet_unlock_impl(None, &state).unwrap();
+    assert_eq!(secwet_status_impl(&state).unwrap(), SecwetStatusDto::Unlocked { secwet_id });
 
     // Verify settings and dashboard persist after unlock
     let restored_dash = dashboard_get_impl(&state).unwrap();
     assert_eq!(restored_dash.home_label, "Executive Dashboard");
 
-    vault_lock_impl(None, &state).unwrap();
+    secwet_lock_impl(None, &state).unwrap();
 }
 
 #[tokio::test]
@@ -392,8 +395,8 @@ async fn test_clipboard_copy_auto_clear_timing_and_foreign_content() {
 
     let mock_cb = Arc::new(TestMockClipboard::default());
 
-    // Create vault and secret
-    vault_create_impl(None, &state, Some("test".into())).unwrap();
+    // Create secwet and secret
+    secwet_create_impl(None, &state, Some("test".into())).unwrap();
     let label = label_create_impl(None, &state, "TestLabel".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "TestItem".into(), None).unwrap();
 
@@ -440,7 +443,7 @@ async fn test_error_mappings_and_edge_cases() {
     let state = AppState::new(dir.path().to_path_buf(), keystore);
     let mock_cb = Arc::new(TestMockClipboard::default());
 
-    vault_create_impl(None, &state, Some("test-device".into())).unwrap();
+    secwet_create_impl(None, &state, Some("test-device".into())).unwrap();
     let label = label_create_impl(None, &state, "General".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "Web".into(), None).unwrap();
 
@@ -525,7 +528,7 @@ async fn test_secret_deserialization_general_secret_variations() {
     let keystore = Arc::new(MemoryStore::new());
     let state = AppState::new(dir.path().to_path_buf(), keystore);
 
-    vault_create_impl(None, &state, Some("TestDevice".into())).unwrap();
+    secwet_create_impl(None, &state, Some("TestDevice".into())).unwrap();
     let label = label_create_impl(None, &state, "General".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "MyApp".into(), None).unwrap();
 
@@ -585,10 +588,188 @@ async fn test_secret_deserialization_general_secret_variations() {
     assert_eq!(secret_reveal_impl(&state, sec_legacy.id).unwrap(), "val_legacy");
 
     // 7. Verify SQLite persistence across lock/unlock
-    vault_lock_impl(None, &state).unwrap();
-    vault_unlock_impl(None, &state).unwrap();
+    secwet_lock_impl(None, &state).unwrap();
+    secwet_unlock_impl(None, &state).unwrap();
     let secrets_reopened = secrets_list_impl(&state, Some(item.id), None).expect("list_secrets after reopen");
     assert_eq!(secrets_reopened.len(), 4);
     assert_eq!(secret_reveal_impl(&state, sec_empty.id).unwrap(), "val_empty");
 }
+
+#[test]
+fn test_recovery_and_workspace_export_restore_lifecycle_roundtrip() {
+    let dir = tempdir().unwrap();
+    let keystore = Arc::new(MemoryStore::new());
+    let state = AppState::new(dir.path().to_path_buf(), keystore);
+
+    // 1. Locked / uninitialized state checks
+    assert_eq!(recovery_status_impl(&state).unwrap_err().code, "locked");
+    assert_eq!(recovery_key_create_impl(None, &state).unwrap_err().code, "locked");
+    assert_eq!(recovery_key_replace_impl(None, &state).unwrap_err().code, "locked");
+    assert_eq!(
+        workspace_export_impl(None, &state, Some(dir.path().join("out.secwet")), "KEY".into())
+            .unwrap_err()
+            .code,
+        "locked"
+    );
+
+    // 2. Initialize workspace
+    secwet_create_impl(None, &state, Some("test-device".into())).unwrap();
+
+    // Recovery status initially false
+    let initial_status: RecoveryStatusDto = recovery_status_impl(&state).unwrap();
+    assert!(!initial_status.created);
+    assert_eq!(initial_status.created_at, None);
+
+    // 3. Populate workspace with spaces, labels, items, environments, secrets, notes, and files
+    let space = space_create_impl(None, &state, "Backend Space".into(), Some("server".into()))
+        .unwrap();
+    assert_eq!(space.name, "Backend Space");
+    let label = label_create_impl(None, &state, "Core Service".into(), Some("tag".into()))
+        .unwrap();
+    let item = item_create_impl(None, &state, label.id, "Auth Service".into(), None)
+        .unwrap();
+    let env = environment_add_impl(None, &state, item.id, "Production".into())
+        .unwrap();
+
+    let secret_draft = SecretDraftDto {
+        item_id: Some(item.id),
+        project_id: None,
+        environment_id: Some(env.id),
+        name: "JWT_SECRET".into(),
+        kind: SecretKind::Password,
+        value: "super-secret-jwt-signing-key".into(),
+        note: Some("Production JWT key".into()),
+    };
+    secret_create_impl(None, &state, secret_draft).unwrap();
+
+    let note_draft = NoteDraftDto {
+        item_id: item.id,
+        environment_id: Some(env.id),
+        title: "Deployment Notes".into(),
+        content: "<p>Important runbook steps</p>".into(),
+    };
+    note_create_impl(None, &state, note_draft).unwrap();
+
+    let file_content = b"TLS CERTIFICATE CONTENT PAYLOAD 12345";
+    file_upload_impl(
+        None,
+        &state,
+        item.id,
+        Some(env.id),
+        "cert.pem".into(),
+        Some("application/x-pem-file".into()),
+        file_content.to_vec(),
+    )
+    .unwrap();
+
+    // 4. Create recovery key
+    let key1 = recovery_key_create_impl(None, &state).unwrap();
+    assert_eq!(key1.len(), 29); // 25 chars + 4 hyphens
+    assert_eq!(key1.matches('-').count(), 4);
+
+    let status1 = recovery_status_impl(&state).unwrap();
+    assert!(status1.created);
+    assert!(status1.created_at.is_some());
+
+    // 5. Replace recovery key
+    let key2 = recovery_key_replace_impl(None, &state).unwrap();
+    assert_ne!(key1, key2);
+    assert_eq!(key2.len(), 29);
+
+    let status2 = recovery_status_impl(&state).unwrap();
+    assert!(status2.created);
+
+    // 6. Export with invalidated old key fails
+    let export_path = dir.path().join("workspace_export.secwet");
+    let err_old_key = workspace_export_impl(None, &state, Some(export_path.clone()), key1).unwrap_err();
+    assert_eq!(err_old_key.code, "recovery_failed");
+
+    // 7. Headless mode without path fails with invalid error
+    let err_headless = workspace_export_impl(None, &state, None, key2.clone()).unwrap_err();
+    assert_eq!(err_headless.code, "invalid");
+
+    // 8. Export with valid key2 succeeds
+    let export_summary: ExportSummaryDto = workspace_export_impl(None, &state, Some(export_path.clone()), key2.clone())
+        .unwrap();
+    assert!(export_path.exists());
+    assert!(export_summary.bytes_written > 0);
+    assert!(export_summary.spaces_count >= 1);
+    assert!(export_summary.items_count >= 1);
+    assert!(export_summary.secrets_count >= 1);
+    assert!(export_summary.notes_count >= 1);
+    assert!(export_summary.files_count >= 1);
+
+    // 9. Restore on a fresh device / state
+    let restore_dir = tempdir().unwrap();
+    let restore_keystore = Arc::new(MemoryStore::new());
+    let restore_state = AppState::new(restore_dir.path().to_path_buf(), restore_keystore);
+
+    // Wrong key fails
+    let err_restore_bad = workspace_restore_impl(
+        None,
+        &restore_state,
+        Some(export_path.clone()),
+        "WRONG-KEY00-00000-00000-00000".into(),
+        Some("restore-dev".into()),
+    )
+    .unwrap_err();
+    assert_eq!(err_restore_bad.code, "recovery_failed");
+
+    // Headless mode without path fails with invalid error
+    let err_restore_headless = workspace_restore_impl(
+        None,
+        &restore_state,
+        None,
+        key2.clone(),
+        Some("restore-dev".into()),
+    )
+    .unwrap_err();
+    assert_eq!(err_restore_headless.code, "invalid");
+
+    // Restore with correct key2 succeeds
+    let restore_status = workspace_restore_impl(
+        None,
+        &restore_state,
+        Some(export_path),
+        key2,
+        Some("restored-desktop".into()),
+    )
+    .unwrap();
+
+    match restore_status {
+        SecwetStatusDto::Unlocked { secwet_id } => {
+            assert_ne!(secwet_id, Uuid::nil());
+        }
+        _ => panic!("Expected Unlocked status after restore"),
+    }
+
+    // 10. Verify 100% data fidelity on restored instance
+    let restored_status = recovery_status_impl(&restore_state).unwrap();
+    assert!(restored_status.created);
+
+    let restored_items = items_list_impl(&restore_state, Some(label.id)).unwrap();
+    assert_eq!(restored_items.len(), 1);
+    assert_eq!(restored_items[0].name, "Auth Service");
+
+    let restored_secrets = secrets_list_impl(&restore_state, Some(item.id), Some(env.id)).unwrap();
+    assert_eq!(restored_secrets.len(), 1);
+    assert_eq!(restored_secrets[0].name, "JWT_SECRET");
+
+    let revealed = secret_reveal_impl(&restore_state, restored_secrets[0].id).unwrap();
+    assert_eq!(revealed, "super-secret-jwt-signing-key");
+
+    let restored_notes = notes_list_impl(&restore_state, item.id, Some(env.id)).unwrap();
+    assert_eq!(restored_notes.len(), 1);
+    let note = note_get_impl(&restore_state, restored_notes[0].id).unwrap();
+    assert_eq!(note.title, "Deployment Notes");
+    assert_eq!(note.content, "<p>Important runbook steps</p>");
+
+    let restored_files = files_list_impl(&restore_state, item.id, Some(env.id)).unwrap();
+    assert_eq!(restored_files.len(), 1);
+    assert_eq!(restored_files[0].name, "cert.pem");
+    let downloaded = file_download_impl(&restore_state, restored_files[0].id).unwrap();
+    assert_eq!(downloaded.bytes, file_content);
+}
+
+
 

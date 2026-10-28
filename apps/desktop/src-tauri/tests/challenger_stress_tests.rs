@@ -3,7 +3,7 @@
 //! Objectives:
 //! 1. Verify rapid lock/unlock during active auto-clear timers.
 //! 2. Verify foreign clipboard content is preserved across rapid lifecycle transitions.
-//! 3. Verify concurrent burst copies with interleaved vault locking and unlocking.
+//! 3. Verify concurrent burst copies with interleaved secwet locking and unlocking.
 //! 4. Verify absolute zero secret leakage in all UiError variants, DTOs, and Debug representations.
 //! 5. Verify rich-text note plain text clipboard extraction, isolation, and auto-clear.
 
@@ -18,11 +18,11 @@ use secwet_desktop_lib::clipboard::{extract_plain_text, ClipboardPort};
 use secwet_desktop_lib::commands::{
     clipboard_copy_text_impl, item_create_impl, label_create_impl, note_copy_plain_impl,
     note_create_impl, overview_impl, secret_copy_impl, secret_create_impl, secret_reveal_impl,
-    secrets_list_impl, vault_create_impl, vault_lock_impl, vault_status_impl, vault_unlock_impl,
+    secrets_list_impl, secwet_create_impl, secwet_lock_impl, secwet_status_impl, secwet_unlock_impl,
     NoteDraftDto, SecretDraftDto,
 };
 use secwet_desktop_lib::error::UiError;
-use secwet_desktop_lib::state::{AppState, VaultStatusDto};
+use secwet_desktop_lib::state::{AppState, SecwetStatusDto};
 use tempfile::tempdir;
 
 #[derive(Default)]
@@ -84,8 +84,8 @@ async fn test_adversarial_rapid_lock_unlock_during_active_autoclear() {
 
     let cb = Arc::new(ChallengerMockClipboard::default());
 
-    // Initialize vault
-    vault_create_impl(None, &state, Some("ChallengerDevice".into())).unwrap();
+    // Initialize secwet
+    secwet_create_impl(None, &state, Some("ChallengerDevice".into())).unwrap();
     let label = label_create_impl(None, &state, "Engineering".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "CoreAPI".into(), None).unwrap();
 
@@ -110,20 +110,20 @@ async fn test_adversarial_rapid_lock_unlock_during_active_autoclear() {
     let s_clone = Arc::clone(&state);
     let lifecycle_handle = thread::spawn(move || {
         for _ in 0..40 {
-            let _ = vault_lock_impl(None, &s_clone);
+            let _ = secwet_lock_impl(None, &s_clone);
             thread::yield_now();
-            let _ = vault_unlock_impl(None, &s_clone);
+            let _ = secwet_unlock_impl(None, &s_clone);
             thread::yield_now();
         }
-        // End in locked state to test clearing even when vault is locked
-        let _ = vault_lock_impl(None, &s_clone);
+        // End in locked state to test clearing even when secwet is locked
+        let _ = secwet_lock_impl(None, &s_clone);
     });
 
     lifecycle_handle.join().unwrap();
 
-    // Verify vault is currently locked
-    match vault_status_impl(&state).unwrap() {
-        VaultStatusDto::Locked { .. } => {}
+    // Verify secwet is currently locked
+    match secwet_status_impl(&state).unwrap() {
+        SecwetStatusDto::Locked { .. } => {}
         status => panic!("Expected Locked status, got {:?}", status),
     }
 
@@ -131,12 +131,12 @@ async fn test_adversarial_rapid_lock_unlock_during_active_autoclear() {
     let cleared = wait_for_clear_or_timeout(&cb, Duration::from_millis(500)).await;
     assert!(
         cleared,
-        "Clipboard must be cleared after timeout even if vault was locked during auto-clear"
+        "Clipboard must be cleared after timeout even if secwet was locked during auto-clear"
     );
     assert_eq!(cb.clear_count.load(Ordering::SeqCst), 1);
 
-    // Unlock and verify vault state remains completely intact
-    vault_unlock_impl(None, &state).unwrap();
+    // Unlock and verify secwet state remains completely intact
+    secwet_unlock_impl(None, &state).unwrap();
     let revealed = secret_reveal_impl(&state, meta.id).unwrap();
     assert_eq!(revealed, canary_secret);
 }
@@ -155,7 +155,7 @@ async fn test_adversarial_foreign_overwrite_survives_rapid_lock_unlock() {
 
     let cb = Arc::new(ChallengerMockClipboard::default());
 
-    vault_create_impl(None, &state, Some("DevHost".into())).unwrap();
+    secwet_create_impl(None, &state, Some("DevHost".into())).unwrap();
     let label = label_create_impl(None, &state, "Ops".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "Cluster".into(), None).unwrap();
 
@@ -184,9 +184,9 @@ async fn test_adversarial_foreign_overwrite_survives_rapid_lock_unlock() {
     let s_clone = Arc::clone(&state);
     let lifecycle_handle = thread::spawn(move || {
         for _ in 0..30 {
-            let _ = vault_lock_impl(None, &s_clone);
+            let _ = secwet_lock_impl(None, &s_clone);
             thread::yield_now();
-            let _ = vault_unlock_impl(None, &s_clone);
+            let _ = secwet_unlock_impl(None, &s_clone);
             thread::yield_now();
         }
     });
@@ -202,7 +202,7 @@ async fn test_adversarial_foreign_overwrite_survives_rapid_lock_unlock() {
 }
 
 // ============================================================================
-// Test 3: Burst Copies With Interleaved Vault Locking and Unlocking
+// Test 3: Burst Copies With Interleaved Secwet Locking and Unlocking
 // ============================================================================
 
 #[test]
@@ -215,7 +215,7 @@ fn test_adversarial_burst_copies_with_interleaved_locking() {
 
     let cb = Arc::new(ChallengerMockClipboard::default());
 
-    vault_create_impl(None, &state, Some("StressBench".into())).unwrap();
+    secwet_create_impl(None, &state, Some("StressBench".into())).unwrap();
     let label = label_create_impl(None, &state, "Services".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "AuthService".into(), None).unwrap();
 
@@ -264,7 +264,7 @@ fn test_adversarial_burst_copies_with_interleaved_locking() {
                     Ok(()) => {
                         succ.fetch_add(1, Ordering::Relaxed);
                     }
-                    Err(e) if e.code == "vault_locked" => {
+                    Err(e) if e.code == "locked" => {
                         lock_rej.fetch_add(1, Ordering::Relaxed);
                     }
                     Err(e) => {
@@ -282,9 +282,9 @@ fn test_adversarial_burst_copies_with_interleaved_locking() {
     let ctrl_handle = thread::spawn(move || {
         b_ctrl.wait();
         for _ in 0..50 {
-            let _ = vault_lock_impl(None, &s_ctrl);
+            let _ = secwet_lock_impl(None, &s_ctrl);
             thread::sleep(Duration::from_millis(1));
-            let _ = vault_unlock_impl(None, &s_ctrl);
+            let _ = secwet_unlock_impl(None, &s_ctrl);
             thread::sleep(Duration::from_millis(1));
         }
     });
@@ -326,7 +326,7 @@ fn test_adversarial_zero_secret_leakage_in_error_display_and_debug() {
     // Verify all 17 secwet_core::Error variants format without sensitive leakage
     let errors: Vec<secwet_core::Error> = vec![
         secwet_core::Error::Locked,
-        secwet_core::Error::NoVault,
+        secwet_core::Error::NotInitialized,
         secwet_core::Error::AlreadyInitialized,
         secwet_core::Error::NotFound,
         secwet_core::Error::Invalid {
@@ -365,8 +365,8 @@ fn test_adversarial_zero_secret_leakage_in_error_display_and_debug() {
     }
 
     // 2. SecretMeta and Overview serialization must never contain the full canary
-    vault_create_impl(None, &state, Some("LeakTestNode".into())).unwrap();
-    let label = label_create_impl(None, &state, "VaultGroup".into(), None).unwrap();
+    secwet_create_impl(None, &state, Some("LeakTestNode".into())).unwrap();
+    let label = label_create_impl(None, &state, "SecwetGroup".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "ItemWithSecret".into(), None).unwrap();
 
     let meta = secret_create_impl(
@@ -425,7 +425,7 @@ async fn test_adversarial_note_copy_plain_and_clipboard_text_concurrency() {
 
     let cb = Arc::new(ChallengerMockClipboard::default());
 
-    vault_create_impl(None, &state, Some("NoteNode".into())).unwrap();
+    secwet_create_impl(None, &state, Some("NoteNode".into())).unwrap();
     let label = label_create_impl(None, &state, "NotesLabel".into(), None).unwrap();
     let item = item_create_impl(None, &state, label.id, "NoteItem".into(), None).unwrap();
 
@@ -439,7 +439,7 @@ async fn test_adversarial_note_copy_plain_and_clipboard_text_concurrency() {
     assert!(extracted.contains("Key server: 10.0.0.5"));
     assert!(extracted.contains("Password: xyz999"));
 
-    // 2. Create note in vault
+    // 2. Create note in secwet
     let note_meta = note_create_impl(
         None,
         &state,
@@ -462,7 +462,7 @@ async fn test_adversarial_note_copy_plain_and_clipboard_text_concurrency() {
     assert!(wait_for_clear_or_timeout(&cb, Duration::from_millis(500)).await);
     assert_eq!(cb.clear_count.load(Ordering::SeqCst), 1);
 
-    // 5. clipboard_copy_text_impl: copies raw text and respects vault_locked
+    // 5. clipboard_copy_text_impl: copies raw text and respects locked
     clipboard_copy_text_impl(
         Arc::clone(&cb),
         &state,
@@ -471,15 +471,15 @@ async fn test_adversarial_note_copy_plain_and_clipboard_text_concurrency() {
     .unwrap();
     assert_eq!(cb.read_text().unwrap(), "Direct text copy");
 
-    // Lock vault
-    vault_lock_impl(None, &state).unwrap();
+    // Lock secwet
+    secwet_lock_impl(None, &state).unwrap();
 
-    // Copying text while locked must fail with vault_locked
+    // Copying text while locked must fail with locked
     let lock_err = clipboard_copy_text_impl(
         Arc::clone(&cb),
         &state,
         "Should fail".into(),
     )
     .unwrap_err();
-    assert_eq!(lock_err.code, "vault_locked");
+    assert_eq!(lock_err.code, "locked");
 }

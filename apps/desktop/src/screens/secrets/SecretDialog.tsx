@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Dialog } from "../../components/Dialog";
 import { SelectField, TextArea, TextField } from "../../components/Field";
@@ -33,6 +34,13 @@ interface Props {
 
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.@-]*$/;
 
+function makeEntryId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function SecretDialog({
   project,
   item,
@@ -62,7 +70,7 @@ export function SecretDialog({
   // Entries list (supports single or multiple secrets)
   const [entries, setEntries] = useState<SecretEntry[]>([
     {
-      id: initial?.id ?? "1",
+      id: initial?.id ?? makeEntryId(),
       name: initial?.name ?? "",
       value: initial && "value" in initial && typeof (initial as any).value === "string" ? (initial as any).value : "",
       note: initial?.note ?? "",
@@ -96,8 +104,8 @@ export function SecretDialog({
       (parsed.length === 1 && entries.length === 1 && !entries[0].name.trim() && !entries[0].value.trim())
     ) {
       e.preventDefault();
-      const newEntries: SecretEntry[] = parsed.map((p, idx) => ({
-        id: `${Date.now()}-${idx}`,
+      const newEntries: SecretEntry[] = parsed.map((p) => ({
+        id: makeEntryId(),
         name: p.name,
         value: p.value,
         note: "",
@@ -112,7 +120,7 @@ export function SecretDialog({
     setEntries((prev) => [
       ...prev,
       {
-        id: `${Date.now()}-${prev.length}`,
+        id: makeEntryId(),
         name: "",
         value: "",
         note: "",
@@ -298,7 +306,7 @@ export function SecretDialog({
             >
               {isMultiple && (
                 <div className={styles.entryHeader}>
-                  <span className={styles.entryBadge}>#{index + 1}</span>
+                  <Badge tone="neutral">#{index + 1}</Badge>
                   <button
                     type="button"
                     className={styles.removeBtn}
@@ -312,7 +320,7 @@ export function SecretDialog({
 
               <TextField
                 label="Name"
-                name={`name-${index}`}
+                name={`name-${entry.id}`}
                 autoComplete="off"
                 spellCheck={false}
                 placeholder="DATABASE_URL"
@@ -326,7 +334,7 @@ export function SecretDialog({
 
               <TextArea
                 label="Value"
-                name={`value-${index}`}
+                name={`value-${entry.id}`}
                 autoComplete="off"
                 spellCheck={false}
                 placeholder="postgres://user:password@host:5432/db"
@@ -337,16 +345,14 @@ export function SecretDialog({
                 }}
               />
 
-              {(!isMultiple || entry.note) && (
-                <TextField
-                  label="Note"
-                  name={`note-${index}`}
-                  help="Optional. Encrypted with the secret."
-                  placeholder="Rotates every 90 days"
-                  value={entry.note || ""}
-                  onChange={(e) => updateEntry(index, { note: e.target.value })}
-                />
-              )}
+              <TextField
+                label="Note"
+                name={`note-${entry.id}`}
+                help="Optional. Encrypted with the secret."
+                placeholder="Rotates every 90 days"
+                value={entry.note || ""}
+                onChange={(e) => updateEntry(index, { note: e.target.value })}
+              />
             </div>
           ))}
         </div>

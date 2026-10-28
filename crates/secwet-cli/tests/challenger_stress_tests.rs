@@ -1,13 +1,13 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use secwet_cli::keystore::FileKeyStore;
-use secwet_core::{SecretDraft, SecretKind, Vault};
+use secwet_core::{SecretDraft, SecretKind, Secwet};
 use std::path::Path;
 use tempfile::tempdir;
 
-fn setup_vault(data_dir: &Path) -> Vault {
+fn setup_secwet(data_dir: &Path) -> Secwet {
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    Vault::create(data_dir, "challenger-device", &keystore).expect("create vault")
+    Secwet::create(data_dir, "challenger-device", &keystore).expect("create secwet")
 }
 
 // =========================================================================
@@ -18,8 +18,8 @@ fn setup_vault(data_dir: &Path) -> Vault {
 fn test_exit_code_1_missing_item_across_all_commands() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
-    let vault = setup_vault(data_dir);
-    vault.lock();
+    let secwet = setup_secwet(data_dir);
+    secwet.lock();
 
     let missing_item = "completely-nonexistent-item";
 
@@ -91,11 +91,11 @@ fn test_exit_code_1_missing_item_across_all_commands() {
 fn test_exit_code_1_missing_environment_across_all_commands() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
-    let mut vault = setup_vault(data_dir);
-    let label = vault.create_label("General", None).unwrap();
-    let item = vault.create_item(label.id, "my-service", None).unwrap();
-    vault.add_environment(item.id, "development").unwrap();
-    vault.lock();
+    let mut secwet = setup_secwet(data_dir);
+    let label = secwet.create_label("General", None).unwrap();
+    let item = secwet.create_item(label.id, "my-service", None).unwrap();
+    secwet.add_environment(item.id, "development").unwrap();
+    secwet.lock();
 
     let missing_env = "nonexistent-env";
 
@@ -167,10 +167,10 @@ fn test_exit_code_1_missing_environment_across_all_commands() {
 fn test_exit_code_1_zero_env_item_with_env_flag_across_all_commands() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
-    let mut vault = setup_vault(data_dir);
-    let label = vault.create_label("General", None).unwrap();
-    let _item = vault.create_item(label.id, "zero-env-svc", None).unwrap();
-    vault.lock();
+    let mut secwet = setup_secwet(data_dir);
+    let label = secwet.create_label("General", None).unwrap();
+    let _item = secwet.create_item(label.id, "zero-env-svc", None).unwrap();
+    secwet.lock();
 
     let err_msg = "error: item 'zero-env-svc' has no environments";
 
@@ -281,12 +281,12 @@ fn test_exit_code_64_invalid_secwet_toml_syntax() {
 fn test_cli_flags_item_project_aliases_complete_parity() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
-    let mut vault = setup_vault(data_dir);
-    let label = vault.create_label("General", None).unwrap();
-    let item = vault.create_item(label.id, "alias-target", None).unwrap();
+    let mut secwet = setup_secwet(data_dir);
+    let label = secwet.create_label("General", None).unwrap();
+    let item = secwet.create_item(label.id, "alias-target", None).unwrap();
     let draft = SecretDraft::new(item.id, None, "CANARY_FLAG", SecretKind::EnvVar, "flag_value_xyz", None);
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let flag_combos = [
         vec!["-i", "alias-target"],
@@ -334,7 +334,7 @@ fn test_cli_flags_item_project_aliases_complete_parity() {
             .stdout("flag_value_xyz");
 
         // 4. Export
-        let mut exp_args = vec!["export", "-f", "json"];
+        let mut exp_args = vec!["export", "-f", "json", "--plaintext"];
         exp_args.extend_from_slice(combo);
         let exp_out = Command::cargo_bin("secwet")
             .unwrap()
@@ -355,11 +355,11 @@ fn test_cli_flags_item_project_aliases_complete_parity() {
 fn test_secret_inheritance_and_shadowing_deep_verification() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
-    let mut vault = setup_vault(data_dir);
-    let label = vault.create_label("General", None).unwrap();
-    let item = vault.create_item(label.id, "tiered-service", None).unwrap();
-    let env_staging = vault.add_environment(item.id, "staging").unwrap();
-    let env_prod = vault.add_environment(item.id, "production").unwrap();
+    let mut secwet = setup_secwet(data_dir);
+    let label = secwet.create_label("General", None).unwrap();
+    let item = secwet.create_item(label.id, "tiered-service", None).unwrap();
+    let env_staging = secwet.add_environment(item.id, "staging").unwrap();
+    let env_prod = secwet.add_environment(item.id, "production").unwrap();
 
     // 1. Secrets at item level (base)
     // BASE_SHARED: inherited by both staging and prod
@@ -368,24 +368,24 @@ fn test_secret_inheritance_and_shadowing_deep_verification() {
     let d1 = SecretDraft::new(item.id, None, "BASE_SHARED", SecretKind::EnvVar, "shared_base_123", None);
     let d2 = SecretDraft::new(item.id, None, "DB_HOST", SecretKind::EnvVar, "db.base.local", None);
     let d3 = SecretDraft::new(item.id, None, "OVERRIDDEN_IN_PROD", SecretKind::EnvVar, "base_val", None);
-    vault.create_secret(d1).unwrap();
-    vault.create_secret(d2).unwrap();
-    vault.create_secret(d3).unwrap();
+    secwet.create_secret(d1).unwrap();
+    secwet.create_secret(d2).unwrap();
+    secwet.create_secret(d3).unwrap();
 
     // 2. Secrets in staging environment
     let s1 = SecretDraft::new(item.id, Some(env_staging.id), "DB_HOST", SecretKind::EnvVar, "db.staging.cloud", None);
     let s2 = SecretDraft::new(item.id, Some(env_staging.id), "STAGING_SPECIAL", SecretKind::EnvVar, "stage_only", None);
-    vault.create_secret(s1).unwrap();
-    vault.create_secret(s2).unwrap();
+    secwet.create_secret(s1).unwrap();
+    secwet.create_secret(s2).unwrap();
 
     // 3. Secrets in production environment
     let p1 = SecretDraft::new(item.id, Some(env_prod.id), "DB_HOST", SecretKind::EnvVar, "db.prod.cloud", None);
     let p2 = SecretDraft::new(item.id, Some(env_prod.id), "OVERRIDDEN_IN_PROD", SecretKind::EnvVar, "prod_override_val", None);
     let p3 = SecretDraft::new(item.id, Some(env_prod.id), "PROD_SECRET", SecretKind::ApiKey, "sk_live_prod_999", None);
-    vault.create_secret(p1).unwrap();
-    vault.create_secret(p2).unwrap();
-    vault.create_secret(p3).unwrap();
-    vault.lock();
+    secwet.create_secret(p1).unwrap();
+    secwet.create_secret(p2).unwrap();
+    secwet.create_secret(p3).unwrap();
+    secwet.lock();
 
     // A. Check Item with environments when no env specified:
     // Falls back to first environment (staging) in the absence of "development"
@@ -487,10 +487,10 @@ fn test_secret_inheritance_and_shadowing_deep_verification() {
 fn test_child_signal_termination_preservation() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
-    let mut vault = setup_vault(data_dir);
-    let label = vault.create_label("General", None).unwrap();
-    let _item = vault.create_item(label.id, "signal-svc", None).unwrap();
-    vault.lock();
+    let mut secwet = setup_secwet(data_dir);
+    let label = secwet.create_label("General", None).unwrap();
+    let _item = secwet.create_item(label.id, "signal-svc", None).unwrap();
+    secwet.lock();
 
     // Signal 9 (SIGKILL) -> 128 + 9 = 137
     Command::cargo_bin("secwet")
@@ -528,21 +528,21 @@ fn test_child_signal_termination_preservation() {
 fn test_secwet_toml_item_project_precedence_and_cli_override() {
     let temp = tempdir().unwrap();
     let root = temp.path();
-    let mut vault = setup_vault(root);
-    let label = vault.create_label("General", None).unwrap();
-    let item_toml = vault.create_item(label.id, "item-from-toml", None).unwrap();
-    let item_cli = vault.create_item(label.id, "item-from-cli", None).unwrap();
+    let mut secwet = setup_secwet(root);
+    let label = secwet.create_label("General", None).unwrap();
+    let item_toml = secwet.create_item(label.id, "item-from-toml", None).unwrap();
+    let item_cli = secwet.create_item(label.id, "item-from-cli", None).unwrap();
 
     let d_toml = SecretDraft::new(item_toml.id, None, "ORIGIN", SecretKind::EnvVar, "from_toml", None);
     let d_cli = SecretDraft::new(item_cli.id, None, "ORIGIN", SecretKind::EnvVar, "from_cli", None);
-    vault.create_secret(d_toml).unwrap();
-    vault.create_secret(d_cli).unwrap();
-    vault.lock();
+    secwet.create_secret(d_toml).unwrap();
+    secwet.create_secret(d_cli).unwrap();
+    secwet.lock();
 
     let toml_file = root.join(".secwet.toml");
 
     // Case 1: toml defines `item`
-    std::fs::write(&toml_file, format!("item = \"item-from-toml\"\nvault = \"{}\"\n", root.display())).unwrap();
+    std::fs::write(&toml_file, format!("item = \"item-from-toml\"\ndata_dir = \"{}\"\n", root.display())).unwrap();
 
     let out1 = Command::cargo_bin("secwet")
         .unwrap()
@@ -564,7 +564,7 @@ fn test_secwet_toml_item_project_precedence_and_cli_override() {
     assert_eq!(out2.get_output().stdout, b"from_cli");
 
     let keystore = FileKeyStore::new(root.join(".test_keystore.json"));
-    let mut v = Vault::unlock(root, &keystore).unwrap();
+    let mut v = Secwet::unlock(root, &keystore).unwrap();
     let item_legacy = v.create_item(label.id, "item-legacy", None).unwrap();
     let d_legacy = SecretDraft::new(item_legacy.id, None, "ORIGIN", SecretKind::EnvVar, "from_legacy", None);
     v.create_secret(d_legacy).unwrap();
@@ -572,7 +572,7 @@ fn test_secwet_toml_item_project_precedence_and_cli_override() {
 
     std::fs::write(
         &toml_file,
-        format!("item = \"item-from-toml\"\nproject = \"item-legacy\"\nvault = \"{}\"\n", root.display())
+        format!("item = \"item-from-toml\"\nproject = \"item-legacy\"\ndata_dir = \"{}\"\n", root.display())
     ).unwrap();
 
     let out3 = Command::cargo_bin("secwet")

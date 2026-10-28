@@ -193,7 +193,7 @@
   width: 24px;
   height: 24px;
   flex: none;
-  border: 1.5px solid var(--color-border-strong);
+  border: 1px solid var(--color-border-strong);
   border-radius: 50%;
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);

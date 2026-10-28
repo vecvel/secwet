@@ -1,11 +1,11 @@
-use secwet_core::{SecretDraft, Vault};
+use secwet_core::{SecretDraft, Secwet};
 use secwet_proto::SecretKind;
 use std::io::{IsTerminal, Read, Write};
 use uuid::Uuid;
 
 #[allow(clippy::too_many_arguments)]
 pub fn execute_set(
-    vault: &mut Vault,
+    secwet: &mut Secwet,
     item_id: Uuid,
     item_name: &str,
     env_id: Option<Uuid>,
@@ -18,9 +18,7 @@ pub fn execute_set(
         .map_err(|e| format!("invalid secret name '{name}': {e}"))?;
 
     let kind = match kind_str {
-        Some(s) => s
-            .parse::<SecretKind>()
-            .map_err(|_| format!("invalid secret kind '{s}'"))?,
+        Some(s) => parse_kind_cli(s)?,
         None => SecretKind::EnvVar,
     };
 
@@ -49,7 +47,7 @@ pub fn execute_set(
     secwet_proto::validate_secret_value(&input)
         .map_err(|e| format!("invalid secret value for '{name}': {e}"))?;
 
-    let secrets = vault
+    let secrets = secwet
         .list_secrets(item_id, env_id)
         .map_err(|e| format!("{e}"))?;
     let existing = secrets.into_iter().find(|s| s.name == name);
@@ -58,18 +56,35 @@ pub fn execute_set(
 
     let location = match env_name {
         Some(e) => format!("{item_name}/{e}"),
-        None => item_name.to_string(),
+        None => format!("{item_name} (General)"),
     };
 
     if let Some(s) = existing {
-        vault
+        secwet
             .update_secret(s.id, draft)
             .map_err(|e| format!("{e}"))?;
         eprintln!("Updated secret '{name}' in {location}");
     } else {
-        vault.create_secret(draft).map_err(|e| format!("{e}"))?;
+        secwet.create_secret(draft).map_err(|e| format!("{e}"))?;
         eprintln!("Created secret '{name}' in {location}");
     }
 
     Ok(())
+}
+
+pub fn parse_kind_cli(s: &str) -> Result<SecretKind, String> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "password" | "pass" => Ok(SecretKind::Password),
+        "api_key" | "apikey" | "api-key" => Ok(SecretKind::ApiKey),
+        "access_token" | "accesstoken" | "token" => Ok(SecretKind::AccessToken),
+        "env_var" | "env" | "envvar" => Ok(SecretKind::EnvVar),
+        "ssh_key" | "ssh" | "sshkey" => Ok(SecretKind::SshKey),
+        "certificate" | "cert" => Ok(SecretKind::Certificate),
+        "codes" | "code" | "backup_codes" | "backup-codes" | "backup_code" | "backup-code" => {
+            Ok(SecretKind::Codes)
+        }
+        _ => s
+            .parse::<SecretKind>()
+            .map_err(|_| format!("invalid secret kind '{s}'")),
+    }
 }

@@ -1,13 +1,46 @@
 [package]
 name = "secwet-relay"
-description = "Hosted relay for encrypted sync events. Never sees plaintext or vault keys."
+description = "Hosted relay for encrypted sync events. Never sees plaintext or master keys."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "secwet_relay"
+path = "src/lib.rs"
+
+[[bin]]
+name = "secwet-relay"
+path = "src/main.rs"
+
 [dependencies]
-axum.workspace = true
-tokio.workspace = true
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true, features = ["sync"] }
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sqlx-core = { version = "0.8.6", default-features = false, features = ["migrate", "offline", "_rt-tokio"] }
+sqlx-postgres = { version = "0.8.6", default-features = false, features = ["chrono", "uuid", "migrate"] }
+chrono.workspace = true
+clap.workspace = true
+governor.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-secwet-core.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+postcard.workspace = true
+sha2.workspace = true
+ed25519-dalek.workspace = true
+x25519-dalek.workspace = true
+data-encoding.workspace = true
+
+secwet-proto.workspace = true
+secwet-core = { workspace = true, features = ["test-util"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+secrecy.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+http-body-util = "0.1"
+getrandom.workspace = true

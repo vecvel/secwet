@@ -19,6 +19,9 @@ pub const INITIAL_SCHEMA_SQL: &str = include_str!("../migrations/0001_initial_sc
 /// Migration 0002: Flexible organization schema script embedded at compile time.
 pub const MIGRATION_0002_SQL: &str = include_str!("../migrations/0002_flexible_organization.sql");
 
+/// Migration 0003: Spaces architecture schema script embedded at compile time.
+pub const MIGRATION_0003_SQL: &str = include_str!("../migrations/0003_spaces.sql");
+
 // ============================================================================
 // 1. Connection Initializer & PRAGMA Settings
 // ============================================================================
@@ -63,11 +66,12 @@ pub fn get_schema_version(conn: &Connection) -> Result<u32> {
     Ok(version)
 }
 
-/// Runs pending migrations up to the latest schema version (2).
+/// Runs pending migrations up to the latest schema version (3).
 ///
 /// Execution order:
 /// - Version 0 -> 1: Executes `0001_initial_schema.sql`, sets `schema_version = 1`, bumps `user_version = 1`.
 /// - Version 1 -> 2: Executes `0002_flexible_organization.sql`, sets `schema_version = 2`, bumps `user_version = 2`.
+/// - Version 2 -> 3: Executes `0003_spaces.sql`, ensures `space_id` column on `labels`, sets `schema_version = 3`, bumps `user_version = 3`.
 pub fn run_migrations(conn: &mut Connection) -> Result<()> {
     let mut version = get_schema_version(conn)?;
     if version < 1 {
@@ -96,7 +100,51 @@ pub fn run_migrations(conn: &mut Connection) -> Result<()> {
         tx.commit().map_err(|_| Error::Storage)?;
         conn.execute("PRAGMA user_version = 2", [])
             .map_err(|_| Error::Storage)?;
+        version = 2;
     }
+    if version < 3 {
+        let tx = conn.transaction().map_err(|_| Error::Storage)?;
+        tx.execute_batch(MIGRATION_0003_SQL)
+            .map_err(|_| Error::Storage)?;
+
+        // Ensure space_id column exists on labels table (safe for upgrades & fresh inits)
+        let has_space_id: bool = tx
+            .prepare("PRAGMA table_info(labels)")
+            .and_then(|mut stmt| {
+                let mut rows = stmt.query([])?;
+                let mut found = false;
+                while let Some(row) = rows.next()? {
+                    let col_name: String = row.get(1)?;
+                    if col_name == "space_id" {
+                        found = true;
+                        break;
+                    }
+                }
+                Ok(found)
+            })
+            .unwrap_or(false);
+
+        if !has_space_id {
+            tx.execute("ALTER TABLE labels ADD COLUMN space_id BLOB", [])
+                .map_err(|_| Error::Storage)?;
+            tx.execute(
+                "CREATE INDEX IF NOT EXISTS idx_labels_space ON labels(space_id)",
+                [],
+            )
+            .map_err(|_| Error::Storage)?;
+        }
+
+        tx.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '3')",
+            [],
+        )
+        .map_err(|_| Error::Storage)?;
+        tx.commit().map_err(|_| Error::Storage)?;
+        conn.execute("PRAGMA user_version = 3", [])
+            .map_err(|_| Error::Storage)?;
+    }
+    crate::sessions::init_active_sessions_table(conn)?;
+    crate::collab::init_collab_tables(conn)?;
     Ok(())
 }
 
@@ -104,16 +152,17 @@ pub fn run_migrations(conn: &mut Connection) -> Result<()> {
 pub fn open_and_migrate(path: impl AsRef<Path>) -> Result<Connection> {
     let mut conn = open_connection(path)?;
     run_migrations(&mut conn)?;
+    crate::sessions::init_active_sessions_table(&conn)?;
     Ok(conn)
 }
 
 // ============================================================================
-// 3. Record & Label Data Structures
+// 3. Space, Label & Record Data Structures
 // ============================================================================
 
-/// In-memory representation of a row in the `labels` table.
+/// In-memory representation of a row in the `spaces` table.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LabelRow {
+pub struct SpaceRow {
     pub id: Uuid,
     pub name_blob: Vec<u8>,
     pub position: u32,
@@ -122,8 +171,8 @@ pub struct LabelRow {
     pub deleted: bool,
 }
 
-impl LabelRow {
-    /// Constructs an active (non-deleted) label row.
+impl SpaceRow {
+    /// Constructs an active (non-deleted) space row.
     pub fn new_active(id: Uuid, name_blob: Vec<u8>, position: u32, now_ms: i64) -> Self {
         Self {
             id,
@@ -135,10 +184,75 @@ impl LabelRow {
         }
     }
 
+    /// Constructs a soft-deleted space row.
+    pub fn new_deleted(id: Uuid, position: u32, created_at: i64, now_ms: i64) -> Self {
+        Self {
+            id,
+            name_blob: Vec::new(),
+            position,
+            created_at,
+            updated_at: now_ms,
+            deleted: true,
+        }
+    }
+}
+
+/// In-memory representation of a row in the `labels` table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LabelRow {
+    pub id: Uuid,
+    pub space_id: Option<Uuid>,
+    pub name_blob: Vec<u8>,
+    pub position: u32,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+impl LabelRow {
+    /// Constructs an active (non-deleted) label row without explicit space.
+    pub fn new_active(id: Uuid, name_blob: Vec<u8>, position: u32, now_ms: i64) -> Self {
+        Self {
+            id,
+            space_id: None,
+            name_blob,
+            position,
+            created_at: now_ms,
+            updated_at: now_ms,
+            deleted: false,
+        }
+    }
+
+    /// Constructs an active (non-deleted) label row within a specific space.
+    pub fn new_active_in_space(
+        id: Uuid,
+        space_id: Option<Uuid>,
+        name_blob: Vec<u8>,
+        position: u32,
+        now_ms: i64,
+    ) -> Self {
+        Self {
+            id,
+            space_id,
+            name_blob,
+            position,
+            created_at: now_ms,
+            updated_at: now_ms,
+            deleted: false,
+        }
+    }
+
+    /// Sets the space ID for this label row.
+    pub fn with_space(mut self, space_id: Option<Uuid>) -> Self {
+        self.space_id = space_id;
+        self
+    }
+
     /// Constructs a soft-deleted label row.
     pub fn new_deleted(id: Uuid, position: u32, created_at: i64, now_ms: i64) -> Self {
         Self {
             id,
+            space_id: None,
             name_blob: Vec::new(),
             position,
             created_at,
@@ -266,17 +380,158 @@ pub fn next_lamport(conn: &Connection) -> Result<u64> {
 }
 
 // ============================================================================
-// 5. Labels Table Operations
+// 5. Spaces Table Operations
+// ============================================================================
+
+/// Inserts a new space row into the `spaces` table.
+pub fn insert_space(conn: &Connection, space: &SpaceRow) -> Result<()> {
+    conn.execute(
+        "INSERT INTO spaces (
+            id, name_blob, position, created_at, updated_at, deleted
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            space.id.as_bytes().as_slice(),
+            &space.name_blob,
+            space.position as i64,
+            space.created_at,
+            space.updated_at,
+            if space.deleted { 1i64 } else { 0i64 },
+        ],
+    )
+    .map_err(|_| Error::Storage)?;
+    Ok(())
+}
+
+/// Fetches a single space by its UUID. Returns `Ok(None)` if space does not exist.
+pub fn get_space(conn: &Connection, id: Uuid) -> Result<Option<SpaceRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name_blob, position, created_at, updated_at, deleted
+             FROM spaces WHERE id = ?1",
+        )
+        .map_err(|_| Error::Storage)?;
+
+    let mut rows = stmt
+        .query(params![id.as_bytes().as_slice()])
+        .map_err(|_| Error::Storage)?;
+
+    if let Some(row) = rows.next().map_err(|_| Error::Storage)? {
+        Ok(Some(parse_space_row(row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Queries all active (non-deleted) spaces, ordered by `position ASC, created_at ASC`.
+pub fn query_active_spaces(conn: &Connection) -> Result<Vec<SpaceRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name_blob, position, created_at, updated_at, deleted
+             FROM spaces WHERE deleted = 0 ORDER BY position ASC, created_at ASC",
+        )
+        .map_err(|_| Error::Storage)?;
+
+    let mut rows = stmt.query([]).map_err(|_| Error::Storage)?;
+    let mut spaces = Vec::new();
+    while let Some(row) = rows.next().map_err(|_| Error::Storage)? {
+        spaces.push(parse_space_row(row)?);
+    }
+    Ok(spaces)
+}
+
+/// Updates the sealed name blob of an active space.
+/// Returns `Error::NotFound` if the space does not exist or is deleted.
+pub fn update_space_name(conn: &Connection, id: Uuid, name_blob: &[u8], now_ms: i64) -> Result<()> {
+    let count = conn
+        .execute(
+            "UPDATE spaces
+             SET name_blob = ?1, updated_at = ?2
+             WHERE id = ?3 AND deleted = 0",
+            params![name_blob, now_ms, id.as_bytes().as_slice()],
+        )
+        .map_err(|_| Error::Storage)?;
+
+    if count == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
+/// Reorders active spaces according to the provided slice of UUIDs.
+/// Updates positions sequentially (0..ids.len()) within a single transaction.
+pub fn reorder_spaces(conn: &mut Connection, ids: &[Uuid], now_ms: i64) -> Result<()> {
+    let tx = conn.transaction().map_err(|_| Error::Storage)?;
+    for (pos, id) in ids.iter().enumerate() {
+        let count = tx
+            .execute(
+                "UPDATE spaces SET position = ?1, updated_at = ?2 WHERE id = ?3 AND deleted = 0",
+                params![pos as i64, now_ms, id.as_bytes().as_slice()],
+            )
+            .map_err(|_| Error::Storage)?;
+        if count == 0 {
+            return Err(Error::NotFound);
+        }
+    }
+    tx.commit().map_err(|_| Error::Storage)?;
+    Ok(())
+}
+
+/// Computes the next position for a new space (`max(position) + 1` or 0 if empty).
+pub fn next_space_position(conn: &Connection) -> Result<u32> {
+    let max_pos: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(position), -1) FROM spaces WHERE deleted = 0",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| Error::Storage)?;
+    if max_pos < 0 {
+        Ok(0)
+    } else {
+        Ok((max_pos + 1) as u32)
+    }
+}
+
+/// Soft-deletes a space by marking `deleted = 1`.
+pub fn soft_delete_space(conn: &Connection, id: Uuid, now_ms: i64) -> Result<()> {
+    let count = conn
+        .execute(
+            "UPDATE spaces SET deleted = 1, updated_at = ?1 WHERE id = ?2 AND deleted = 0",
+            params![now_ms, id.as_bytes().as_slice()],
+        )
+        .map_err(|_| Error::Storage)?;
+
+    if count == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
+/// Counts the number of active labels belonging to a specific space.
+pub fn count_active_labels_for_space(conn: &Connection, space_id: Uuid) -> Result<usize> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM labels WHERE space_id = ?1 AND deleted = 0",
+            params![space_id.as_bytes().as_slice()],
+            |row| row.get(0),
+        )
+        .map_err(|_| Error::Storage)?;
+    Ok(count as usize)
+}
+
+// ============================================================================
+// 6. Labels Table Operations
 // ============================================================================
 
 /// Inserts a new label row into the `labels` table.
 pub fn insert_label(conn: &Connection, label: &LabelRow) -> Result<()> {
     conn.execute(
         "INSERT INTO labels (
-            id, name_blob, position, created_at, updated_at, deleted
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            id, space_id, name_blob, position, created_at, updated_at, deleted
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             label.id.as_bytes().as_slice(),
+            label.space_id.as_ref().map(|u| u.as_bytes().as_slice()),
             &label.name_blob,
             label.position as i64,
             label.created_at,
@@ -292,7 +547,7 @@ pub fn insert_label(conn: &Connection, label: &LabelRow) -> Result<()> {
 pub fn get_label(conn: &Connection, id: Uuid) -> Result<Option<LabelRow>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name_blob, position, created_at, updated_at, deleted
+            "SELECT id, space_id, name_blob, position, created_at, updated_at, deleted
              FROM labels WHERE id = ?1",
         )
         .map_err(|_| Error::Storage)?;
@@ -312,7 +567,7 @@ pub fn get_label(conn: &Connection, id: Uuid) -> Result<Option<LabelRow>> {
 pub fn query_active_labels(conn: &Connection) -> Result<Vec<LabelRow>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name_blob, position, created_at, updated_at, deleted
+            "SELECT id, space_id, name_blob, position, created_at, updated_at, deleted
              FROM labels WHERE deleted = 0 ORDER BY position ASC, created_at ASC",
         )
         .map_err(|_| Error::Storage)?;
@@ -323,6 +578,85 @@ pub fn query_active_labels(conn: &Connection) -> Result<Vec<LabelRow>> {
         labels.push(parse_label_row(row)?);
     }
     Ok(labels)
+}
+
+/// Queries all active (non-deleted) labels belonging to a specific space.
+pub fn query_active_labels_by_space(conn: &Connection, space_id: Uuid) -> Result<Vec<LabelRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, space_id, name_blob, position, created_at, updated_at, deleted
+             FROM labels WHERE space_id = ?1 AND deleted = 0 ORDER BY position ASC, created_at ASC",
+        )
+        .map_err(|_| Error::Storage)?;
+
+    let mut rows = stmt
+        .query(params![space_id.as_bytes().as_slice()])
+        .map_err(|_| Error::Storage)?;
+
+    let mut labels = Vec::new();
+    while let Some(row) = rows.next().map_err(|_| Error::Storage)? {
+        labels.push(parse_label_row(row)?);
+    }
+    Ok(labels)
+}
+
+/// Updates the space assignment of an active label.
+pub fn update_label_space(
+    conn: &Connection,
+    id: Uuid,
+    space_id: Option<Uuid>,
+    now_ms: i64,
+) -> Result<()> {
+    let count = conn
+        .execute(
+            "UPDATE labels SET space_id = ?1, updated_at = ?2 WHERE id = ?3 AND deleted = 0",
+            params![
+                space_id.as_ref().map(|u| u.as_bytes().as_slice()),
+                now_ms,
+                id.as_bytes().as_slice(),
+            ],
+        )
+        .map_err(|_| Error::Storage)?;
+
+    if count == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
+/// Reassigns all active labels from one space to another space.
+pub fn reassign_labels_to_space(
+    conn: &Connection,
+    from_space_id: Uuid,
+    to_space_id: Uuid,
+    now_ms: i64,
+) -> Result<usize> {
+    let count = conn
+        .execute(
+            "UPDATE labels SET space_id = ?1, updated_at = ?2 WHERE space_id = ?3 AND deleted = 0",
+            params![
+                to_space_id.as_bytes().as_slice(),
+                now_ms,
+                from_space_id.as_bytes().as_slice(),
+            ],
+        )
+        .map_err(|_| Error::Storage)?;
+    Ok(count)
+}
+
+/// Retrofits all unassigned active labels (`space_id IS NULL`) to point to the default space.
+pub fn update_null_labels_space(
+    conn: &Connection,
+    default_space_id: Uuid,
+    now_ms: i64,
+) -> Result<usize> {
+    let count = conn
+        .execute(
+            "UPDATE labels SET space_id = ?1, updated_at = ?2 WHERE space_id IS NULL AND deleted = 0",
+            params![default_space_id.as_bytes().as_slice(), now_ms],
+        )
+        .map_err(|_| Error::Storage)?;
+    Ok(count)
 }
 
 /// Updates the sealed name blob of an active label.
@@ -1282,7 +1616,7 @@ pub fn set_meta(conn: &Connection, key: &str, value: &str) -> Result<()> {
 // Internal Helpers
 // ============================================================================
 
-fn parse_label_row(row: &Row<'_>) -> Result<LabelRow> {
+fn parse_space_row(row: &Row<'_>) -> Result<SpaceRow> {
     let id_bytes: Vec<u8> = row.get(0).map_err(|_| Error::Storage)?;
     let id = Uuid::from_slice(&id_bytes).map_err(|_| Error::Storage)?;
     let name_blob: Vec<u8> = row.get(1).map_err(|_| Error::Storage)?;
@@ -1291,8 +1625,33 @@ fn parse_label_row(row: &Row<'_>) -> Result<LabelRow> {
     let updated_at: i64 = row.get(4).map_err(|_| Error::Storage)?;
     let deleted_num: i64 = row.get(5).map_err(|_| Error::Storage)?;
 
+    Ok(SpaceRow {
+        id,
+        name_blob,
+        position: position as u32,
+        created_at,
+        updated_at,
+        deleted: deleted_num != 0,
+    })
+}
+
+fn parse_label_row(row: &Row<'_>) -> Result<LabelRow> {
+    let id_bytes: Vec<u8> = row.get(0).map_err(|_| Error::Storage)?;
+    let id = Uuid::from_slice(&id_bytes).map_err(|_| Error::Storage)?;
+    let space_id_bytes: Option<Vec<u8>> = row.get(1).map_err(|_| Error::Storage)?;
+    let space_id = match space_id_bytes {
+        Some(b) => Some(Uuid::from_slice(&b).map_err(|_| Error::Storage)?),
+        None => None,
+    };
+    let name_blob: Vec<u8> = row.get(2).map_err(|_| Error::Storage)?;
+    let position: i64 = row.get(3).map_err(|_| Error::Storage)?;
+    let created_at: i64 = row.get(4).map_err(|_| Error::Storage)?;
+    let updated_at: i64 = row.get(5).map_err(|_| Error::Storage)?;
+    let deleted_num: i64 = row.get(6).map_err(|_| Error::Storage)?;
+
     Ok(LabelRow {
         id,
+        space_id,
         name_blob,
         position: position as u32,
         created_at,

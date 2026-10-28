@@ -1,10 +1,10 @@
-//! Vault lifecycle acceptance tests.
+//! Secwet lifecycle acceptance tests.
 //!
 //! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F1, F2), §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secwet_core::keys::{KeyStore, MemoryStore, SecretVec};
-use secwet_core::vault::Settings;
-use secwet_core::{Error, Result, SecretDraft, SecretKind, Vault, VaultStatus};
+use secwet_core::secwet::Settings;
+use secwet_core::{Error, Result, SecretDraft, SecretKind, Secwet, SecwetStatus};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -35,11 +35,11 @@ impl KeyStore for SpyKeyStore {
     }
 
     fn set(&self, entry: &str, value: &[u8]) -> Result<()> {
-        // Assert that neither vault.sqlite3 nor the vaults/ subdirectory exists at the time of key writing
-        let direct_db = self.data_dir.join("vault.sqlite3");
-        let vaults_dir = self.data_dir.join("vaults");
+        // Assert that neither secwet.sqlite3 nor the secwets/ subdirectory exists at the time of key writing
+        let direct_db = self.data_dir.join("secwet.sqlite3");
+        let secwet_dir = self.data_dir.join("secwet");
 
-        if direct_db.exists() || vaults_dir.exists() {
+        if direct_db.exists() || secwet_dir.exists() {
             self.keys_written_before_db.store(false, Ordering::SeqCst);
         }
 
@@ -72,7 +72,7 @@ impl KeyStore for FailingKeyStore {
 /// Acceptance test: `create_writes_keys_before_db`
 ///
 /// Verifies:
-/// 1. `KeyStore::set` is called for device keys and epoch 1 vault key BEFORE database creation.
+/// 1. `KeyStore::set` is called for device keys and epoch 1 secwet key BEFORE database creation.
 /// 2. Database files and directories do not exist on disk when `set` executes.
 #[test]
 fn create_writes_keys_before_db() {
@@ -81,8 +81,8 @@ fn create_writes_keys_before_db() {
     let keys_before_flag = spy.keys_written_before_db.clone();
     let count_atomic = spy.key_count.clone();
 
-    let vault =
-        Vault::create(dir.path(), "test-laptop", &spy).expect("Vault::create should succeed");
+    let secwet =
+        Secwet::create(dir.path(), "test-laptop", &spy).expect("Secwet::create should succeed");
 
     assert!(
         keys_before_flag.load(Ordering::SeqCst),
@@ -91,34 +91,34 @@ fn create_writes_keys_before_db() {
     assert_eq!(
         count_atomic.load(Ordering::SeqCst),
         3,
-        "Exactly 3 keys (device-sign, device-enc, vault-key/1) must be written during creation"
+        "Exactly 3 keys (device-sign, device-enc, master-key/1) must be written during creation"
     );
 
     // Verify database file exists after creation
-    let vault_db = dir
+    let secwet_db = dir
         .path()
-        .join("vaults")
-        .join(vault.vault_id().to_string())
-        .join("vault.sqlite3");
+        .join("secwet")
+        .join(secwet.secwet_id().to_string())
+        .join("secwet.sqlite3");
     assert!(
-        vault_db.is_file(),
+        secwet_db.is_file(),
         "Database file must exist on disk after successful create"
     );
 
-    vault.lock();
+    secwet.lock();
 }
 
 /// Acceptance test: `create_fails_cleanly_when_keystore_fails`
 ///
 /// Verifies:
-/// 1. `Vault::create` aborts cleanly if `KeyStore::set` returns `Error::KeyStore`.
+/// 1. `Secwet::create` aborts cleanly if `KeyStore::set` returns `Error::KeyStore`.
 /// 2. No database files, lock files, or temporary directories remain in `data_dir`.
 #[test]
 fn create_fails_cleanly_when_keystore_fails() {
     let dir = tempdir().expect("failed to create temp dir");
     let failing_store = FailingKeyStore;
 
-    let res = Vault::create(dir.path(), "broken-keystore-device", &failing_store);
+    let res = Secwet::create(dir.path(), "broken-keystore-device", &failing_store);
 
     assert!(
         matches!(res, Err(Error::KeyStore)),
@@ -137,57 +137,57 @@ fn create_fails_cleanly_when_keystore_fails() {
 ///
 /// Verifies:
 /// 1. Status is `Uninitialized` before creation.
-/// 2. `Vault::create` yields an active, unlocked vault.
+/// 2. `Secwet::create` yields an active, unlocked secwet.
 /// 3. Status reflects `Unlocked` while open.
-/// 4. Calling `vault.lock()` transitions status to `Locked`.
-/// 5. Calling `Vault::unlock` transitions status back to `Unlocked`.
+/// 4. Calling `secwet.lock()` transitions status to `Locked`.
+/// 5. Calling `Secwet::unlock` transitions status back to `Unlocked`.
 #[test]
 fn status_uninitialized_then_unlocked() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
     // 1. Before creation
-    let status = Vault::status(dir.path()).expect("Vault::status");
+    let status = Secwet::status(dir.path()).expect("Secwet::status");
     assert_eq!(
         status,
-        VaultStatus::Uninitialized,
+        SecwetStatus::Uninitialized,
         "Status must be Uninitialized before creation"
     );
 
-    // 2. Create vault
-    let vault =
-        Vault::create(dir.path(), "test-device", &keystore).expect("Vault::create should succeed");
-    let vault_id = vault.vault_id();
+    // 2. Create secwet
+    let secwet =
+        Secwet::create(dir.path(), "test-device", &keystore).expect("Secwet::create should succeed");
+    let secwet_id = secwet.secwet_id();
 
     // 3. Status while unlocked
-    let status_unlocked = Vault::status(dir.path()).expect("Vault::status");
+    let status_unlocked = Secwet::status(dir.path()).expect("Secwet::status");
     assert_eq!(
         status_unlocked,
-        VaultStatus::Unlocked { vault_id },
-        "Status must reflect Unlocked while vault is active"
+        SecwetStatus::Unlocked { secwet_id },
+        "Status must reflect Unlocked while secwet is active"
     );
 
-    // 4. Lock vault
-    vault.lock();
-    let status_locked = Vault::status(dir.path()).expect("Vault::status");
+    // 4. Lock secwet
+    secwet.lock();
+    let status_locked = Secwet::status(dir.path()).expect("Secwet::status");
     assert_eq!(
         status_locked,
-        VaultStatus::Locked { vault_id },
+        SecwetStatus::Locked { secwet_id },
         "Status must reflect Locked after lock()"
     );
 
-    // 5. Unlock vault
-    let unlocked_vault = Vault::unlock(dir.path(), &keystore).expect("Vault::unlock");
-    assert_eq!(unlocked_vault.vault_id(), vault_id);
+    // 5. Unlock secwet
+    let unlocked_secwet = Secwet::unlock(dir.path(), &keystore).expect("Secwet::unlock");
+    assert_eq!(unlocked_secwet.secwet_id(), secwet_id);
 
-    let status_reunlocked = Vault::status(dir.path()).expect("Vault::status");
+    let status_reunlocked = Secwet::status(dir.path()).expect("Secwet::status");
     assert_eq!(
         status_reunlocked,
-        VaultStatus::Unlocked { vault_id },
+        SecwetStatus::Unlocked { secwet_id },
         "Status must reflect Unlocked after unlock()"
     );
 
-    unlocked_vault.lock();
+    unlocked_secwet.lock();
 }
 
 #[test]
@@ -195,15 +195,15 @@ fn unlock_fails_cleanly_when_keystore_missing_keys() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let vault = Vault::create(dir.path(), "test-device", &keystore).unwrap();
-    let _vault_id = vault.vault_id();
-    vault.lock();
+    let secwet = Secwet::create(dir.path(), "test-device", &keystore).unwrap();
+    let _secwet_id = secwet.secwet_id();
+    secwet.lock();
 
     // Wipe keystore
     keystore.clear().unwrap();
 
     // Attempt unlock
-    let err = Vault::unlock(dir.path(), &keystore).expect_err("unlock should fail without keys");
+    let err = Secwet::unlock(dir.path(), &keystore).expect_err("unlock should fail without keys");
     assert!(
         matches!(err, Error::KeyStore),
         "Expected Error::KeyStore when keystore is missing keys"
@@ -215,25 +215,25 @@ fn overview_aggregates_counts_and_recent() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "MacBook Pro", &keystore).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "MacBook Pro", &keystore).unwrap();
 
     // Initially 0 projects, 0 environments, 0 secrets, 1 active device
-    let ov1 = vault.overview().unwrap();
+    let ov1 = secwet.overview().unwrap();
     assert_eq!(ov1.projects_count, 0);
     assert_eq!(ov1.environments_count, 0);
     assert_eq!(ov1.secrets_count, 0);
     assert_eq!(ov1.active_devices_count, 1);
-    assert!(ov1.checklist.vault_created);
+    assert!(ov1.checklist.secwet_created);
     assert!(!ov1.checklist.recovery_key_created);
     assert!(!ov1.checklist.cli_connected);
 
     // Create a project with default 3 environments
-    let proj = vault.create_project("Backend", &[]).unwrap();
+    let proj = secwet.create_project("Backend", &[]).unwrap();
     let dev_env = proj.environments[0].id;
 
     // Create 6 secrets in dev_env
     for i in 1..=6 {
-        vault
+        secwet
             .create_secret(SecretDraft::new(
                 proj.id,
                 dev_env,
@@ -245,7 +245,7 @@ fn overview_aggregates_counts_and_recent() {
             .unwrap();
     }
 
-    let ov2 = vault.overview().unwrap();
+    let ov2 = secwet.overview().unwrap();
     assert_eq!(ov2.projects_count, 1);
     assert_eq!(ov2.environments_count, 3);
     assert_eq!(ov2.secrets_count, 6);
@@ -259,7 +259,7 @@ fn overview_aggregates_counts_and_recent() {
     assert_eq!(ov2.recent[0].project_name, "Backend");
     assert_eq!(ov2.recent[0].environment_name, "Development");
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
@@ -267,11 +267,11 @@ fn env_for_returns_all_secrets() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "dev", &keystore).unwrap();
-    let p = vault.create_project("app", &[]).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "dev", &keystore).unwrap();
+    let p = secwet.create_project("app", &[]).unwrap();
     let env_id = p.environments[0].id;
 
-    vault
+    secwet
         .create_secret(SecretDraft::new(
             p.id,
             env_id,
@@ -282,7 +282,7 @@ fn env_for_returns_all_secrets() {
         ))
         .unwrap();
 
-    vault
+    secwet
         .create_secret(SecretDraft::new(
             p.id,
             env_id,
@@ -293,7 +293,7 @@ fn env_for_returns_all_secrets() {
         ))
         .unwrap();
 
-    let env_vars = vault.env_for_environment(env_id).unwrap();
+    let env_vars = secwet.env_for_environment(env_id).unwrap();
     assert_eq!(env_vars.len(), 2);
 
     use secrecy::ExposeSecret;
@@ -308,7 +308,7 @@ fn env_for_returns_all_secrets() {
     );
     assert_eq!(map.get("PORT").unwrap(), "8080");
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
@@ -316,11 +316,11 @@ fn settings_defaults_and_roundtrip() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    // 1. Create vault with initial device name
-    let mut vault = Vault::create(dir.path(), "MacBook Pro M3", &keystore).unwrap();
+    // 1. Create secwet with initial device name
+    let mut secwet = Secwet::create(dir.path(), "MacBook Pro M3", &keystore).unwrap();
 
     // 2. Verify defaults
-    let initial_settings = vault.settings().expect("settings() should succeed");
+    let initial_settings = secwet.settings().expect("settings() should succeed");
     assert_eq!(initial_settings.theme, "system");
     assert_eq!(initial_settings.lock_timeout_minutes, 15);
     assert_eq!(initial_settings.device_name, "MacBook Pro M3");
@@ -331,17 +331,17 @@ fn settings_defaults_and_roundtrip() {
         lock_timeout_minutes: 60,
         device_name: "Office Workstation".to_string(),
     };
-    vault
+    secwet
         .set_settings(updated.clone())
         .expect("set_settings() should succeed");
 
     // Verify immediate reflection
-    let read_back = vault.settings().unwrap();
+    let read_back = secwet.settings().unwrap();
     assert_eq!(read_back, updated);
 
     // 4. Verify persistence across lock/unlock cycle
-    vault.lock();
-    let unlocked = Vault::unlock(dir.path(), &keystore).expect("unlock");
+    secwet.lock();
+    let unlocked = Secwet::unlock(dir.path(), &keystore).expect("unlock");
     let persisted = unlocked.settings().expect("settings after restart");
     assert_eq!(persisted, updated);
 
@@ -352,10 +352,10 @@ fn settings_defaults_and_roundtrip() {
 fn settings_validation_enforces_allowed_values() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
-    let mut vault = Vault::create(dir.path(), "dev-device", &keystore).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "dev-device", &keystore).unwrap();
 
     // Invalid theme
-    let err_theme = vault
+    let err_theme = secwet
         .set_settings(Settings {
             theme: "neon-blue".to_string(),
             lock_timeout_minutes: 15,
@@ -365,7 +365,7 @@ fn settings_validation_enforces_allowed_values() {
     assert!(matches!(err_theme, Error::Invalid { field: "theme", .. }));
 
     // Invalid lock timeout
-    let err_timeout = vault
+    let err_timeout = secwet
         .set_settings(Settings {
             theme: "light".to_string(),
             lock_timeout_minutes: 45, // not in 5, 15, 30, 60
@@ -381,7 +381,7 @@ fn settings_validation_enforces_allowed_values() {
     ));
 
     // Empty device name
-    let err_empty_name = vault
+    let err_empty_name = secwet
         .set_settings(Settings {
             theme: "light".to_string(),
             lock_timeout_minutes: 30,
@@ -397,7 +397,7 @@ fn settings_validation_enforces_allowed_values() {
     ));
 
     // Too long device name (> 64 chars)
-    let err_long_name = vault
+    let err_long_name = secwet
         .set_settings(Settings {
             theme: "light".to_string(),
             lock_timeout_minutes: 30,
@@ -412,7 +412,7 @@ fn settings_validation_enforces_allowed_values() {
         }
     ));
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
@@ -421,11 +421,11 @@ fn settings_device_name_is_never_stored_in_plaintext() {
     let keystore = MemoryStore::new();
     let super_secret_device_name = "SuperSecretUniqDeviceLabel999";
 
-    let mut vault = Vault::create(dir.path(), super_secret_device_name, &keystore).unwrap();
-    let vault_id = vault.vault_id();
+    let mut secwet = Secwet::create(dir.path(), super_secret_device_name, &keystore).unwrap();
+    let secwet_id = secwet.secwet_id();
 
     let updated_name = "AnotherVerySecretDeviceNameXYZ";
-    vault
+    secwet
         .set_settings(Settings {
             theme: "dark".to_string(),
             lock_timeout_minutes: 30,
@@ -433,14 +433,14 @@ fn settings_device_name_is_never_stored_in_plaintext() {
         })
         .unwrap();
 
-    vault.lock();
+    secwet.lock();
 
     // Check disk bytes
     let db_path = dir
         .path()
-        .join("vaults")
-        .join(vault_id.to_string())
-        .join("vault.sqlite3");
+        .join("secwet")
+        .join(secwet_id.to_string())
+        .join("secwet.sqlite3");
     let raw_bytes = std::fs::read(&db_path).expect("read db file");
 
     let needle1 = super_secret_device_name.as_bytes();
@@ -460,20 +460,20 @@ fn settings_device_name_is_never_stored_in_plaintext() {
 }
 
 #[test]
-fn concurrent_vault_readers_and_writers_wal() {
+fn concurrent_secwet_readers_and_writers_wal() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    // Vault created by "Desktop"
-    let mut desktop_vault = Vault::create(dir.path(), "desktop", &keystore).unwrap();
-    let p = desktop_vault.create_project("Shared Project", &[]).unwrap();
+    // Secwet created by "Desktop"
+    let mut desktop_secwet = Secwet::create(dir.path(), "desktop", &keystore).unwrap();
+    let p = desktop_secwet.create_project("Shared Project", &[]).unwrap();
     let env_id = p.environments[0].id;
 
-    // "CLI" opens the vault concurrently
-    let mut cli_vault = Vault::unlock(dir.path(), &keystore).unwrap();
+    // "CLI" opens the secwet concurrently
+    let mut cli_secwet = Secwet::unlock(dir.path(), &keystore).unwrap();
 
     // CLI creates a secret
-    let meta = cli_vault
+    let meta = cli_secwet
         .create_secret(SecretDraft::new(
             p.id,
             env_id,
@@ -485,12 +485,12 @@ fn concurrent_vault_readers_and_writers_wal() {
         .unwrap();
 
     // Desktop immediately sees the secret written by CLI
-    let secrets_desktop = desktop_vault.list_environment_secrets(env_id).unwrap();
+    let secrets_desktop = desktop_secwet.list_environment_secrets(env_id).unwrap();
     assert_eq!(secrets_desktop.len(), 1);
     assert_eq!(secrets_desktop[0].id, meta.id);
 
     // Desktop updates settings
-    desktop_vault
+    desktop_secwet
         .set_settings(Settings {
             theme: "dark".to_string(),
             lock_timeout_minutes: 30,
@@ -499,10 +499,10 @@ fn concurrent_vault_readers_and_writers_wal() {
         .unwrap();
 
     // CLI immediately reads the updated settings
-    let cli_settings = cli_vault.settings().unwrap();
+    let cli_settings = cli_secwet.settings().unwrap();
     assert_eq!(cli_settings.theme, "dark");
     assert_eq!(cli_settings.lock_timeout_minutes, 30);
 
-    desktop_vault.lock();
-    cli_vault.lock();
+    desktop_secwet.lock();
+    cli_secwet.lock();
 }

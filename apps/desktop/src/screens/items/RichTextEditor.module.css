@@ -25,12 +25,6 @@
   border: none;
   border-bottom: 1px solid transparent;
   padding: var(--space-1) 0;
-  outline: none;
-  box-shadow: none;
-}
-
-.titleInput:focus {
-  border-bottom-color: var(--color-border-strong);
   box-shadow: none;
 }
 
@@ -60,7 +54,6 @@
   cursor: pointer;
 }
 
-.toolbarBtn:active,
 .toolbarBtn[aria-pressed="true"] {
   background: var(--color-accent-tint-soft);
   color: var(--color-text-primary);
@@ -84,25 +77,8 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
   line-height: 1.6;
-  outline: none;
   box-shadow: none;
   transition: border-color var(--duration-fast) ease;
-}
-
-.contentArea:hover {
-  border-color: var(--color-border-strong);
-  box-shadow: none;
-}
-
-.contentArea:focus {
-  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
-  outline: none;
-  box-shadow: none;
-}
-
-.contentArea:focus:hover {
-  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
-  box-shadow: none;
 }
 
 .contentArea h1 {
@@ -194,10 +170,6 @@
   transition: background 0.15s ease;
 }
 
-.noteCard:active {
-  background: var(--color-accent-tint-soft);
-}
-
 .noteCardHeader {
   display: flex;
   align-items: center;
@@ -221,4 +193,10 @@
 .noteMeta {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
 }

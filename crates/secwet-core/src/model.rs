@@ -3,8 +3,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use secwet_proto::{
-    AssetMetaView, DashboardConfig, EnvironmentView, FileMetaView, ItemView, LabelView,
-    NoteMetaView, NoteView, ProjectView, SecretKind, SecretMeta, VaultStatus,
+    ActiveSession, AssetMetaView, DashboardConfig, EnvironmentView, ExportAad, ExportSummary,
+    FileMetaView, ItemView, LabelView, NoteMetaView, NoteView, ProjectView, RecoveryStatus,
+    SecretKind, SecretMeta, SecwetExportEnvelope, SecwetSnapshot, SecwetStatus,
+    SnapshotEnvironment, SnapshotFile, SnapshotItem, SnapshotLabel, SnapshotNote,
+    SnapshotSecret, SnapshotSetting, SnapshotSpace, SpaceView,
 };
 
 /// Device ID wrapper.
@@ -112,7 +115,7 @@ pub struct RecentSecret {
 /// Overview setup and safety checklist state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChecklistState {
-    pub vault_created: bool,
+    pub secwet_created: bool,
     pub recovery_key_created: bool,
     pub cli_connected: bool,
     pub add_device_done: bool,

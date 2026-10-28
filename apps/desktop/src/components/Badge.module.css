@@ -12,6 +12,14 @@
   white-space: nowrap;
 }
 
+.dotOnly {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+}
+
 .dot {
   width: 6px;
   height: 6px;

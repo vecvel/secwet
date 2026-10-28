@@ -1,0 +1,166 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.subtle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  container-type: inline-size;
+}
+
+.scopeHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scopeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+}
+
+.scopeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  min-height: 48px;
+}
+
+.scopeRow + .scopeRow {
+  border-top: 1px solid var(--color-border-separator);
+}
+
+.scopeText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scopeName {
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roleSelect {
+  flex: none;
+  width: 168px;
+}
+
+.loading {
+  padding: var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text-tertiary);
+}
+
+/* Narrow dialogs: put the role picker under the name instead of squeezing it. */
+@container (max-width: 380px) {
+  .scopeRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+  .roleSelect {
+    width: 100%;
+  }
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.infoButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-control);
+  color: var(--color-text-tertiary);
+}
+
+.infoButtonOpen {
+  color: var(--color-text-primary);
+  background: var(--color-accent-tint-soft);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+  font-size: var(--font-size-sm);
+}
+
+.legendRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.legendRow dt {
+  flex: none;
+  width: 72px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.legendRow dd {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.linkRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.linkRow > :first-child {
+  flex: 1;
+}
+
+.copyBtn {
+  flex: none;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}

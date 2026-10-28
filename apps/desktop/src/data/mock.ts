@@ -1,8 +1,16 @@
 // Sample data for the UI while the backend is stubbed. All values are fake.
 
-export type SecretKind = "password" | "api_key" | "access_token" | "env_var" | "ssh_key" | "certificate";
+export type SecretKind =
+  | "password"
+  | "api_key"
+  | "access_token"
+  | "env_var"
+  | "ssh_key"
+  | "certificate"
+  | "codes";
 
 export const kindLabels: Record<SecretKind, string> = {
+  codes: "Codes",
   api_key: "API key",
   access_token: "Access token",
   password: "Password",

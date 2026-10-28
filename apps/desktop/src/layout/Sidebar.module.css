@@ -75,10 +75,6 @@
   transition: color 0.15s ease;
 }
 
-.groupTitleBtn:hover {
-  color: var(--color-text-primary);
-}
-
 .groupTitleActive {
   color: var(--color-accent);
 }
@@ -97,10 +93,6 @@
   transition: all 0.15s ease;
 }
 
-.groupAdd:hover {
-  color: var(--color-text-primary);
-}
-
 .item {
   display: flex;
   align-items: center;
@@ -117,10 +109,6 @@
   border: none;
   cursor: pointer;
   transition: color 0.15s ease;
-}
-
-.item:hover {
-  color: var(--color-text-primary);
 }
 
 .nestedItem {
@@ -146,10 +134,6 @@
   transition: color 0.15s ease;
 }
 
-.emptyItemHint:hover {
-  color: var(--color-text-primary);
-}
-
 .newGroupContainer {
   display: flex;
   width: 100%;
@@ -166,15 +150,10 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
   background: none;
-  border: 1px dashed color-mix(in srgb, var(--color-text-primary) 22%, transparent);
+  border: 1px dashed var(--color-border-strong);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.newGroupBtn:hover {
-  border-color: var(--color-text-secondary);
-  color: var(--color-text-primary);
 }
 
 .newGroupIconWrap {
@@ -208,23 +187,55 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  border-top: 1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  border-top: 1px solid var(--color-border);
 }
 
 .device {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  min-height: 32px;
+}
+
+.deviceInfo {
+  display: flex;
   flex-direction: column;
-  padding: 0 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .deviceName {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .deviceMeta {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
+}
+
+.settingsBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-small);
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+
+.settingsBtnActive {
+  color: var(--color-accent);
+  background: var(--color-accent-tint-soft);
 }
 
 .railOnly {
@@ -314,13 +325,18 @@
     width: 24px;
     height: 24px;
     border-radius: var(--radius-small);
-    border: 1px dashed color-mix(in srgb, var(--color-text-primary) 22%, transparent);
+    border: 1px dashed var(--color-border-strong);
     color: var(--color-text-tertiary);
     transition: border-color 0.15s ease, color 0.15s ease;
   }
-  .newGroupBtn:hover .newGroupIconWrap {
-    border-color: var(--color-text-secondary);
-    color: var(--color-text-primary);
+  .device {
+    justify-content: center;
+    width: 100%;
+    padding: 0;
+  }
+  .settingsBtn {
+    width: 36px;
+    height: 36px;
   }
   /* Rail widens so the window buttons get equal space on both sides. */
   :global([data-titlebar="overlay"]) .sidebar {

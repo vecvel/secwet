@@ -40,6 +40,7 @@ fn test_record_type_exhaustive_u8_space() {
         (4, RecordType::Secret),
         (5, RecordType::File),
         (6, RecordType::Note),
+        (7, RecordType::Space),
     ]
     .into_iter()
     .collect();
@@ -68,7 +69,7 @@ fn test_record_type_exhaustive_u8_space() {
 
     // Explicitly assert on prompt's highlighted edge cases: 0, 7, 255
     assert_eq!(RecordType::try_from(0), Err(0));
-    assert_eq!(RecordType::try_from(7), Err(7));
+    assert_eq!(RecordType::try_from(8), Err(8));
     assert_eq!(RecordType::try_from(255), Err(255));
 }
 
@@ -82,6 +83,7 @@ fn test_record_type_postcard_wire_representation() {
         (RecordType::Secret, "secret"),
         (RecordType::Asset, "asset"),
         (RecordType::Note, "note"),
+        (RecordType::Space, "space"),
     ] {
         assert_eq!(rt.as_str(), expected_name);
         let enc = postcard::to_stdvec(&rt).expect("serialize RecordType");
@@ -89,8 +91,8 @@ fn test_record_type_postcard_wire_representation() {
         assert_eq!(dec, rt);
     }
 
-    // Deserializing invalid variant indices (>= 6) via postcard must fail cleanly without panics
-    for invalid_var_idx in 6u8..=255 {
+    // Deserializing invalid variant indices (>= 7) via postcard must fail cleanly without panics
+    for invalid_var_idx in 7u8..=255 {
         let bad_bytes = [invalid_var_idx];
         let res: Result<RecordType, _> = postcard::from_bytes(&bad_bytes);
         assert!(
@@ -106,23 +108,23 @@ fn test_record_type_postcard_wire_representation() {
 
 #[test]
 fn test_record_aad_from_raw_type_invariants() {
-    let vault_id = [0x11u8; 16];
+    let secwet_id = [0x11u8; 16];
     let record_id = [0x22u8; 16];
 
     // Verify raw types for legacy and future discriminators
     for raw in [0u8, 1, 2, 3, 4, 5, 6, 7, 42, 255] {
-        let aad = RecordAad::from_raw_type(&vault_id, &record_id, raw, 1);
+        let aad = RecordAad::from_raw_type(&secwet_id, &record_id, raw, 1);
         assert_eq!(aad.format, RecordAad::FORMAT_V1);
         assert_eq!(aad.record_type, raw);
         assert_eq!(aad.key_epoch, 1);
 
         let bytes = aad.to_bytes().expect("serialize raw AAD");
         assert_eq!(bytes[0], 1); // format
-        assert_eq!(bytes[1..17], vault_id);
+        assert_eq!(bytes[1..17], secwet_id);
         assert_eq!(bytes[17..33], record_id);
         assert_eq!(bytes[33], raw); // record_type byte
 
-        let owned = RecordAadOwned::from_raw_type(vault_id, record_id, raw, 1);
+        let owned = RecordAadOwned::from_raw_type(secwet_id, record_id, raw, 1);
         let owned_bytes = owned.as_borrowed().to_bytes().expect("serialize owned AAD");
         assert_eq!(bytes, owned_bytes);
 
@@ -142,6 +144,7 @@ fn test_secret_kind_fuzzing() {
         "env_var",
         "ssh_key",
         "certificate",
+        "codes",
     ];
 
     for s in valid_strings {
@@ -173,7 +176,7 @@ fn test_secret_kind_fuzzing() {
     }
 
     // Postcard deserialization of invalid SecretKind index
-    for b in 6u8..=255 {
+    for b in 7u8..=255 {
         assert!(postcard::from_bytes::<SecretKind>(&[b]).is_err());
     }
 }
@@ -410,15 +413,15 @@ fn test_extreme_payload_50mib_file_limit() {
 
 #[test]
 fn test_record_aad_canonical_determinism_and_bit_tampering() {
-    let vault_id = [0x33u8; 16];
+    let secwet_id = [0x33u8; 16];
     let record_id = [0x44u8; 16];
     let record_type = RecordType::Secret;
     let key_epoch = 1u32;
 
-    let aad = RecordAad::new(&vault_id, &record_id, record_type, key_epoch);
+    let aad = RecordAad::new(&secwet_id, &record_id, record_type, key_epoch);
     let canonical_bytes = aad.to_bytes().expect("serialize RecordAad");
 
-    // Layout: format(1) + vault_id(16) + record_id(16) + record_type(1) + varint(key_epoch)
+    // Layout: format(1) + secwet_id(16) + record_id(16) + record_type(1) + varint(key_epoch)
     assert_eq!(canonical_bytes.len(), 1 + 16 + 16 + 1 + 1); // 35 bytes
 
     // 1. Bit-level tampering: flip each bit of each byte in canonical_bytes
@@ -438,7 +441,7 @@ fn test_record_aad_canonical_determinism_and_bit_tampering() {
             if let Ok(dec) = postcard::from_bytes::<RecordAadOwned>(&tampered) {
                 assert_ne!(
                     dec,
-                    RecordAadOwned::new(vault_id, record_id, record_type, key_epoch),
+                    RecordAadOwned::new(secwet_id, record_id, record_type, key_epoch),
                     "Tampered AAD at byte {} bit {} unexpectedly deserialized to original AAD",
                     byte_idx,
                     bit
@@ -480,19 +483,19 @@ fn test_record_aad_canonical_determinism_and_bit_tampering() {
 
 #[test]
 fn test_record_aad_every_field_tampering_different_bytes() {
-    let vault_id = [0x55u8; 16];
+    let secwet_id = [0x55u8; 16];
     let record_id = [0x66u8; 16];
     let epoch = 10u32;
 
-    let base = RecordAad::new(&vault_id, &record_id, RecordType::Item, epoch)
+    let base = RecordAad::new(&secwet_id, &record_id, RecordType::Item, epoch)
         .to_bytes()
         .unwrap();
 
-    // 1. Changing vault_id
+    // 1. Changing secwet_id
     for i in 0..16 {
-        let mut other_vault = vault_id;
-        other_vault[i] ^= 0x01;
-        let bytes = RecordAad::new(&other_vault, &record_id, RecordType::Item, epoch)
+        let mut other_secwet = secwet_id;
+        other_secwet[i] ^= 0x01;
+        let bytes = RecordAad::new(&other_secwet, &record_id, RecordType::Item, epoch)
             .to_bytes()
             .unwrap();
         assert_ne!(bytes, base);
@@ -502,7 +505,7 @@ fn test_record_aad_every_field_tampering_different_bytes() {
     for i in 0..16 {
         let mut other_rec = record_id;
         other_rec[i] ^= 0x01;
-        let bytes = RecordAad::new(&vault_id, &other_rec, RecordType::Item, epoch)
+        let bytes = RecordAad::new(&secwet_id, &other_rec, RecordType::Item, epoch)
             .to_bytes()
             .unwrap();
         assert_ne!(bytes, base);
@@ -516,7 +519,7 @@ fn test_record_aad_every_field_tampering_different_bytes() {
         RecordType::File,
         RecordType::Note,
     ] {
-        let bytes = RecordAad::new(&vault_id, &record_id, rt, epoch)
+        let bytes = RecordAad::new(&secwet_id, &record_id, rt, epoch)
             .to_bytes()
             .unwrap();
         assert_ne!(bytes, base);
@@ -524,7 +527,7 @@ fn test_record_aad_every_field_tampering_different_bytes() {
 
     // 4. Changing key_epoch
     for other_epoch in [0u32, 9, 11, 100, 1000, u32::MAX] {
-        let bytes = RecordAad::new(&vault_id, &record_id, RecordType::Item, other_epoch)
+        let bytes = RecordAad::new(&secwet_id, &record_id, RecordType::Item, other_epoch)
             .to_bytes()
             .unwrap();
         assert_ne!(bytes, base);

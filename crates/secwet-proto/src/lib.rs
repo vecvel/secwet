@@ -6,6 +6,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub mod collab;
+pub use collab::*;
+
 // ============================================================================
 // 1. Discriminators & Taxonomy Enums
 // ============================================================================
@@ -20,6 +23,9 @@ pub enum RecordType {
     Secret = 4,
     Asset = 5,
     Note = 6,
+    /// Space record in sync events. Local storage keeps sealing spaces with the
+    /// `Label` discriminator for backwards compatibility.
+    Space = 7,
 }
 
 impl RecordType {
@@ -39,6 +45,7 @@ impl RecordType {
             RecordType::Secret => "secret",
             RecordType::Asset => "asset",
             RecordType::Note => "note",
+            RecordType::Space => "space",
         }
     }
 }
@@ -54,6 +61,7 @@ impl TryFrom<u8> for RecordType {
             4 => Ok(RecordType::Secret),
             5 => Ok(RecordType::Asset),
             6 => Ok(RecordType::Note),
+            7 => Ok(RecordType::Space),
             other => Err(other),
         }
     }
@@ -82,6 +90,7 @@ pub enum SecretKind {
     EnvVar,
     SshKey,
     Certificate,
+    Codes,
 }
 
 impl SecretKind {
@@ -93,6 +102,7 @@ impl SecretKind {
             SecretKind::EnvVar => "env_var",
             SecretKind::SshKey => "ssh_key",
             SecretKind::Certificate => "certificate",
+            SecretKind::Codes => "codes",
         }
     }
 }
@@ -114,6 +124,7 @@ impl std::str::FromStr for SecretKind {
             "env_var" => Ok(SecretKind::EnvVar),
             "ssh_key" => Ok(SecretKind::SshKey),
             "certificate" => Ok(SecretKind::Certificate),
+            "codes" => Ok(SecretKind::Codes),
             _ => Err(ParseKindError(s.to_string())),
         }
     }
@@ -147,12 +158,35 @@ pub struct ItemIdCompat {
 // 2. Record Payloads (Decrypted Bodies Sealed inside Blobs)
 // ============================================================================
 
+/// Body of a Space record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpaceBody {
+    pub name: String,
+    pub position: u32,
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub is_default: bool,
+}
+
+impl SpaceBody {
+    pub fn new(name: impl Into<String>, position: u32, icon: Option<String>, is_default: bool) -> Self {
+        Self {
+            name: name.into(),
+            position,
+            icon,
+            is_default,
+        }
+    }
+}
+
 /// Body of a Label record (type 1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelBody {
     pub name: String,
     pub position: u32,
     pub icon: Option<String>,
+    #[serde(default)]
+    pub space_id: Option<Uuid>,
 }
 
 impl LabelBody {
@@ -161,6 +195,16 @@ impl LabelBody {
             name: name.into(),
             position,
             icon,
+            space_id: None,
+        }
+    }
+
+    pub fn with_space(name: impl Into<String>, position: u32, icon: Option<String>, space_id: Option<Uuid>) -> Self {
+        Self {
+            name: name.into(),
+            position,
+            icon,
+            space_id,
         }
     }
 }
@@ -416,6 +460,7 @@ pub enum RecordPayload {
     File(FilePayload),
     Note(NoteBody),
     Project(ProjectBody), // Retained for backwards compatibility
+    Space(SpaceBody),
 }
 
 impl RecordPayload {
@@ -428,6 +473,7 @@ impl RecordPayload {
             RecordPayload::File(_) => RecordType::File,
             RecordPayload::Note(_) => RecordType::Note,
             RecordPayload::Project(_) => RecordType::Item,
+            RecordPayload::Space(_) => RecordType::Space,
         }
     }
 
@@ -440,6 +486,7 @@ impl RecordPayload {
             RecordPayload::File(b) => postcard::to_stdvec(b),
             RecordPayload::Note(b) => postcard::to_stdvec(b),
             RecordPayload::Project(b) => postcard::to_stdvec(b),
+            RecordPayload::Space(b) => postcard::to_stdvec(b),
         }
     }
 
@@ -451,6 +498,7 @@ impl RecordPayload {
             RecordType::Secret => postcard::from_bytes(bytes).map(RecordPayload::Secret),
             RecordType::File => postcard::from_bytes(bytes).map(RecordPayload::File),
             RecordType::Note => postcard::from_bytes(bytes).map(RecordPayload::Note),
+            RecordType::Space => postcard::from_bytes(bytes).map(RecordPayload::Space),
         }
     }
 }
@@ -463,7 +511,7 @@ impl RecordPayload {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct RecordAad<'a> {
     pub format: u8,
-    pub vault_id: &'a [u8; 16],
+    pub secwet_id: &'a [u8; 16],
     pub record_id: &'a [u8; 16],
     pub record_type: u8,
     pub key_epoch: u32,
@@ -474,14 +522,14 @@ impl<'a> RecordAad<'a> {
 
     #[inline]
     pub fn new(
-        vault_id: &'a [u8; 16],
+        secwet_id: &'a [u8; 16],
         record_id: &'a [u8; 16],
         record_type: RecordType,
         key_epoch: u32,
     ) -> Self {
         Self {
             format: Self::FORMAT_V1,
-            vault_id,
+            secwet_id,
             record_id,
             record_type: record_type as u8,
             key_epoch,
@@ -491,14 +539,14 @@ impl<'a> RecordAad<'a> {
     /// Construct AAD with arbitrary raw discriminator byte (used in Phase 2 migration of legacy records).
     #[inline]
     pub fn from_raw_type(
-        vault_id: &'a [u8; 16],
+        secwet_id: &'a [u8; 16],
         record_id: &'a [u8; 16],
         record_type: u8,
         key_epoch: u32,
     ) -> Self {
         Self {
             format: Self::FORMAT_V1,
-            vault_id,
+            secwet_id,
             record_id,
             record_type,
             key_epoch,
@@ -514,7 +562,7 @@ impl<'a> RecordAad<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordAadOwned {
     pub format: u8,
-    pub vault_id: [u8; 16],
+    pub secwet_id: [u8; 16],
     pub record_id: [u8; 16],
     pub record_type: u8,
     pub key_epoch: u32,
@@ -525,14 +573,14 @@ impl RecordAadOwned {
 
     #[inline]
     pub fn new(
-        vault_id: [u8; 16],
+        secwet_id: [u8; 16],
         record_id: [u8; 16],
         record_type: RecordType,
         key_epoch: u32,
     ) -> Self {
         Self {
             format: Self::FORMAT_V1,
-            vault_id,
+            secwet_id,
             record_id,
             record_type: record_type as u8,
             key_epoch,
@@ -541,14 +589,14 @@ impl RecordAadOwned {
 
     #[inline]
     pub fn from_raw_type(
-        vault_id: [u8; 16],
+        secwet_id: [u8; 16],
         record_id: [u8; 16],
         record_type: u8,
         key_epoch: u32,
     ) -> Self {
         Self {
             format: Self::FORMAT_V1,
-            vault_id,
+            secwet_id,
             record_id,
             record_type,
             key_epoch,
@@ -558,7 +606,7 @@ impl RecordAadOwned {
     pub fn as_borrowed(&self) -> RecordAad<'_> {
         RecordAad {
             format: self.format,
-            vault_id: &self.vault_id,
+            secwet_id: &self.secwet_id,
             record_id: &self.record_id,
             record_type: self.record_type,
             key_epoch: self.key_epoch,
@@ -640,10 +688,43 @@ pub struct RecordMeta {
     pub deleted: bool,
 }
 
-/// View model for an organizational label.
+/// View model for an organizational space.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpaceView {
+    pub id: Uuid,
+    pub name: String,
+    pub position: u32,
+    pub icon: Option<String>,
+    pub is_default: bool,
+    pub groups_count: usize,
+}
+
+impl SpaceView {
+    pub fn new(
+        id: Uuid,
+        name: impl Into<String>,
+        position: u32,
+        icon: Option<String>,
+        is_default: bool,
+        groups_count: usize,
+    ) -> Self {
+        Self {
+            id,
+            name: name.into(),
+            position,
+            icon,
+            is_default,
+            groups_count,
+        }
+    }
+}
+
+/// View model for an organizational label / group.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelView {
     pub id: Uuid,
+    #[serde(default)]
+    pub space_id: Option<Uuid>,
     pub name: String,
     pub position: u32,
     pub icon: Option<String>,
@@ -660,6 +741,25 @@ impl LabelView {
     ) -> Self {
         Self {
             id,
+            space_id: None,
+            name: name.into(),
+            position,
+            icon,
+            items_count,
+        }
+    }
+
+    pub fn with_space(
+        id: Uuid,
+        space_id: Option<Uuid>,
+        name: impl Into<String>,
+        position: u32,
+        icon: Option<String>,
+        items_count: usize,
+    ) -> Self {
+        Self {
+            id,
+            space_id,
             name: name.into(),
             position,
             icon,
@@ -820,6 +920,40 @@ impl std::ops::Deref for SecretMeta {
     }
 }
 
+/// Active session tracking running processes with injected secrets.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActiveSession {
+    pub session_id: String,
+    pub pid: u32,
+    pub item_id: Uuid,
+    pub environment_id: Option<Uuid>,
+    pub command: String,
+    pub secret_ids: Vec<Uuid>,
+    pub started_at: i64,
+}
+
+impl ActiveSession {
+    pub fn new(
+        session_id: impl Into<String>,
+        pid: u32,
+        item_id: Uuid,
+        environment_id: Option<Uuid>,
+        command: impl Into<String>,
+        secret_ids: Vec<Uuid>,
+        started_at: i64,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            pid,
+            item_id,
+            environment_id,
+            command: command.into(),
+            secret_ids,
+            started_at,
+        }
+    }
+}
+
 /// View model for asset metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetMetaView {
@@ -965,12 +1099,12 @@ pub struct ProjectView {
     pub environments: Vec<EnvironmentView>,
 }
 
-/// Vault status state.
+/// Secwet status state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VaultStatus {
+pub enum SecwetStatus {
     Uninitialized,
-    Locked { vault_id: Uuid },
-    Unlocked { vault_id: Uuid },
+    Locked { secwet_id: Uuid },
+    Unlocked { secwet_id: Uuid },
 }
 
 /// User and device preferences.
@@ -978,7 +1112,7 @@ pub enum VaultStatus {
 pub struct Settings {
     /// Appearance preference: "system" | "light" | "dark".
     pub theme: String,
-    /// Vault auto-lock timeout in minutes: 5 | 15 | 30 | 60.
+    /// Auto-lock timeout in minutes: 5 | 15 | 30 | 60.
     #[serde(alias = "lock_minutes")]
     pub lock_timeout_minutes: u32,
     /// Human-readable device label (stored encrypted).
@@ -1003,12 +1137,80 @@ impl Default for Settings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventEnvelope {
     pub event_id: [u8; 16],
-    pub vault_id: [u8; 16],
+    pub secwet_id: [u8; 16],
     pub device_id: String,
     pub device_seq: u64,
     pub key_epoch: u32,
     pub nonce: [u8; 24],
     pub ciphertext: Vec<u8>,
+    /// Routing scope for events in collaborative spaces (F19). `None` for
+    /// workspace-private events, which only the owner's devices receive.
+    #[serde(default)]
+    pub scope: Option<EventScope>,
+}
+
+/// Field layout of envelopes written before scoped events existed.
+#[derive(Serialize, Deserialize)]
+struct LegacyEventEnvelope {
+    event_id: [u8; 16],
+    secwet_id: [u8; 16],
+    device_id: String,
+    device_seq: u64,
+    key_epoch: u32,
+    nonce: [u8; 24],
+    ciphertext: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LegacySignedEvent {
+    envelope: LegacyEventEnvelope,
+    #[serde(with = "signature_bytes")]
+    signature: [u8; 64],
+}
+
+impl EventEnvelope {
+    /// Bytes covered by the Ed25519 event signature. Unscoped envelopes sign
+    /// the original seven-field layout so events signed before scopes existed
+    /// still verify; scoped envelopes sign every field including the scope.
+    pub fn signing_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        match &self.scope {
+            None => postcard::to_stdvec(&(
+                &self.event_id,
+                &self.secwet_id,
+                &self.device_id,
+                self.device_seq,
+                self.key_epoch,
+                &self.nonce,
+                &self.ciphertext,
+            )),
+            Some(_) => postcard::to_stdvec(self),
+        }
+    }
+}
+
+impl SignedEvent {
+    /// Decodes a postcard `SignedEvent`, accepting the pre-scope layout too.
+    pub fn from_postcard_compat(bytes: &[u8]) -> Result<SignedEvent, postcard::Error> {
+        match postcard::from_bytes::<SignedEvent>(bytes) {
+            Ok(ev) => Ok(ev),
+            Err(e) => match postcard::from_bytes::<LegacySignedEvent>(bytes) {
+                Ok(l) => Ok(SignedEvent {
+                    envelope: EventEnvelope {
+                        event_id: l.envelope.event_id,
+                        secwet_id: l.envelope.secwet_id,
+                        device_id: l.envelope.device_id,
+                        device_seq: l.envelope.device_seq,
+                        key_epoch: l.envelope.key_epoch,
+                        nonce: l.envelope.nonce,
+                        ciphertext: l.envelope.ciphertext,
+                        scope: None,
+                    },
+                    signature: l.signature,
+                }),
+                Err(_) => Err(e),
+            },
+        }
+    }
 }
 
 mod signature_bytes {
@@ -1070,7 +1272,7 @@ pub struct SignedEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct EventAad<'a> {
     pub event_id: &'a [u8; 16],
-    pub vault_id: &'a [u8; 16],
+    pub secwet_id: &'a [u8; 16],
     pub device_id: &'a str,
     pub device_seq: u64,
     pub key_epoch: u32,
@@ -1080,7 +1282,7 @@ pub struct EventAad<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventAadOwned {
     pub event_id: [u8; 16],
-    pub vault_id: [u8; 16],
+    pub secwet_id: [u8; 16],
     pub device_id: String,
     pub device_seq: u64,
     pub key_epoch: u32,
@@ -1090,7 +1292,7 @@ impl EventAadOwned {
     pub fn as_borrowed(&self) -> EventAad<'_> {
         EventAad {
             event_id: &self.event_id,
-            vault_id: &self.vault_id,
+            secwet_id: &self.secwet_id,
             device_id: &self.device_id,
             device_seq: self.device_seq,
             key_epoch: self.key_epoch,
@@ -1116,6 +1318,25 @@ pub enum EventBody {
         device_id: String,
         name: String,
     },
+    /// An owner device vouches for a device's keys and membership. Sealed
+    /// with the workspace event key, so only workspace-key holders can
+    /// produce it; the relay's device list is never trusted on its own.
+    DeviceCertified {
+        device_id: String,
+        sign_pub: [u8; 32],
+        enc_pub: [u8; 32],
+        member_id: Option<Uuid>,
+    },
+    /// Re-emission of an existing record when a branch is shared or rotated.
+    /// Applied only when the receiver does not have the record yet, with the
+    /// original author as origin, so it never wins last-writer-wins.
+    Seed {
+        record_id: Uuid,
+        record_type: u8,
+        lamport: u64,
+        origin_device: String,
+        body: Vec<u8>,
+    },
 }
 
 // ============================================================================
@@ -1126,7 +1347,7 @@ pub enum EventBody {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct KeyWrapInfo<'a> {
     pub purpose: &'a str,
-    pub vault_id: &'a [u8; 16],
+    pub secwet_id: &'a [u8; 16],
     pub key_epoch: u32,
     pub recipient_device_id: &'a str,
 }
@@ -1135,7 +1356,7 @@ pub struct KeyWrapInfo<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyWrapInfoOwned {
     pub purpose: String,
-    pub vault_id: [u8; 16],
+    pub secwet_id: [u8; 16],
     pub key_epoch: u32,
     pub recipient_device_id: String,
 }
@@ -1144,7 +1365,7 @@ impl KeyWrapInfoOwned {
     pub fn as_borrowed(&self) -> KeyWrapInfo<'_> {
         KeyWrapInfo {
             purpose: &self.purpose,
-            vault_id: &self.vault_id,
+            secwet_id: &self.secwet_id,
             key_epoch: self.key_epoch,
             recipient_device_id: &self.recipient_device_id,
         }
@@ -1161,7 +1382,7 @@ pub struct WrappedKey {
 /// Pairing approval record signed by authorized device.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairingApproval {
-    pub vault_id: [u8; 16],
+    pub secwet_id: [u8; 16],
     pub session_id: [u8; 16],
     pub device_id: String,
     pub sign_pub: [u8; 32],
@@ -1169,9 +1390,193 @@ pub struct PairingApproval {
     pub approved_at: i64,
 }
 
+/// Device profile sealed inside pairing join payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingProfile {
+    pub name: String,
+    pub platform: String,
+}
+
+/// Request to create a pairing session on the relay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatePairingSessionRequest {
+    pub secwet_id: Uuid,
+    pub a_eph_pub: [u8; 32],
+}
+
+/// Response returned when a pairing session is created.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatePairingSessionResponse {
+    pub session_id: Uuid,
+    pub expires_at: String,
+    pub qr_payload: String,
+}
+
+/// Join payload submitted by new device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingJoinRequest {
+    pub n_eph_pub: [u8; 32],
+    pub sign_pub: [u8; 32],
+    pub enc_pub: [u8; 32],
+    pub sealed_profile: Vec<u8>,
+}
+
+/// A wrapped key for a specific master key epoch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WrappedEpochKey {
+    pub epoch: u32,
+    pub wrapped: WrappedKey,
+}
+
+/// Request to approve a pairing session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingApproveRequest {
+    pub approval: PairingApproval,
+    #[serde(with = "signature_bytes")]
+    pub signature: [u8; 64],
+    pub wrapped_keys: Vec<WrappedEpochKey>,
+}
+
+/// Response returned on GET /v1/pairing/{id}.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingSessionStatusResponse {
+    pub session_id: Uuid,
+    pub secwet_id: Uuid,
+    pub created_by: String,
+    pub expires_at: String,
+    pub status: String,
+    pub join_payload: Option<PairingJoinRequest>,
+}
+
+/// Response returned on GET /v1/pairing/{id}/result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingResultResponse {
+    pub secwet_id: Uuid,
+    pub device_id: String,
+    pub wrapped_keys: Vec<WrappedEpochKey>,
+}
+
+/// Unified Device DTO matching desktop and CLI presentations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceDto {
+    pub id: String,
+    pub name: String,
+    pub platform: String,
+    pub fingerprint: String,
+    pub added_at: i64,
+    pub last_seen_at: i64,
+    pub revoked_at: Option<i64>,
+    pub is_current: bool,
+}
+
+/// Pairing session information returned to UI or CLI when starting pairing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingSessionInfo {
+    pub session_id: Uuid,
+    pub expires_at: String,
+    pub qr_payload: String,
+}
+
+/// Status of an active pairing session polled by the approving device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum PairingPollResponse {
+    Waiting,
+    Found {
+        name: String,
+        platform: String,
+        fingerprint: String,
+        code: String,
+        device_id: String,
+    },
+    Expired,
+    Approved,
+}
+
 // ============================================================================
-// 7. Relay Error Codes
+// Sync DTOs (M6)
 // ============================================================================
+
+/// Request body for POST /v1/secwets/{id}/events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PushEventsRequest {
+    pub events: Vec<SignedEvent>,
+}
+
+/// Response body for POST /v1/secwets/{id}/events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PushEventsResponse {
+    pub accepted: usize,
+    pub latest_server_seq: u64,
+    /// Event ids the relay consumed without storing because the author's role
+    /// does not permit them (F19). Counted in `accepted`.
+    #[serde(default)]
+    pub rejected: Vec<[u8; 16]>,
+}
+
+/// Stored event representation returned during event pull.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredEventDto {
+    pub server_seq: u64,
+    pub event: SignedEvent,
+    pub received_at: i64,
+}
+
+/// Response body for GET /v1/secwets/{id}/events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullEventsResponse {
+    pub events: Vec<StoredEventDto>,
+    pub has_more: bool,
+    /// Newest `server_seq` in the workspace, so a device that sees no events
+    /// (a member with quiet spaces) can still advance and ack.
+    #[serde(default)]
+    pub head_seq: u64,
+}
+
+/// Request body for POST /v1/secwets/{id}/ack.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AckEventsRequest {
+    pub server_seq: u64,
+}
+
+/// Request body for PUT /v1/secwets/{id}/snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotUploadRequest {
+    pub server_seq: u64,
+    pub key_epoch: u32,
+    pub nonce: [u8; 24],
+    pub ciphertext: Vec<u8>,
+}
+
+/// Response body for GET /v1/secwets/{id}/snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotResponse {
+    pub server_seq: u64,
+    pub key_epoch: u32,
+    pub nonce: [u8; 24],
+    pub ciphertext: Vec<u8>,
+    pub updated_at: i64,
+}
+
+/// Message emitted over the WebSocket stream (GET /v1/secwets/{id}/stream).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamEventMessage {
+    pub r#type: String,
+    pub server_seq: u64,
+}
+
+// ============================================================================
+// 7. Relay Error Codes, Constants & Wire Models
+// ============================================================================
+
+pub const HEADER_DEVICE: &str = "x-secwet-device";
+pub const HEADER_TIME: &str = "x-secwet-time";
+pub const HEADER_NONCE: &str = "x-secwet-nonce";
+pub const HEADER_SIGNATURE: &str = "x-secwet-signature";
+pub const REQUEST_SIGNATURE_CONTEXT: &str = "secwet-req-v1";
+pub const REGISTRATION_PROOF_CONTEXT: &str = "secwet-reg-proof-v1";
+pub const MAX_CLOCK_SKEW_MS: i64 = 60_000;
+pub const NONCE_RETENTION_SECS: i64 = 600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1190,6 +1595,43 @@ pub enum RelayErrorCode {
     CursorExpired,
     NotFound,
     Internal,
+    ReusedNonce,
+    ExpiredTimestamp,
+    Unauthorized,
+    RateLimited,
+    Forbidden,
+    AlreadyRevoked,
+    InvalidInvitation,
+    InvalidRequest,
+}
+
+impl RelayErrorCode {
+    pub const fn http_status_code(&self) -> u16 {
+        match self {
+            Self::Exists => 409,
+            Self::NotEntitled => 403,
+            Self::Expired => 400,
+            Self::AlreadyJoined => 409,
+            Self::DeviceLimit => 403,
+            Self::BadSignature => 401,
+            Self::Pending => 202,
+            Self::CannotRevokeSelf => 400,
+            Self::EpochConflict => 409,
+            Self::SeqGap => 400,
+            Self::Revoked => 403,
+            Self::CursorExpired => 410,
+            Self::NotFound => 404,
+            Self::Internal => 500,
+            Self::ReusedNonce => 401,
+            Self::ExpiredTimestamp => 401,
+            Self::Unauthorized => 401,
+            Self::RateLimited => 429,
+            Self::Forbidden => 403,
+            Self::AlreadyRevoked => 409,
+            Self::InvalidInvitation => 403,
+            Self::InvalidRequest => 400,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1201,6 +1643,105 @@ pub struct RelayErrorDetail {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelayError {
     pub error: RelayErrorDetail,
+    /// Present on `revoked` errors sent to the revoked device itself: the
+    /// signed directive it verifies before wiping or archiving (F16).
+    #[serde(default)]
+    pub revocation: Option<SignedRevocation>,
+}
+
+impl RelayError {
+    pub fn new(code: RelayErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            error: RelayErrorDetail {
+                code,
+                message: message.into(),
+            },
+            revocation: None,
+        }
+    }
+}
+
+/// Computes the exact canonical byte sequence for a signed relay request.
+/// Format: postcard(("secwet-req-v1", method, path_and_query, time_ms, nonce, body_sha256))
+pub fn canonical_request_bytes(
+    method: &str,
+    path_and_query: &str,
+    time_ms: i64,
+    nonce: &[u8],
+    body_sha256: &[u8; 32],
+) -> Result<Vec<u8>, postcard::Error> {
+    postcard::to_stdvec(&(
+        REQUEST_SIGNATURE_CONTEXT,
+        method,
+        path_and_query,
+        time_ms,
+        nonce,
+        *body_sha256,
+    ))
+}
+
+/// Computes canonical proof bytes for store and first device registration.
+/// Format: postcard(("secwet-reg-proof-v1", secwet_id, sign_pub, enc_pub))
+pub fn canonical_registration_proof_bytes(
+    secwet_id: &Uuid,
+    sign_pub: &[u8; 32],
+    enc_pub: &[u8; 32],
+) -> Result<Vec<u8>, postcard::Error> {
+    postcard::to_stdvec(&(
+        REGISTRATION_PROOF_CONTEXT,
+        secwet_id.as_bytes(),
+        sign_pub,
+        enc_pub,
+    ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegisterSecwetRequest {
+    pub secwet_id: Uuid,
+    pub sign_pub: [u8; 32],
+    pub enc_pub: [u8; 32],
+    #[serde(with = "signature_bytes")]
+    pub proof: [u8; 64],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegisterSecwetResponse {
+    pub secwet_id: Uuid,
+    pub device_id: String,
+    pub created_at: String,
+    pub current_epoch: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EntitlementResponse {
+    pub secwet_id: Uuid,
+    pub plan: String,
+    pub device_limit: u32,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RelayStatusDto {
+    pub connected: bool,
+    pub relay_url: String,
+    pub plan: String,
+    pub device_limit: u32,
+    pub active_devices: u32,
+    pub expires_at: Option<String>,
+    pub pending_outbox_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminGrantRequest {
+    pub secwet_id: Uuid,
+    pub plan: String,
+    pub device_limit: u32,
+    pub expires_at: Option<String>,
 }
 
 // ============================================================================
@@ -1237,6 +1778,22 @@ impl std::fmt::Display for ValidationError {
 }
 
 impl std::error::Error for ValidationError {}
+
+pub fn validate_space_name(name: &str) -> Result<String, ValidationError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(ValidationError::EmptyField("space_name"));
+    }
+    let char_count = trimmed.chars().count();
+    if char_count > 64 {
+        return Err(ValidationError::TooLong {
+            field: "space_name",
+            max: 64,
+            actual: char_count,
+        });
+    }
+    Ok(trimmed.to_string())
+}
 
 pub fn validate_label_name(name: &str) -> Result<String, ValidationError> {
     let trimmed = name.trim();
@@ -1786,7 +2343,267 @@ pub fn snippet_from_content(content: &str, max_chars: usize) -> String {
 }
 
 // ============================================================================
-// 10. Unit Tests
+// 10. Snapshot, Export, and Recovery Models (Milestone 3)
+// ============================================================================
+
+/// Snapshot representation of an organizational space.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotSpace {
+    pub id: Uuid,
+    pub name: String,
+    pub position: u32,
+    pub icon: Option<String>,
+    pub is_default: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+/// Snapshot representation of an organizational label / group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotLabel {
+    pub id: Uuid,
+    pub space_id: Option<Uuid>,
+    pub name: String,
+    pub position: u32,
+    pub icon: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+/// Snapshot representation of an item container.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotItem {
+    pub id: Uuid,
+    pub label_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub position: u32,
+    pub lamport: u64,
+    pub origin_device: String,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+/// Snapshot representation of an environment record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotEnvironment {
+    pub id: Uuid,
+    pub item_id: Uuid,
+    pub name: String,
+    pub position: u32,
+    pub lamport: u64,
+    pub origin_device: String,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+/// Snapshot representation of a secret record.
+///
+/// Custom Debug implementation ensures plaintext value is redacted.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotSecret {
+    pub id: Uuid,
+    pub item_id: Uuid,
+    pub environment_id: Option<Uuid>,
+    pub name: String,
+    pub kind: SecretKind,
+    pub value: String,
+    pub note: Option<String>,
+    pub lamport: u64,
+    pub origin_device: String,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+impl std::fmt::Debug for SnapshotSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SnapshotSecret")
+            .field("id", &self.id)
+            .field("item_id", &self.item_id)
+            .field("environment_id", &self.environment_id)
+            .field("name", &self.name)
+            .field("kind", &self.kind)
+            .field("value", &"[REDACTED]")
+            .field("note", &self.note)
+            .field("lamport", &self.lamport)
+            .field("origin_device", &self.origin_device)
+            .field("updated_at", &self.updated_at)
+            .field("deleted", &self.deleted)
+            .finish()
+    }
+}
+
+/// Snapshot representation of a rich-text note record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotNote {
+    pub id: Uuid,
+    pub item_id: Uuid,
+    pub environment_id: Option<Uuid>,
+    pub title: String,
+    pub content: String,
+    pub position: u32,
+    pub lamport: u64,
+    pub origin_device: String,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+/// Snapshot representation of an asset file payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotFile {
+    pub id: Uuid,
+    pub item_id: Uuid,
+    pub environment_id: Option<Uuid>,
+    pub name: String,
+    pub size_bytes: u64,
+    pub mime_type: String,
+    pub sha256: [u8; 32],
+    pub data: Vec<u8>,
+    pub lamport: u64,
+    pub origin_device: String,
+    pub updated_at: i64,
+    pub deleted: bool,
+}
+
+/// Snapshot representation of a setting key-value pair.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotSetting {
+    pub key: String,
+    pub value: String,
+}
+
+/// Canonical Secwet Snapshot for encrypted backup and disaster recovery.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecwetSnapshot {
+    pub secwet_id: Uuid,
+    pub created_at: i64,
+    pub key_epoch: u32,
+    pub plan: String,
+    pub relay_url: String,
+    pub spaces: Vec<SnapshotSpace>,
+    pub labels: Vec<SnapshotLabel>,
+    #[serde(alias = "projects")]
+    pub items: Vec<SnapshotItem>,
+    pub environments: Vec<SnapshotEnvironment>,
+    pub secrets: Vec<SnapshotSecret>,
+    pub notes: Vec<SnapshotNote>,
+    pub files: Vec<SnapshotFile>,
+    pub settings: Vec<SnapshotSetting>,
+}
+
+impl SecwetSnapshot {
+    #[inline]
+    pub fn projects(&self) -> &[SnapshotItem] {
+        &self.items
+    }
+}
+
+/// Authenticated Additional Data (AAD) bound to the encrypted backup envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportAad {
+    pub format: String,
+    pub version: u8,
+    pub secwet_id: Uuid,
+}
+
+impl ExportAad {
+    pub const FORMAT_V1: &'static str = "secwet-export";
+    pub const VERSION_V1: u8 = 1;
+
+    pub fn new(secwet_id: Uuid) -> Self {
+        Self {
+            format: Self::FORMAT_V1.to_string(),
+            version: Self::VERSION_V1,
+            secwet_id,
+        }
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_stdvec(self)
+    }
+}
+
+/// Wire JSON envelope for encrypted `.secwet` workspace exports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecwetExportEnvelope {
+    pub format: String,
+    pub version: u32,
+    pub secwet_id: Uuid,
+    pub created_at: i64,
+    pub kdf: String,
+    pub cipher: String,
+    pub nonce: String,
+    pub ciphertext: String,
+}
+
+/// Summary metrics returned upon successful workspace export.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportSummary {
+    pub secwet_id: Uuid,
+    pub created_at: i64,
+    pub spaces_count: usize,
+    pub labels_count: usize,
+    pub items_count: usize,
+    pub environments_count: usize,
+    pub secrets_count: usize,
+    pub notes_count: usize,
+    pub files_count: usize,
+    pub bytes_written: usize,
+    #[serde(default)]
+    pub projects_count: usize,
+    #[serde(default)]
+    pub assets_count: usize,
+}
+
+impl ExportSummary {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        secwet_id: Uuid,
+        created_at: i64,
+        spaces_count: usize,
+        labels_count: usize,
+        items_count: usize,
+        environments_count: usize,
+        secrets_count: usize,
+        notes_count: usize,
+        files_count: usize,
+        bytes_written: usize,
+    ) -> Self {
+        Self {
+            secwet_id,
+            created_at,
+            spaces_count,
+            labels_count,
+            items_count,
+            environments_count,
+            secrets_count,
+            notes_count,
+            files_count,
+            bytes_written,
+            projects_count: items_count,
+            assets_count: files_count,
+        }
+    }
+}
+
+/// Recovery key status for UI and overview queries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecoveryStatus {
+    pub created: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<u64>,
+}
+
+impl RecoveryStatus {
+    pub fn new(created: bool, created_at: Option<u64>) -> Self {
+        Self { created, created_at }
+    }
+}
+
+// ============================================================================
+// 11. Unit Tests
 // ============================================================================
 
 #[cfg(test)]
@@ -1802,6 +2619,7 @@ mod tests {
             (4, RecordType::Secret),
             (5, RecordType::File),
             (6, RecordType::Note),
+            (7, RecordType::Space),
         ] {
             assert_eq!(RecordType::try_from(byte).unwrap(), expected);
             assert_eq!(u8::from(expected), byte);
@@ -1812,7 +2630,7 @@ mod tests {
         }
 
         assert!(RecordType::try_from(0).is_err());
-        assert!(RecordType::try_from(7).is_err());
+        assert!(RecordType::try_from(8).is_err());
         assert!(RecordType::try_from(255).is_err());
     }
 
@@ -1825,6 +2643,7 @@ mod tests {
             SecretKind::EnvVar,
             SecretKind::SshKey,
             SecretKind::Certificate,
+            SecretKind::Codes,
         ];
 
         for kind in kinds {
@@ -1980,9 +2799,9 @@ mod tests {
 
     #[test]
     fn test_record_aad_canonical() {
-        let vault_id = [7u8; 16];
+        let secwet_id = [7u8; 16];
         let record_id = [9u8; 16];
-        let aad = RecordAad::new(&vault_id, &record_id, RecordType::Secret, 1);
+        let aad = RecordAad::new(&secwet_id, &record_id, RecordType::Secret, 1);
         let bytes1 = aad.to_bytes().unwrap();
         let bytes2 = aad.to_bytes().unwrap();
         assert_eq!(
@@ -1990,11 +2809,11 @@ mod tests {
             "Postcard serialization must be deterministic"
         );
 
-        let owned = RecordAadOwned::new(vault_id, record_id, RecordType::Secret, 1);
+        let owned = RecordAadOwned::new(secwet_id, record_id, RecordType::Secret, 1);
         let bytes_owned = owned.as_borrowed().to_bytes().unwrap();
         assert_eq!(bytes1, bytes_owned);
 
-        let raw_aad = RecordAad::from_raw_type(&vault_id, &record_id, 4, 1);
+        let raw_aad = RecordAad::from_raw_type(&secwet_id, &record_id, 4, 1);
         assert_eq!(bytes1, raw_aad.to_bytes().unwrap());
     }
 
@@ -2234,5 +3053,200 @@ mod tests {
         let enc = postcard::to_stdvec(&config).unwrap();
         let dec: DashboardConfig = postcard::from_bytes(&enc).unwrap();
         assert_eq!(dec, config);
+    }
+
+    #[test]
+    fn test_snapshot_and_recovery_models_roundtrip() {
+        let secwet_id = Uuid::new_v4();
+        let space_id = Uuid::new_v4();
+        let label_id = Uuid::new_v4();
+        let item_id = Uuid::new_v4();
+        let env_id = Uuid::new_v4();
+        let secret_id = Uuid::new_v4();
+        let note_id = Uuid::new_v4();
+        let file_id = Uuid::new_v4();
+
+        let space = SnapshotSpace {
+            id: space_id,
+            name: "Personal".to_string(),
+            position: 0,
+            icon: Some("user".to_string()),
+            is_default: true,
+            created_at: 1000,
+            updated_at: 1000,
+            deleted: false,
+        };
+
+        let label = SnapshotLabel {
+            id: label_id,
+            space_id: Some(space_id),
+            name: "Work".to_string(),
+            position: 0,
+            icon: Some("folder".to_string()),
+            created_at: 1001,
+            updated_at: 1001,
+            deleted: false,
+        };
+
+        let item = SnapshotItem {
+            id: item_id,
+            label_id,
+            name: "API Service".to_string(),
+            description: Some("Core API".to_string()),
+            position: 0,
+            lamport: 1,
+            origin_device: "dev-1".to_string(),
+            updated_at: 1002,
+            deleted: false,
+        };
+
+        let env = SnapshotEnvironment {
+            id: env_id,
+            item_id,
+            name: "Production".to_string(),
+            position: 0,
+            lamport: 2,
+            origin_device: "dev-1".to_string(),
+            updated_at: 1003,
+            deleted: false,
+        };
+
+        let secret = SnapshotSecret {
+            id: secret_id,
+            item_id,
+            environment_id: Some(env_id),
+            name: "DATABASE_URL".to_string(),
+            kind: SecretKind::EnvVar,
+            value: "postgres://localhost/prod".to_string(),
+            note: Some("Production DB".to_string()),
+            lamport: 3,
+            origin_device: "dev-1".to_string(),
+            updated_at: 1004,
+            deleted: false,
+        };
+
+        let note = SnapshotNote {
+            id: note_id,
+            item_id,
+            environment_id: Some(env_id),
+            title: "Runbook".to_string(),
+            content: "Deployment checklist".to_string(),
+            position: 0,
+            lamport: 4,
+            origin_device: "dev-1".to_string(),
+            updated_at: 1005,
+            deleted: false,
+        };
+
+        let file = SnapshotFile {
+            id: file_id,
+            item_id,
+            environment_id: Some(env_id),
+            name: "ca.crt".to_string(),
+            size_bytes: 4,
+            mime_type: "application/x-x509-ca-cert".to_string(),
+            sha256: [1u8; 32],
+            data: vec![0xCA, 0xFE, 0xBA, 0xBE],
+            lamport: 5,
+            origin_device: "dev-1".to_string(),
+            updated_at: 1006,
+            deleted: false,
+        };
+
+        let setting = SnapshotSetting {
+            key: "theme".to_string(),
+            value: "dark".to_string(),
+        };
+
+        let snapshot = SecwetSnapshot {
+            secwet_id,
+            created_at: 1000,
+            key_epoch: 1,
+            plan: "pro".to_string(),
+            relay_url: "https://relay.secwet.test".to_string(),
+            spaces: vec![space],
+            labels: vec![label],
+            items: vec![item],
+            environments: vec![env],
+            secrets: vec![secret],
+            notes: vec![note],
+            files: vec![file],
+            settings: vec![setting],
+        };
+
+        let enc_snapshot = postcard::to_stdvec(&snapshot).unwrap();
+        let dec_snapshot: SecwetSnapshot = postcard::from_bytes(&enc_snapshot).unwrap();
+        assert_eq!(dec_snapshot, snapshot);
+        assert_eq!(dec_snapshot.projects().len(), 1);
+
+        let aad = ExportAad::new(secwet_id);
+        let enc_aad = aad.to_bytes().unwrap();
+        let dec_aad: ExportAad = postcard::from_bytes(&enc_aad).unwrap();
+        assert_eq!(dec_aad, aad);
+
+        let envelope = SecwetExportEnvelope {
+            format: "secwet-export".to_string(),
+            version: 1,
+            secwet_id,
+            created_at: 1000,
+            kdf: "hkdf-sha256".to_string(),
+            cipher: "xchacha20poly1305".to_string(),
+            nonce: "AQID".to_string(),
+            ciphertext: "BAUG".to_string(),
+        };
+        let enc_env = postcard::to_stdvec(&envelope).unwrap();
+        let dec_env: SecwetExportEnvelope = postcard::from_bytes(&enc_env).unwrap();
+        assert_eq!(dec_env, envelope);
+
+        let summary = ExportSummary::new(secwet_id, 1000, 1, 1, 1, 1, 1, 1, 1, 2048);
+        assert_eq!(summary.projects_count, 1);
+        assert_eq!(summary.assets_count, 1);
+        assert_eq!(summary.bytes_written, 2048);
+
+        let status = RecoveryStatus::new(true, Some(1000));
+        assert!(status.created);
+        assert_eq!(status.created_at, Some(1000));
+
+        let push_req = PushEventsRequest {
+            events: vec![SignedEvent {
+                envelope: EventEnvelope {
+                    event_id: [1u8; 16],
+                    secwet_id: [2u8; 16],
+                    device_id: "dev-1".to_string(),
+                    device_seq: 1,
+                    key_epoch: 1,
+                    nonce: [3u8; 24],
+                    ciphertext: vec![4, 5, 6],
+                    scope: None,
+                },
+                signature: [7u8; 64],
+            }],
+        };
+        let enc_push = postcard::to_stdvec(&push_req).unwrap();
+        let dec_push: PushEventsRequest = postcard::from_bytes(&enc_push).unwrap();
+        assert_eq!(dec_push, push_req);
+
+        let pull_resp = PullEventsResponse {
+            events: vec![StoredEventDto {
+                server_seq: 42,
+                event: push_req.events[0].clone(),
+                received_at: 1234567,
+            }],
+            has_more: false,
+            head_seq: 42,
+        };
+        let enc_pull = postcard::to_stdvec(&pull_resp).unwrap();
+        let dec_pull: PullEventsResponse = postcard::from_bytes(&enc_pull).unwrap();
+        assert_eq!(dec_pull, pull_resp);
+
+        let snap_req = SnapshotUploadRequest {
+            server_seq: 100,
+            key_epoch: 2,
+            nonce: [9u8; 24],
+            ciphertext: vec![10, 11, 12],
+        };
+        let enc_snap = postcard::to_stdvec(&snap_req).unwrap();
+        let dec_snap: SnapshotUploadRequest = postcard::from_bytes(&enc_snap).unwrap();
+        assert_eq!(dec_snap, snap_req);
     }
 }

@@ -19,6 +19,8 @@ serde.workspace = true
 serde_json.workspace = true
 secwet-core = { workspace = true, features = ["test-util"] }
 secwet-proto.workspace = true
+chrono.workspace = true
+x25519-dalek.workspace = true
 uuid.workspace = true
 directories.workspace = true
 secrecy.workspace = true
@@ -26,6 +28,7 @@ subtle.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["time"] }
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 tempfile.workspace = true

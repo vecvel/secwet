@@ -16,7 +16,7 @@ use secwet_core::model::SecretKind;
 use secwet_desktop_lib::clipboard::{AutoClearManager, ClipboardPort};
 use secwet_desktop_lib::commands::{
     overview_impl, project_create_impl, secret_copy_impl, secret_create_impl, secret_reveal_impl,
-    secrets_list_impl, vault_create_impl, SecretDraftDto,
+    secrets_list_impl, secwet_create_impl, SecretDraftDto,
 };
 use secwet_desktop_lib::state::AppState;
 use sha2::{Digest, Sha256};
@@ -387,7 +387,7 @@ async fn test_sandwich_external_copy_between_secrets() {
 
 #[test]
 fn test_constant_time_equality_full_exhaustive_bit_flips() {
-    let secret = "ProductionVaultSecretPassword987!";
+    let secret = "ProductionMasterSecretPassword987!";
     let mut hasher = Sha256::new();
     hasher.update(secret.as_bytes());
     let expected_hash: [u8; 32] = hasher.finalize().into();
@@ -507,8 +507,8 @@ async fn test_secret_copy_zero_webview_leakage_and_metadata_isolation() {
 
     let cb = Arc::new(InstrumentedTestClipboard::default());
 
-    // Initialize vault
-    vault_create_impl(None, &state, Some("test-device".into())).unwrap();
+    // Initialize secwet
+    secwet_create_impl(None, &state, Some("test-device".into())).unwrap();
     let proj =
         project_create_impl(None, &state, "SecurityProj".into(), vec!["Prod".into()]).unwrap();
     let env_id = proj.environments[0].id;

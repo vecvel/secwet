@@ -3,7 +3,6 @@ import type { Project } from "./mock";
 export const newId = () => crypto.randomUUID();
 
 export type Action = { type: string; [key: string]: any };
-export type VaultAction = Action;
 
 const MAX_NAME = 64;
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();

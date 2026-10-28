@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use secwet_core::keys::{KeyStore, KeyringStore, MemoryStore};
-use secwet_core::{Vault, VaultStatus};
+use secwet_core::{Secwet, SecwetStatus};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -15,29 +15,62 @@ use crate::error::UiError;
 /// Discriminated status DTO for frontend consumption matching §9.1 and §13.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
-pub enum VaultStatusDto {
+pub enum SecwetStatusDto {
     Uninitialized,
-    Locked { vault_id: Uuid },
-    Unlocked { vault_id: Uuid },
+    Locked {
+        secwet_id: Uuid,
+    },
+    Unlocked {
+        secwet_id: Uuid,
+    },
 }
 
-impl From<VaultStatus> for VaultStatusDto {
-    fn from(s: VaultStatus) -> Self {
+impl From<SecwetStatus> for SecwetStatusDto {
+    fn from(s: SecwetStatus) -> Self {
         match s {
-            VaultStatus::Uninitialized => VaultStatusDto::Uninitialized,
-            VaultStatus::Locked { vault_id } => VaultStatusDto::Locked { vault_id },
-            VaultStatus::Unlocked { vault_id } => VaultStatusDto::Unlocked { vault_id },
+            SecwetStatus::Uninitialized => SecwetStatusDto::Uninitialized,
+            SecwetStatus::Locked { secwet_id } => SecwetStatusDto::Locked { secwet_id },
+            SecwetStatus::Unlocked { secwet_id } => SecwetStatusDto::Unlocked { secwet_id },
         }
     }
 }
 
+/// Cached information about a peer that has joined an active pairing session.
+pub struct ActivePairingPeer {
+    pub join_req: secwet_proto::PairingJoinRequest,
+    pub profile: secwet_proto::PairingProfile,
+    pub sas: String,
+    pub fingerprint: String,
+    pub device_id: String,
+}
+
+/// Active in-memory pairing session state held on the approving device.
+pub struct ActivePairingSession {
+    pub session_id: Uuid,
+    pub a_eph_secret: x25519_dalek::StaticSecret,
+    pub a_eph_pub: [u8; 32],
+    pub expires_at: String,
+    pub qr_payload: String,
+    pub cached_peer: Option<ActivePairingPeer>,
+}
+
 /// Persistent shared state held and managed by Tauri.
 pub struct AppState {
-    pub vault: Mutex<Option<Vault>>,
+    pub secwet: Mutex<Option<Secwet>>,
+    pub active_pairing: Mutex<Option<ActivePairingSession>>,
     pub data_dir: PathBuf,
     pub keystore: Arc<dyn KeyStore>,
     pub clipboard_generation: Arc<AtomicU64>,
     pub clear_duration: Duration,
+    /// Invite links created in this session, so they can be copied through
+    /// the auto-clearing clipboard instead of the webview (they carry the
+    /// invite token). Cleared on lock.
+    pub invite_links: Mutex<std::collections::HashMap<Uuid, secrecy::SecretString>>,
+    /// Bumped on every lock, so a store taken out for a network call is not
+    /// put back after the user locked the app meanwhile.
+    pub lock_generation: Arc<AtomicU64>,
+    /// Number of commands holding the store across a network call.
+    pub in_flight: Arc<AtomicU64>,
 }
 
 impl AppState {
@@ -48,12 +81,19 @@ impl AppState {
             .map(Duration::from_millis)
             .unwrap_or_else(|| Duration::from_secs(30));
 
+        // Finish key deletions left by an interrupted remote wipe.
+        let _ = Secwet::finish_pending_wipes(&data_dir, keystore.as_ref());
+
         Self {
-            vault: Mutex::new(None),
+            secwet: Mutex::new(None),
+            active_pairing: Mutex::new(None),
             data_dir,
             keystore,
             clipboard_generation: Arc::new(AtomicU64::new(0)),
             clear_duration,
+            invite_links: Mutex::new(std::collections::HashMap::new()),
+            lock_generation: Arc::new(AtomicU64::new(0)),
+            in_flight: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -83,29 +123,38 @@ impl AppState {
         Arc::new(KeyringStore::new())
     }
 
-    /// Executes a read-only closure with the unlocked vault.
-    pub fn with_vault<T, F>(&self, f: F) -> Result<T, UiError>
+    /// Executes a read-only closure with the unlocked secwet.
+    pub fn with_secwet<T, F>(&self, f: F) -> Result<T, UiError>
     where
-        F: FnOnce(&Vault) -> Result<T, secwet_core::Error>,
+        F: FnOnce(&Secwet) -> Result<T, secwet_core::Error>,
     {
         let guard = self
-            .vault
+            .secwet
             .lock()
-            .map_err(|_| UiError::internal("Vault mutex poisoned"))?;
-        let vault = guard.as_ref().ok_or_else(UiError::vault_locked)?;
-        f(vault).map_err(UiError::from)
+            .map_err(|_| UiError::internal("Secwet mutex poisoned"))?;
+        let secwet = guard.as_ref().ok_or_else(|| self.locked_or_busy())?;
+        f(secwet).map_err(UiError::from)
     }
 
-    /// Executes a mutating closure with the unlocked vault.
-    pub fn with_vault_mut<T, F>(&self, f: F) -> Result<T, UiError>
+    /// `busy` while a command holds the store for a network call, else `locked`.
+    pub fn locked_or_busy(&self) -> UiError {
+        if self.in_flight.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            UiError::new("busy", None, "Secwet is syncing. Try again in a moment.")
+        } else {
+            UiError::locked()
+        }
+    }
+
+    /// Executes a mutating closure with the unlocked secwet.
+    pub fn with_secwet_mut<T, F>(&self, f: F) -> Result<T, UiError>
     where
-        F: FnOnce(&mut Vault) -> Result<T, secwet_core::Error>,
+        F: FnOnce(&mut Secwet) -> Result<T, secwet_core::Error>,
     {
         let mut guard = self
-            .vault
+            .secwet
             .lock()
-            .map_err(|_| UiError::internal("Vault mutex poisoned"))?;
-        let vault = guard.as_mut().ok_or_else(UiError::vault_locked)?;
-        f(vault).map_err(UiError::from)
+            .map_err(|_| UiError::internal("Secwet mutex poisoned"))?;
+        let secwet = guard.as_mut().ok_or_else(|| self.locked_or_busy())?;
+        f(secwet).map_err(UiError::from)
     }
 }

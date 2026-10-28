@@ -118,6 +118,37 @@ const paths = {
   ),
   arrowRight: <path d="M4 10h12M11.5 5.5L16 10l-4.5 4.5" />,
   dot: <circle cx="10" cy="10" r="2.5" fill="currentColor" stroke="none" />,
+  info: (
+    <>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 9.25v4.5" />
+      <circle cx="10" cy="6.6" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  terminal: (
+    <>
+      <path d="M4 6.5l3.5 3.5-3.5 3.5M9.5 13.5h6.5" />
+    </>
+  ),
+  stop: <rect x="5.5" y="5.5" width="9" height="9" rx="1.5" fill="currentColor" stroke="none" />,
+  user: (
+    <>
+      <circle cx="10" cy="7" r="3.25" />
+      <path d="M4.5 16.5c0-3 2.5-4.75 5.5-4.75s5.5 1.75 5.5 4.75" />
+    </>
+  ),
+  briefcase: (
+    <>
+      <rect x="3.5" y="6.5" width="13" height="10" rx="1.5" />
+      <path d="M7.5 6.5V4.75c0-.69.56-1.25 1.25-1.25h2.5c.69 0 1.25.56 1.25 1.25V6.5" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="10" cy="10" r="6.75" />
+      <path d="M3.5 10h13M10 3.25c2 2.5 3 4.5 3 6.75s-1 4.25-3 6.75M10 3.25c-2 2.5-3 4.5-3 6.75s1 4.25 3 6.75" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof paths;

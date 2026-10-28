@@ -20,10 +20,10 @@ use x25519_dalek::StaticSecret;
 #[test]
 fn tampered_blob_fails_to_open() {
     let k_rec = [42u8; 32];
-    let vault_id = Uuid::new_v4();
+    let secwet_id = Uuid::new_v4();
     let record_id = Uuid::now_v7();
     let aad = RecordAad::new(
-        vault_id.as_bytes(),
+        secwet_id.as_bytes(),
         record_id.as_bytes(),
         RecordType::Secret,
         1,
@@ -96,11 +96,11 @@ fn tampered_blob_fails_to_open() {
 #[test]
 fn blob_moved_to_other_record_fails() {
     let k_rec = [0x5Au8; 32];
-    let vault_id_1 = Uuid::new_v4();
+    let secwet_id_1 = Uuid::new_v4();
     let record_id_1 = Uuid::now_v7();
     let epoch_1 = 1u32;
     let aad_1 = RecordAad::new(
-        vault_id_1.as_bytes(),
+        secwet_id_1.as_bytes(),
         record_id_1.as_bytes(),
         RecordType::Project,
         epoch_1,
@@ -112,7 +112,7 @@ fn blob_moved_to_other_record_fails() {
     // 1. Same payload, but different record_id in AAD (e.g. copied to another record row)
     let record_id_2 = Uuid::now_v7();
     let aad_different_record = RecordAad::new(
-        vault_id_1.as_bytes(),
+        secwet_id_1.as_bytes(),
         record_id_2.as_bytes(),
         RecordType::Project,
         epoch_1,
@@ -123,23 +123,23 @@ fn blob_moved_to_other_record_fails() {
         "Opening with mismatched record_id must fail authentication"
     );
 
-    // 2. Same payload, but different vault_id in AAD (e.g. copied across vaults)
-    let vault_id_2 = Uuid::new_v4();
-    let aad_different_vault = RecordAad::new(
-        vault_id_2.as_bytes(),
+    // 2. Same payload, but different secwet_id in AAD (e.g. copied across secwets)
+    let secwet_id_2 = Uuid::new_v4();
+    let aad_different_secwet = RecordAad::new(
+        secwet_id_2.as_bytes(),
         record_id_1.as_bytes(),
         RecordType::Project,
         epoch_1,
     );
     assert_eq!(
-        open_record(&k_rec, &aad_different_vault, &blob),
+        open_record(&k_rec, &aad_different_secwet, &blob),
         Err(CryptoError),
-        "Opening with mismatched vault_id must fail authentication"
+        "Opening with mismatched secwet_id must fail authentication"
     );
 
     // 3. Same payload, but different record_type in AAD (type confusion: Project vs Environment)
     let aad_different_type = RecordAad::new(
-        vault_id_1.as_bytes(),
+        secwet_id_1.as_bytes(),
         record_id_1.as_bytes(),
         RecordType::Environment,
         epoch_1,
@@ -152,7 +152,7 @@ fn blob_moved_to_other_record_fails() {
 
     // 4. Same payload, but different key epoch in AAD (epoch mismatch)
     let aad_different_epoch = RecordAad::new(
-        vault_id_1.as_bytes(),
+        secwet_id_1.as_bytes(),
         record_id_1.as_bytes(),
         RecordType::Project,
         epoch_1 + 1,
@@ -180,10 +180,10 @@ fn blob_moved_to_other_record_fails() {
 #[test]
 fn test_sealing_and_opening_roundtrips() {
     let k_rec = [0x77u8; 32];
-    let vault_id = Uuid::new_v4();
+    let secwet_id = Uuid::new_v4();
     let record_id = Uuid::now_v7();
     let aad = RecordAad::new(
-        vault_id.as_bytes(),
+        secwet_id.as_bytes(),
         record_id.as_bytes(),
         RecordType::Secret,
         1,
@@ -235,34 +235,34 @@ fn test_sealing_and_opening_roundtrips() {
 #[test]
 fn test_hkdf_key_derivations_and_domain_separation() {
     let k_v = [0x11u8; 32];
-    let vault_id = Uuid::new_v4();
+    let secwet_id = Uuid::new_v4();
 
-    let k_rec = derive_record_key(&k_v, &vault_id);
-    let k_evt = derive_event_key(&k_v, &vault_id);
-    let (k_rec_tuple, k_evt_tuple) = derive_keys(&k_v, &vault_id);
+    let k_rec = derive_record_key(&k_v, &secwet_id);
+    let k_evt = derive_event_key(&k_v, &secwet_id);
+    let (k_rec_tuple, k_evt_tuple) = derive_keys(&k_v, &secwet_id);
 
     // Consistency
     assert_eq!(*k_rec, *k_rec_tuple);
     assert_eq!(*k_evt, *k_evt_tuple);
 
-    // Domain separation: record key and event key derived from same k_v and vault_id must differ
+    // Domain separation: record key and event key derived from same k_v and secwet_id must differ
     assert_ne!(*k_rec, *k_evt);
 
-    // Vault separation: different vault_id produces distinct keys
-    let vault_id_2 = Uuid::new_v4();
-    let k_rec_vault_2 = derive_record_key(&k_v, &vault_id_2);
-    let k_evt_vault_2 = derive_event_key(&k_v, &vault_id_2);
-    assert_ne!(*k_rec, *k_rec_vault_2);
-    assert_ne!(*k_evt, *k_evt_vault_2);
+    // Secwet separation: different secwet_id produces distinct keys
+    let secwet_id_2 = Uuid::new_v4();
+    let k_rec_secwet_2 = derive_record_key(&k_v, &secwet_id_2);
+    let k_evt_secwet_2 = derive_event_key(&k_v, &secwet_id_2);
+    assert_ne!(*k_rec, *k_rec_secwet_2);
+    assert_ne!(*k_evt, *k_evt_secwet_2);
 
     // Recovery key derivation
     let recovery_secret = [0x99u8; 16];
-    let k_recovery = derive_recovery_key(&recovery_secret, &vault_id);
+    let k_recovery = derive_recovery_key(&recovery_secret, &secwet_id);
     assert_ne!(*k_recovery, *k_rec);
     assert_ne!(*k_recovery, *k_evt);
 
     // Wrong recovery secret produces different recovery key
-    let k_recovery_diff = derive_recovery_key(&[0x98u8; 16], &vault_id);
+    let k_recovery_diff = derive_recovery_key(&[0x98u8; 16], &secwet_id);
     assert_ne!(*k_recovery, *k_recovery_diff);
 }
 
@@ -278,7 +278,7 @@ fn test_hpke_wrap_and_unwrap_roundtrip() {
     let recipient_sk = StaticSecret::from(sk_bytes);
     let recipient_pk = x25519_dalek::PublicKey::from(&recipient_sk);
 
-    let info = b"secwet/v1/pair/vault-key";
+    let info = b"secwet/v1/pair/master-key";
     let plaintext_key = [0x33u8; 32];
 
     // Wrap for device
@@ -506,7 +506,7 @@ fn test_memory_keystore() {
 
     let store = MemoryStore::new();
 
-    let entry = "secwet/test-vault/device-sign";
+    let entry = "secwet/test-secwet/device-sign";
     let value = b"super-secret-signing-seed-material";
 
     // Initially absent

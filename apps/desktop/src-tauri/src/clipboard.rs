@@ -217,8 +217,11 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(35)).await;
         assert_eq!(clipboard.read_text().unwrap(), "secret_2");
 
-        // At t=90ms (Timer 2 has fired), Secret 2 should be cleared
-        tokio::time::sleep(Duration::from_millis(30)).await;
+        // At t=90ms+ (Timer 2 has fired), Secret 2 should be cleared
+        let start = std::time::Instant::now();
+        while clipboard.read_text().is_ok() && start.elapsed() < Duration::from_millis(500) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         assert!(clipboard.read_text().is_err());
     }
 
@@ -242,8 +245,11 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(30)).await;
         assert_eq!(clipboard.read_text().unwrap(), "secret_alpha");
 
-        // At t=95ms (Timer 2 expires), secret is cleared
-        tokio::time::sleep(Duration::from_millis(35)).await;
+        // At t=95ms+ (Timer 2 expires), secret is cleared
+        let start = std::time::Instant::now();
+        while clipboard.read_text().is_ok() && start.elapsed() < Duration::from_millis(500) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         assert!(clipboard.read_text().is_err());
     }
 

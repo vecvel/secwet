@@ -17,12 +17,12 @@ interface Props {
   /** Name of the last revoked device until the encryption key is rotated. */
   pendingRotation?: string;
   onPair: (device: Device) => void;
-  onRevoke: (id: string) => void;
+  onRevoke: (id: string, wipe: boolean) => void;
   onOpenRecovery: () => void;
 }
 
 function deviceMeta(d: Device, _plan?: Plan) {
-  if (d.revokedAt) return `${d.platform}, revoked ${formatDate(d.revokedAt)}. Copies it already had stay on it.`;
+  if (d.revokedAt) return `${d.platform}, revoked ${formatDate(d.revokedAt)}.`;
   if (d.current) return `${d.platform}, added ${formatDate(d.addedAt)}, key ${d.fingerprint}`;
   return `${d.platform}, ${d.lastSyncAt ? `last synced ${formatAgo(d.lastSyncAt)}` : "active"}, key ${d.fingerprint}`;
 }
@@ -101,8 +101,8 @@ export function DevicesScreen({ devices, plan, pendingRotation, onPair, onRevoke
         <RevokeDeviceDialog
           device={revoking}
           onCancel={() => setRevoking(null)}
-          onConfirm={() => {
-            onRevoke(revoking.id);
+          onConfirm={(wipe) => {
+            onRevoke(revoking.id, wipe);
             setRevoking(null);
           }}
         />

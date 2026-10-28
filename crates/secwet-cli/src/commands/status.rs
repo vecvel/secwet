@@ -1,15 +1,15 @@
-use secwet_core::Vault;
+use secwet_core::Secwet;
 
-pub fn execute_status(vault: &Vault, json_output: bool) -> Result<(), String> {
-    let vault_id = vault.vault_id();
-    let settings = vault.settings().map_err(|e| format!("{e}"))?;
+pub fn execute_status(secwet: &Secwet, json_output: bool) -> Result<(), String> {
+    let secwet_id = secwet.secwet_id();
+    let settings = secwet.settings().map_err(|e| format!("{e}"))?;
     let device_name = settings.device_name;
 
-    let plan = secwet_core::records::get_meta(vault.db_connection(), "plan")
+    let plan = secwet_core::records::get_meta(secwet.db_connection(), "plan")
         .map_err(|e| format!("{e}"))?
         .unwrap_or_else(|| "free".to_string());
 
-    let relay_url = secwet_core::records::get_meta(vault.db_connection(), "relay_url")
+    let relay_url = secwet_core::records::get_meta(secwet.db_connection(), "relay_url")
         .map_err(|e| format!("{e}"))?
         .unwrap_or_default();
 
@@ -21,14 +21,14 @@ pub fn execute_status(vault: &Vault, json_output: bool) -> Result<(), String> {
 
     if json_output {
         let json_val = serde_json::json!({
-            "vault_id": vault_id.to_string(),
+            "secwet_id": secwet_id.to_string(),
             "device_name": device_name,
             "plan": plan,
             "sync_state": sync_state,
         });
         println!("{}", serde_json::to_string_pretty(&json_val).unwrap());
     } else {
-        println!("{:<14} {}", "Vault ID:", vault_id);
+        println!("{:<14} {}", "Secwet ID:", secwet_id);
         println!("{:<14} {}", "Device:", device_name);
         println!("{:<14} {}", "Plan:", plan);
         println!("{:<14} {}", "Sync State:", sync_state);

@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 pub struct SecwetConfig {
     /// Target item name or UUID
     pub item: Option<String>,
-    /// Target project name or UUID (legacy alias for item)
+    /// Target project name or UUID (alias for item)
     pub project: Option<String>,
     /// Target environment name or UUID
     pub env: Option<String>,
-    /// Optional vault data directory override
-    pub vault: Option<PathBuf>,
+    /// Optional secwet data directory override
+    pub data_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -19,7 +19,8 @@ struct RawSecwetConfig {
     pub item: Option<String>,
     pub project: Option<String>,
     pub env: Option<String>,
-    pub vault: Option<PathBuf>,
+    #[serde(alias = "secwet")]
+    pub data_dir: Option<PathBuf>,
 }
 
 impl<'de> serde::Deserialize<'de> for SecwetConfig {
@@ -30,12 +31,13 @@ impl<'de> serde::Deserialize<'de> for SecwetConfig {
         let raw = RawSecwetConfig::deserialize(deserializer)?;
         let effective_item = raw.item.clone().or_else(|| raw.project.clone());
         let effective_project = raw.project.or(raw.item);
+        let effective_data_dir = raw.data_dir;
 
         Ok(SecwetConfig {
             item: effective_item,
             project: effective_project,
             env: raw.env,
-            vault: raw.vault,
+            data_dir: effective_data_dir,
         })
     }
 }
@@ -44,6 +46,11 @@ impl SecwetConfig {
     /// Returns the target item identifier (checking `item` first, then `project`).
     pub fn target_item(&self) -> Option<&str> {
         self.item.as_deref().or(self.project.as_deref())
+    }
+
+    /// Returns the data directory override if specified.
+    pub fn data_dir(&self) -> Option<&Path> {
+        self.data_dir.as_deref()
     }
 }
 

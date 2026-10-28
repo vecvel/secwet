@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: secwet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: secwet
+      POSTGRES_PASSWORD: secwet
+      POSTGRES_DB: secwet_relay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secwet -d secwet_relay"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  relay:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.relay
+    container_name: secwet-relay
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://secwet:secwet@postgres:5432/secwet_relay
+      SECWET_RELAY_ADDR: 0.0.0.0:8787
+      RETENTION_DAYS: 30
+      PUBLIC_URL: http://localhost:8787
+      RUST_LOG: info
+    ports:
+      - "8787:8787"
+
+volumes:
+  postgres_data:
