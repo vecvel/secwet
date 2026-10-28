@@ -13,6 +13,7 @@ class SecwetPalette {
     required this.border,
     required this.borderStrong,
     required this.borderSeparator,
+    required this.treeGuide,
     required this.cardHeaderBg,
     required this.accent,
     required this.accentContrast,
@@ -38,6 +39,7 @@ class SecwetPalette {
   final Color border;
   final Color borderStrong;
   final Color borderSeparator;
+  final Color treeGuide;
   final Color cardHeaderBg;
   final Color accent;
   final Color accentContrast;
@@ -63,6 +65,7 @@ class SecwetPalette {
     border: Color(0x0926231E),
     borderStrong: Color(0x1126231E),
     borderSeparator: Color(0x0E26231E),
+    treeGuide: Color(0x2926231E),
     cardHeaderBg: Color(0x0626231E),
     accent: Color(0xFF3D6A4C),
     accentContrast: Color(0xFFFFFFFF),
@@ -89,6 +92,7 @@ class SecwetPalette {
     border: Color(0x09EDEAE3),
     borderStrong: Color(0x11EDEAE3),
     borderSeparator: Color(0x0EEDEAE3),
+    treeGuide: Color(0x29EDEAE3),
     cardHeaderBg: Color(0x08EDEAE3),
     accent: Color(0xFF8FBE9C),
     accentContrast: Color(0xFF13201A),

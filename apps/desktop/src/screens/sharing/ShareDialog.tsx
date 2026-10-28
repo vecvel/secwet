@@ -57,6 +57,35 @@ interface Props {
   onSaved?: (member: MemberView) => void;
 }
 
+type Guide = "pipe" | "blank" | "tee" | "end";
+
+/**
+ * Connector columns for each row of a depth-first tree: a vertical line for
+ * every ancestor that still has siblings below, then a tee or an end elbow
+ * into the row itself.
+ */
+function treeGuides(nodes: ScopeNodeView[]): Guide[][] {
+  const isLast = nodes.map((n, i) => {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (nodes[j].depth < n.depth) return true;
+      if (nodes[j].depth === n.depth) return false;
+    }
+    return true;
+  });
+  return nodes.map((n, i) => {
+    if (n.depth === 0) return [];
+    const columns: Guide[] = [];
+    for (let level = 1; level < n.depth; level++) {
+      // Nearest ancestor at this level: does its branch continue below?
+      let ancestor = i - 1;
+      while (ancestor >= 0 && nodes[ancestor].depth !== level) ancestor--;
+      columns.push(ancestor >= 0 && !isLast[ancestor] ? "pipe" : "blank");
+    }
+    columns.push(isLast[i] ? "end" : "tee");
+    return columns;
+  });
+}
+
 export function ShareDialog({
   spaces,
   initialSpaceId = null,
@@ -95,6 +124,7 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
 
   const nodes = nodesBySpace[spaceId] ?? [];
+  const guides = useMemo(() => treeGuides(nodes), [nodes]);
   const draft = drafts[spaceId] ?? {};
 
   /** Every node of every loaded space, so kept grants exclude all of them. */
@@ -358,16 +388,25 @@ export function ShareDialog({
             )}
             <ul className={styles.scopeList} aria-label="Access by scope" aria-busy={loadingNodes}>
               {loadingNodes && nodes.length === 0 && <li className={styles.loading}>Loading…</li>}
-              {nodes.map((node) => {
+              {nodes.map((node, index) => {
                 const key = nodeKey(node);
                 const explicit = draft[key];
                 const inherited = inheritedRole(nodes, draft, node, keptGrants);
                 const isRoot = node.kind === "space";
                 return (
                   <li key={key} className={styles.scopeRow}>
-                    <div className={styles.scopeText} style={{ paddingLeft: `calc(var(--space-4) * ${node.depth})` }}>
-                      <span className={styles.scopeName}>{node.label}</span>
-                      <span className={styles.subtle}>{KIND_LABELS[node.kind]}</span>
+                    <div className={styles.scopeLead}>
+                      {guides[index].length > 0 && (
+                        <span className={styles.guides} aria-hidden="true">
+                          {guides[index].map((g, col) => (
+                            <span key={col} className={`${styles.guide} ${styles[g]}`} />
+                          ))}
+                        </span>
+                      )}
+                      <div className={styles.scopeText}>
+                        <span className={styles.scopeName}>{node.label}</span>
+                        <span className={styles.subtle}>{KIND_LABELS[node.kind]}</span>
+                      </div>
                     </div>
                     <div className={styles.roleSelect}>
                       <SelectControl

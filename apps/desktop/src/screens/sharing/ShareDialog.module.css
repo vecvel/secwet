@@ -52,10 +52,62 @@
   border-top: 1px solid var(--color-border-separator);
 }
 
+.scopeLead {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+}
+
+/* Tree connectors span the full row height, through the row padding, so
+   the lines of consecutive rows join up. */
+.guides {
+  display: flex;
+  align-self: stretch;
+  /* 1px more at the top covers the row separator above. */
+  margin-block: calc(-1 * var(--space-2) - 1px) calc(-1 * var(--space-2));
+}
+
+.guide {
+  position: relative;
+  flex: none;
+  width: 16px;
+}
+
+.pipe::before,
+.tee::before,
+.end::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 0;
+  width: 1px;
+  bottom: 0;
+  background: var(--color-tree-guide);
+}
+
+.end::before {
+  bottom: 50%;
+}
+
+.tee::after,
+.end::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--color-tree-guide);
+}
+
 .scopeText {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Same offset on every row (root included), so each connector drops
+     from the same point under its parent's name. */
+  margin-left: 6px;
 }
 
 .scopeName {
