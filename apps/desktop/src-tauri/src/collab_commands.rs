@@ -167,9 +167,13 @@ fn take(state: &AppState) -> Result<(Secwet, RelayClient, Ticket), UiError> {
     let secwet = guard.take().ok_or_else(|| state.locked_or_busy())?;
     let relay_url = match secwet.relay_url() {
         Ok(u) => u,
-        Err(e) => {
+        Err(_) => {
             *guard = Some(secwet);
-            return Err(UiError::new("relay_not_configured", None, e.to_string()));
+            return Err(UiError::new(
+                "relay_not_configured",
+                None,
+                "Sync isn't set up on this device.",
+            ));
         }
     };
     state.in_flight.fetch_add(1, Ordering::SeqCst);

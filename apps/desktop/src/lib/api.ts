@@ -476,6 +476,12 @@ export function getSecwetId(status: SecwetStatus | null | undefined): string | u
   return undefined;
 }
 
+/** True when the call failed because this device has no sync relay set up. */
+export function isRelayNotConfigured(err: unknown): boolean {
+  const code = String((err as { code?: string } | null)?.code ?? "").toLowerCase();
+  return code === "relay_not_configured" || code === "relay_relay_not_configured";
+}
+
 /**
  * Maps a UiError to an end-user message following Section 9.2 item 5 & Section 10 rules.
  */
@@ -524,6 +530,9 @@ export function formatUiError(err: unknown, defaultMessage = "Something went wro
       return "This invite link has expired. Ask for a new one.";
     case "exists":
       return uiErr.message || "This person already has an invite or access.";
+    case "relay_not_configured":
+    case "relay_relay_not_configured":
+      return "Sharing needs sync. Set it up in Settings > Sync.";
     default:
       return uiErr.message || defaultMessage;
   }

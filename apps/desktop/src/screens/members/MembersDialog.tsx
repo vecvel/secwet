@@ -9,7 +9,7 @@ import { MoreMenu, type MenuItem } from "../../components/Menu";
 import { Notice } from "../../components/Notice";
 import { Dialog } from "../../components/Dialog";
 import { isShareableSpace, permissionsFor, spaceOfGrant, summarizeGrants } from "../../lib/access";
-import { api, formatUiError, type MemberStatus, type MemberView, type SpaceView } from "../../lib/api";
+import { api, formatUiError, isRelayNotConfigured, type MemberStatus, type MemberView, type SpaceView } from "../../lib/api";
 import { formatAgo, plural } from "../../lib/format";
 import { useStore } from "../../lib/store";
 import { useReadOnly } from "../../lib/useAccess";
@@ -44,6 +44,7 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
   const readOnly = useReadOnly();
   const [members, setMembers] = useState<MemberView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsSync, setNeedsSync] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<MemberView | null>(null);
@@ -62,7 +63,14 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
     try {
       setMembers(await api.membersList());
       setError(null);
+      setNeedsSync(false);
     } catch (err) {
+      if (isRelayNotConfigured(err)) {
+        setNeedsSync(true);
+        setError(null);
+        setMembers((prev) => prev ?? []);
+        return;
+      }
       setError(formatUiError(err, "Couldn't load members."));
       setMembers((prev) => prev ?? []);
     }
@@ -181,7 +189,7 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
             <Button variant="secondary" onClick={onClose}>
               Close
             </Button>
-            <Button variant="primary" icon="plus" disabled={readOnly} onClick={() => setInviting(true)}>
+            <Button variant="primary" icon="plus" disabled={readOnly || needsSync} onClick={() => setInviting(true)}>
               Invite
             </Button>
           </>
@@ -209,7 +217,13 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
             </Notice>
           </div>
         )}
-        {members === null ? (
+        {needsSync ? (
+          <EmptyState
+            icon="user"
+            title="Set up sync to share"
+            body="Members get access through the sync relay. Set it up in Settings > Sync, then invite people here."
+          />
+        ) : members === null ? (
           <p className={styles.sectionDesc}>Loading members…</p>
         ) : visible.length === 0 ? (
           <EmptyState
