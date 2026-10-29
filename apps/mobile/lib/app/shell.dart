@@ -8,6 +8,7 @@ import '../theme/secwet_theme.dart';
 import '../theme/secwet_tokens.dart';
 import '../widgets/controls.dart';
 import '../widgets/icon.dart';
+import 'secwet_scope.dart';
 
 /// The three bottom tabs. Overview sits in the center and opens on launch.
 enum ShellTab {
@@ -195,8 +196,15 @@ class BottomTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final session = SecwetScope.of(context).session;
+    return ListenableBuilder(listenable: session, builder: (context, _) => _bar(context, session.homeLabel));
+  }
+
+  /// The Overview tab carries the Home view title, as the desktop sidebar does.
+  Widget _bar(BuildContext context, String homeLabel) {
     final p = context.palette;
     final inset = MediaQuery.paddingOf(context).bottom;
+    String label(ShellTab t) => t == ShellTab.overview ? homeLabel : t.label;
     return SizedBox(
       height: kBottomBarHeight + inset,
       child: Stack(
@@ -218,7 +226,7 @@ class BottomTabs extends StatelessWidget {
                 for (final t in ShellTab.values)
                   Expanded(
                     child: Tappable(
-                      label: t.label,
+                      label: label(t),
                       selected: t == selected,
                       onTap: () => onSelect(t),
                       child: SizedBox(
@@ -229,7 +237,9 @@ class BottomTabs extends StatelessWidget {
                             IconTile(icon: t.icon, selected: t == selected, solidBase: true),
                             const SizedBox(height: SecwetSpace.s1),
                             Text(
-                              t.label,
+                              label(t),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: SecwetText.xs(p, color: t == selected ? p.textPrimary : p.textTertiary).copyWith(height: 1.2),
                             ),
                           ],

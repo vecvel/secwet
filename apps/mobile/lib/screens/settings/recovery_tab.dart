@@ -232,13 +232,13 @@ class CheckBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Container(
-      width: 20,
-      height: 20,
+      width: 18,
+      height: 18,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: checked ? p.accentFill : p.surface,
+        color: checked ? p.accentFill : InputSurface.background(context),
         border: Border.all(color: checked ? p.accentFill : p.borderStrong),
-        borderRadius: BorderRadius.circular(SecwetRadius.small),
+        borderRadius: BorderRadius.circular(5),
       ),
       child: checked ? SecwetIcon(SecwetIcons.check, size: 14, color: p.onAccentFill) : null,
     );

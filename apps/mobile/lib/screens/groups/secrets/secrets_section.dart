@@ -230,8 +230,10 @@ class SecretRow extends StatefulWidget {
 class _SecretRowState extends State<SecretRow> {
   String? _revealed;
   bool _copiedValue = false;
+  bool _copiedName = false;
   StreamSubscription<SecwetEvent>? _locked;
   Timer? _reset;
+  Timer? _resetName;
 
   SecwetApi get _api => SecwetScope.read(context).api;
 
@@ -247,6 +249,7 @@ class _SecretRowState extends State<SecretRow> {
   void dispose() {
     _locked?.cancel();
     _reset?.cancel();
+    _resetName?.cancel();
     _revealed = null;
     super.dispose();
   }
@@ -279,7 +282,13 @@ class _SecretRowState extends State<SecretRow> {
   Future<void> _copyName() async {
     try {
       await _api.copyText(widget.secret.name);
-      if (mounted) showToast(context, 'Name copied.');
+      if (!mounted) return;
+      setState(() => _copiedName = true);
+      showToast(context, 'Name copied.');
+      _resetName?.cancel();
+      _resetName = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _copiedName = false);
+      });
     } catch (e) {
       if (mounted) showError(context, e, "Couldn't copy the name.");
     }
@@ -330,6 +339,12 @@ class _SecretRowState extends State<SecretRow> {
                   children: [
                     Flexible(
                       child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: SecwetText.md(p, weight: FontWeight.w500)),
+                    ),
+                    SecwetIconButton(
+                      icon: _copiedName ? SecwetIcons.check : SecwetIcons.copy,
+                      label: _copiedName ? 'Name copied' : 'Copy ${s.name}',
+                      color: _copiedName ? p.success : null,
+                      onPressed: _copyName,
                     ),
                     if (session != null) ...[
                       const SizedBox(width: SecwetSpace.s2),

@@ -34,11 +34,11 @@ class SpaceSwitcher extends StatelessWidget {
     final p = context.palette;
     final global = model.activeSpaceId == null;
     final name = global ? 'Global' : (model.activeSpace?.name ?? 'Personal');
-    return Tappable(
+    return TouchTarget(child: Tappable(
       label: 'Current space: $name',
       onTap: () => showSecwetDialog<void>(context, builder: (_) => _SpaceSheet(model: model, outer: context)),
       child: Container(
-        height: SecwetControl.touchTarget,
+        height: MobileControl.height,
         padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s3),
         decoration: BoxDecoration(
           color: InputSurface.background(context),
@@ -56,7 +56,7 @@ class SpaceSwitcher extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -82,7 +82,9 @@ class _SpaceSheet extends StatelessWidget {
         return SecwetDialog(
           title: 'Spaces',
           children: [
+            // Desktop menu style: a padded panel with rounded row highlights.
             SecwetCard(
+              padding: const EdgeInsets.all(SecwetSpace.s1),
               children: [
                 for (final s in model.spaces)
                   _SpaceRow(
@@ -178,7 +180,10 @@ class _SpaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Container(
-      color: selected ? p.accentTintSoft : null,
+      decoration: BoxDecoration(
+        color: selected ? p.accentTintSoft : null,
+        borderRadius: BorderRadius.circular(SecwetRadius.small),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -187,9 +192,9 @@ class _SpaceRow extends StatelessWidget {
               selected: selected,
               onTap: onTap,
               child: SizedBox(
-                height: SecwetControl.touchTarget,
+                height: MobileControl.height,
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
+                  padding: const EdgeInsets.only(left: 10),
                   child: Row(
                     children: [
                       SecwetIcon(icon, size: 16, color: selected ? p.accent : p.textSecondary),
@@ -353,13 +358,15 @@ class _SpaceDialogState extends State<_SpaceDialog> {
                     label: c.label,
                     selected: c.value == _icon,
                     onTap: () => setState(() => _icon = c.value),
+                    // Desktop NewSpaceDialog .iconBtn: the border never
+                    // changes; the selected icon gets the accent tint.
                     child: Container(
-                      width: SecwetControl.touchTarget,
-                      height: SecwetControl.touchTarget,
+                      width: MobileControl.height,
+                      height: MobileControl.height,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: c.value == _icon ? p.accentTintSoft : p.bg,
-                        border: Border.all(color: c.value == _icon ? p.accent : p.borderStrong),
+                        color: c.value == _icon ? p.accentTint : p.textPrimary.withValues(alpha: 0.05),
+                        border: Border.all(color: p.border),
                         borderRadius: BorderRadius.circular(SecwetRadius.control),
                       ),
                       child: SecwetIcon(c.value, size: 18, color: c.value == _icon ? p.accent : p.textSecondary),

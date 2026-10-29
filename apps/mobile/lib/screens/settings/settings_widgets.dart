@@ -105,7 +105,7 @@ class SelectControl<T> extends StatelessWidget {
     return Builder(
       builder: (anchor) => Opacity(
         opacity: onChanged == null ? 0.5 : 1,
-        child: Tappable(
+        child: TouchTarget(child: Tappable(
           label: '$label: $current',
           onTap: onChanged == null
               ? null
@@ -118,7 +118,7 @@ class SelectControl<T> extends StatelessWidget {
                       ),
                   ]),
           child: Container(
-            height: SecwetControl.touchTarget,
+            height: MobileControl.height,
             padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s3),
             decoration: BoxDecoration(
               color: InputSurface.background(context),
@@ -132,7 +132,7 @@ class SelectControl<T> extends StatelessWidget {
               ],
             ),
           ),
-        ),
+        )),
       ),
     );
   }
@@ -176,15 +176,17 @@ class ChoiceCards<T> extends StatelessWidget {
               onTap: onChanged == null ? null : () => onChanged!(c.value),
               child: Container(
                 padding: const EdgeInsets.all(SecwetSpace.s3),
+                // Desktop ChoiceCards: the border never changes; the
+                // selected card gets the soft tint.
                 decoration: BoxDecoration(
-                  color: c.value == value ? p.accentTintSoft : p.surface,
-                  border: Border.all(color: c.value == value ? p.accent : p.borderStrong),
+                  color: c.value == value ? p.accentTintSoft : p.bg,
+                  border: Border.all(color: p.border),
                   borderRadius: BorderRadius.circular(SecwetRadius.card),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(padding: const EdgeInsets.only(top: 2), child: _Radio(on: c.value == value)),
+                    Padding(padding: const EdgeInsets.only(top: 1), child: _Radio(on: c.value == value)),
                     const SizedBox(width: SecwetSpace.s3),
                     Expanded(
                       child: Column(
@@ -215,14 +217,7 @@ class _Radio extends StatelessWidget {
   final bool on;
 
   @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? p.accent : p.borderStrong, width: on ? 5 : 1.5)),
-    );
-  }
+  Widget build(BuildContext context) => desktopRadio(context, on: on);
 }
 
 /// Short facts as a bulleted list.

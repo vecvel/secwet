@@ -45,7 +45,8 @@ class SecwetCard extends StatelessWidget {
     // background, so it reads as a list rather than blending into the panel.
     final nested = context.dependOnInheritedWidgetOfExactType<InputSurface>() != null;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      // Inside a dialog or sheet the panel's own gap separates its parts.
+      margin: nested ? EdgeInsets.zero : const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: nested ? p.bg : p.surface,
         border: Border.all(color: p.border),
@@ -420,7 +421,7 @@ class _Control extends StatelessWidget {
       ),
     );
     return Container(
-      constraints: BoxConstraints(minHeight: multiline ? 88 : SecwetControl.touchTarget),
+      constraints: BoxConstraints(minHeight: multiline ? 88 : MobileControl.height),
       padding: EdgeInsets.symmetric(horizontal: SecwetSpace.s3, vertical: multiline ? SecwetSpace.s2 : 0),
       decoration: BoxDecoration(
         color: background,

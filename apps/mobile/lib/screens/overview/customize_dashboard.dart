@@ -97,7 +97,7 @@ class _CustomizeDialogState extends State<_CustomizeDialog> {
           label: 'Home title',
           controller: _home,
           hint: 'e.g. Overview, Workspace, Command Center',
-          help: 'Rename the Home view in the sidebar and top navigation.',
+          help: 'Renames this tab in the bottom bar and its title.',
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,

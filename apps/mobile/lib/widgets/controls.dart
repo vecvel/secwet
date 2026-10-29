@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../theme/secwet_theme.dart';
 import '../theme/secwet_tokens.dart';
 import 'icon.dart';
+import 'layout.dart';
 
 /// Tap target with no hover, focus, press or ripple styling (docs/ui-rules.md).
 class Tappable extends StatelessWidget {
@@ -98,7 +99,7 @@ enum ButtonVariant { primary, secondary, tertiary, danger }
 
 /// Desktop Button: primary is deep moss with light text in both themes,
 /// danger deep red, secondary a quiet tinted fill, tertiary accent text.
-/// 32 px tall like the desktop control height, in a 44 px tap area.
+/// 36 px tall (the mobile control height), in a 44 px tap area.
 class SecwetButton extends StatelessWidget {
   const SecwetButton({
     super.key,
@@ -150,7 +151,7 @@ class SecwetButton extends StatelessWidget {
           onTap: onPressed,
           label: label,
           child: Container(
-            height: SecwetControl.height,
+            height: MobileControl.height,
             padding: EdgeInsets.symmetric(horizontal: variant == ButtonVariant.tertiary ? SecwetSpace.s1 : SecwetSpace.s3),
             decoration: BoxDecoration(
               color: bg,
@@ -165,7 +166,7 @@ class SecwetButton extends StatelessWidget {
   }
 }
 
-/// Square icon-only button, 32 px like every button, in a 44 px tap area.
+/// Square icon-only button, 36 px like every button, in a 44 px tap area.
 class SecwetIconButton extends StatelessWidget {
   const SecwetIconButton({
     super.key,
@@ -187,7 +188,7 @@ class SecwetIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    const size = SecwetControl.height;
+    const size = MobileControl.height;
     return TouchTarget(
       child: Opacity(
         opacity: onPressed == null ? 0.5 : 1,
@@ -427,4 +428,23 @@ class EmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Desktop radio: an 18 px circle whose border never changes; the choice
+/// shows as an 8 px accent dot inside.
+Widget desktopRadio(BuildContext context, {required bool on}) {
+  final p = context.palette;
+  return Container(
+    width: 18,
+    height: 18,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: InputSurface.background(context),
+      border: Border.all(color: p.borderStrong),
+    ),
+    child: on
+        ? Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: p.accentFill))
+        : null,
+  );
 }

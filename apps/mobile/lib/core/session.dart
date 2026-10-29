@@ -80,6 +80,11 @@ class SessionController extends ChangeNotifier {
   /// Idle minutes before auto-lock (from Settings); 0 turns the idle lock off.
   int get lockTimeoutMinutes => _lockTimeoutMinutes;
 
+  String _homeLabel = 'Overview';
+
+  /// The Overview tab's name (Home view title), shown in the bottom bar.
+  String get homeLabel => _homeLabel;
+
   String? _notice;
 
   /// One-shot message for the next screen ("This device was unlinked").
@@ -145,6 +150,8 @@ class SessionController extends ChangeNotifier {
       final settings = await api.settings();
       _lockTimeoutMinutes = settings.lockTimeoutMinutes;
       _theme = settings.theme.isEmpty ? 'system' : settings.theme;
+      final home = (await api.dashboard()).homeLabel.trim();
+      _homeLabel = home.isEmpty ? 'Overview' : home;
     } on SecwetException {
       // Keep the previous values.
     }
@@ -159,7 +166,8 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  /// Re-reads appearance, auto-lock and link state (after Settings saves).
+  /// Re-reads appearance, auto-lock, the home title and link state (after
+  /// Settings or Customize dashboard saves).
   Future<void> reloadSettings() async {
     await _loadSettings();
     notifyListeners();

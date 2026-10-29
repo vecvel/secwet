@@ -22,10 +22,10 @@ void main() {
       Color fill(String label) => ((tester.widget<Container>(find.ancestor(of: find.text(label), matching: find.byType(Container)).first)).decoration! as BoxDecoration).color!;
       expect(fill('Save'), const Color(0xFF3D6A4C));
       expect(fill('Delete'), const Color(0xFFB0372D));
-      // 32 px like the desktop control height, in a 44 px tap area.
-      expect(tester.getSize(find.ancestor(of: find.text('Save'), matching: find.byType(Container)).first).height, 32);
+      // 36 px (the mobile control height), in a 44 px tap area.
+      expect(tester.getSize(find.ancestor(of: find.text('Save'), matching: find.byType(Container)).first).height, 36);
       // The 44 px tap area takes no layout space.
-      expect(tester.getSize(find.ancestor(of: find.text('Save'), matching: find.byType(TouchTarget)).first).height, 32);
+      expect(tester.getSize(find.ancestor(of: find.text('Save'), matching: find.byType(TouchTarget)).first).height, 36);
     }
   });
 
@@ -97,11 +97,11 @@ void main() {
       palette: SecwetPalette.light,
     ));
     final box = tester.getRect(find.byType(TouchTarget));
-    await tester.tapAt(box.topCenter - const Offset(0, 5));
+    await tester.tapAt(box.topCenter - const Offset(0, 3));
     expect(taps, 1);
-    await tester.tapAt(box.bottomCenter + const Offset(0, 5));
+    await tester.tapAt(box.bottomCenter + const Offset(0, 3));
     expect(taps, 2);
-    await tester.tapAt(box.topCenter - const Offset(0, 12));
+    await tester.tapAt(box.topCenter - const Offset(0, 8));
     expect(taps, 2);
   });
 }

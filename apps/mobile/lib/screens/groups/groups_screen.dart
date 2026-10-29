@@ -105,7 +105,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 onTap: () => pushScreen(context, GroupScreen(groupId: g.id), name: groupRouteName(g.id)),
                 child: Container(
                   height: SecwetControl.touchTarget,
-                  padding: const EdgeInsets.only(left: SecwetSpace.s2),
+                  // Same left edge as the entry tiles below (6 px).
+                  padding: const EdgeInsets.only(left: 6),
                   alignment: Alignment.centerLeft,
                   child: Text(g.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: SecwetText.sm(p)),
                 ),
@@ -127,7 +128,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
           label: 'Add to ${g.name}',
           onTap: () => _newItem(g.id),
           child: Container(
-            height: SecwetControl.touchTarget,
+            height: _rowHeight,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               children: [
@@ -142,8 +143,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 }
 
-/// Sidebar entry row: 44 px, tile with the initial, name, chevron; selected
+/// Sidebar entry row: 36 px like the desktop sidebar, tile with the initial, name, chevron; selected
 /// rows get the soft tint and a filled tile.
+/// Entry rows in the Groups tab, as the desktop sidebar's `.item`.
+const double _rowHeight = 36;
+
 class _NavRow extends StatelessWidget {
   const _NavRow({required this.label, required this.selected, required this.onTap});
 
@@ -159,8 +163,9 @@ class _NavRow extends StatelessWidget {
       selected: selected,
       onTap: onTap,
       child: Container(
-        height: SecwetControl.touchTarget,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: _rowHeight,
+        // 24 px tile in a 36 px row: 6 px on every side of the tile.
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: selected ? p.accentTintSoft : null,
           borderRadius: BorderRadius.circular(SecwetRadius.control),
@@ -190,11 +195,11 @@ class _NewRow extends StatelessWidget {
     final p = context.palette;
     return Padding(
       padding: const EdgeInsets.only(top: SecwetSpace.s3),
-      child: Tappable(
+      child: TouchTarget(child: Tappable(
         label: 'New',
         onTap: onTap,
         child: Container(
-          height: SecwetControl.touchTarget,
+          height: MobileControl.height,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             color: InputSurface.background(context),
@@ -209,7 +214,7 @@ class _NewRow extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

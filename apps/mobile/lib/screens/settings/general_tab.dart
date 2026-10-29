@@ -70,7 +70,7 @@ class GeneralTab extends StatelessWidget {
           children: [
             SettingRow(
               title: 'Home view title',
-              meta: 'The title of the Overview tab.',
+              meta: 'Renames the Overview tab in the bottom bar and its title.',
               below: SaveOnDoneField(
                 initial: homeLabel == null || homeLabel.isEmpty ? 'Overview' : homeLabel,
                 hint: 'Overview',

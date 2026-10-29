@@ -25,24 +25,32 @@ class SecwetPaletteScope extends InheritedWidget {
 }
 
 /// Text styles from the tokens. System font only; no monospace anywhere.
+/// Mobile control height for every button, icon button, text field and
+/// select: 36 px. The desktop token (SecwetControl.height) stays 32 px.
+abstract final class MobileControl {
+  static const double height = 36;
+}
+
+/// Text styles. Even leading puts a line's extra height equally above and
+/// below the glyphs, as CSS does, so text sits centered in its row.
 abstract final class SecwetText {
   static const double lineHeight = 1.5;
 
   static TextStyle body(SecwetPalette p) =>
-      TextStyle(fontSize: SecwetFontSize.base, height: lineHeight, color: p.textPrimary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.base, height: lineHeight, color: p.textPrimary);
   static TextStyle md(SecwetPalette p, {Color? color, FontWeight weight = FontWeight.w400}) =>
-      TextStyle(fontSize: SecwetFontSize.md, height: lineHeight, color: color ?? p.textPrimary, fontWeight: weight);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.md, height: lineHeight, color: color ?? p.textPrimary, fontWeight: weight);
   static TextStyle sm(SecwetPalette p, {Color? color}) =>
-      TextStyle(fontSize: SecwetFontSize.sm, height: lineHeight, color: color ?? p.textTertiary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.sm, height: lineHeight, color: color ?? p.textTertiary);
   static TextStyle xs(SecwetPalette p, {Color? color}) =>
-      TextStyle(fontSize: SecwetFontSize.xs, height: lineHeight, color: color ?? p.textTertiary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.xs, height: lineHeight, color: color ?? p.textTertiary);
   /// Tab root titles (preview `.ptitle`: 20 px on a 28 px line).
   static TextStyle pageTitle(SecwetPalette p) =>
-      TextStyle(fontSize: SecwetFontSize.xl, height: 1.4, fontWeight: FontWeight.w600, color: p.textPrimary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.xl, height: 1.4, fontWeight: FontWeight.w600, color: p.textPrimary);
   static TextStyle title(SecwetPalette p) =>
-      TextStyle(fontSize: SecwetFontSize.lg, height: 1.3, fontWeight: FontWeight.w600, color: p.textPrimary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.lg, height: 1.3, fontWeight: FontWeight.w600, color: p.textPrimary);
   static TextStyle brand(SecwetPalette p) =>
-      TextStyle(fontSize: 15, height: lineHeight, fontWeight: FontWeight.w600, color: p.textPrimary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: 15, height: lineHeight, fontWeight: FontWeight.w600, color: p.textPrimary);
   static TextStyle stat(SecwetPalette p) =>
-      TextStyle(fontSize: SecwetFontSize.xl, height: 1.4, fontWeight: FontWeight.w600, color: p.textPrimary);
+      TextStyle(leadingDistribution: TextLeadingDistribution.even, fontSize: SecwetFontSize.xl, height: 1.4, fontWeight: FontWeight.w600, color: p.textPrimary);
 }

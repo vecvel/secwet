@@ -229,7 +229,7 @@ class ChoiceField<T> extends StatelessWidget {
           Text(label!, style: SecwetText.sm(p, color: p.textSecondary).copyWith(fontWeight: FontWeight.w500)),
           const SizedBox(height: SecwetSpace.s1),
         ],
-        Tappable(
+        TouchTarget(child: Tappable(
           label: label ?? current?.label,
           onTap: () async {
             final picked = await showSecwetDialog<Choice<T>>(
@@ -254,7 +254,7 @@ class ChoiceField<T> extends StatelessWidget {
             if (picked != null) onChanged(picked.value);
           },
           child: Container(
-            height: SecwetControl.touchTarget,
+            height: MobileControl.height,
             padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s3),
             decoration: BoxDecoration(
               color: InputSurface.background(context),
@@ -274,7 +274,7 @@ class ChoiceField<T> extends StatelessWidget {
               ],
             ),
           ),
-        ),
+        )),
         if (error != null) ...[
           const SizedBox(height: SecwetSpace.s1),
           Text(error!, style: SecwetText.sm(p, color: p.danger)),
@@ -312,9 +312,9 @@ class CheckRow extends StatelessWidget {
               height: 18,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: checked ? p.accentFill : p.bg,
-                border: Border.all(color: checked ? p.accentFill : p.borderStrong.withValues(alpha: 0.3)),
-                borderRadius: BorderRadius.circular(4),
+                color: checked ? p.accentFill : InputSurface.background(context),
+                border: Border.all(color: checked ? p.accentFill : p.borderStrong),
+                borderRadius: BorderRadius.circular(5),
               ),
               child: checked ? SecwetIcon(SecwetIcons.check, size: 14, color: p.onAccentFill) : null,
             ),
@@ -346,16 +346,7 @@ class RadioRow extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: SecwetControl.touchTarget),
         child: Row(
           children: [
-            Container(
-              width: 18,
-              height: 18,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: p.bg,
-                border: Border.all(color: selected ? p.accentFill : p.borderStrong.withValues(alpha: 0.3), width: selected ? 5 : 1),
-              ),
-            ),
+            desktopRadio(context, on: selected),
             const SizedBox(width: SecwetSpace.s2),
             Expanded(child: Text(label, style: SecwetText.md(p))),
           ],

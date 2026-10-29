@@ -150,7 +150,7 @@ class _NotesSectionState extends State<NotesSection> {
                           if (widget.perms.canDelete)
                             SecwetIconButton(icon: SecwetIcons.trash, label: 'Delete ${n.title}', onPressed: () => _delete(n))
                           else
-                            const SizedBox(height: SecwetControl.height),
+                            const SizedBox(height: MobileControl.height),
                         ],
                       ),
                       Padding(

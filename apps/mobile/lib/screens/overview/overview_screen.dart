@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/widgets.dart';
 
+import '../../app/secwet_scope.dart';
 import '../../app/shell.dart';
 import '../../core/secwet_api.dart';
 import '../../theme/secwet_theme.dart';
@@ -168,7 +169,10 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
   Future<void> _customize() async {
     final saved = await showCustomizeDashboard(context, _dashboard, _api.setDashboard);
-    if (saved != null && mounted) setState(() => _dashboard = saved);
+    if (saved == null || !mounted) return;
+    setState(() => _dashboard = saved);
+    // The bottom bar shows the new title too.
+    await SecwetScope.of(context).session.reloadSettings();
   }
 
   @override

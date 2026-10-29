@@ -299,8 +299,8 @@ class _Toolbar extends StatelessWidget {
             selected: active,
             onTap: enabled ? onTap : null,
             child: Container(
-              height: SecwetControl.height,
-              constraints: const BoxConstraints(minWidth: SecwetControl.height),
+              height: MobileControl.height,
+              constraints: const BoxConstraints(minWidth: MobileControl.height),
               padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s2),
               alignment: Alignment.center,
               decoration: BoxDecoration(

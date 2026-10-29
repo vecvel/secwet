@@ -340,8 +340,9 @@ class _MenuPanel extends StatelessWidget {
                       Tappable(
                         label: e.label,
                         onTap: () => Navigator.of(context).pop(e),
+                        // Menu rows: the mobile control height, like buttons.
                         child: Container(
-                          height: SecwetControl.touchTarget,
+                          height: MobileControl.height,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           child: Row(
                             children: [
