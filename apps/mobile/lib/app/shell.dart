@@ -50,16 +50,6 @@ Future<T?> pushFullScreen<T>(BuildContext context, Widget screen) => Navigator.o
       CupertinoPageRoute<T>(builder: (_) => _FullScreen(child: screen), settings: const RouteSettings(arguments: _fullScreenRoute)),
     );
 
-/// Opens [screen] in the Groups tab from another tab (an entry from Overview),
-/// so the highlighted tab always matches what is on screen.
-Future<void> openInGroups(BuildContext context, Widget screen) async {
-  final shell = SecwetShell.of(context);
-  shell.select(ShellTab.groups);
-  final nav = shell.navigatorFor(ShellTab.groups);
-  nav?.popUntil((r) => r.isFirst);
-  await nav?.push(CupertinoPageRoute<void>(builder: (_) => screen));
-}
-
 /// Pushes [screen] inside the current tab (the bar stays visible). [name]
 /// lets a breadcrumb find the screen again ([openCrumb]).
 Future<T?> pushScreen<T>(BuildContext context, Widget screen, {String? name}) =>
