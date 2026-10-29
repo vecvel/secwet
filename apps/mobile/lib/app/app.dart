@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../theme/app_theme.dart';
 import '../theme/secwet_theme.dart';
+import '../theme/secwet_tokens.dart';
 import 'auto_lock.dart';
 import 'root_gate.dart';
 import 'secwet_scope.dart';
@@ -29,15 +30,27 @@ class SecwetApp extends StatelessWidget {
           'dark' => ThemeMode.dark,
           _ => ThemeMode.system,
         },
-        builder: (context, child) => SecwetScope(
-          session: session,
-          child: Builder(
-            builder: (context) => DefaultTextStyle(
-              style: SecwetText.body(context.palette),
-              child: AutoLock(child: child!),
+        builder: (context, child) {
+          // Every Secwet widget reads context.palette, so pin it here from
+          // the Settings choice; System follows the phone.
+          final dark = switch (session.theme) {
+            'light' => false,
+            'dark' => true,
+            _ => MediaQuery.platformBrightnessOf(context) == Brightness.dark,
+          };
+          return SecwetPaletteScope(
+            palette: dark ? SecwetPalette.dark : SecwetPalette.light,
+            child: SecwetScope(
+              session: session,
+              child: Builder(
+                builder: (context) => DefaultTextStyle(
+                  style: SecwetText.body(context.palette),
+                  child: AutoLock(child: child!),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
         home: const RootGate(),
       ),
     );
