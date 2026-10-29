@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { Device, Plan, Project, Secret } from "../../data/mock";
@@ -47,43 +47,15 @@ export function OverviewScreen(props: Props) {
 
   const [comparing, setComparing] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const [cliCopiedLocally, setCliCopiedLocally] = useState(false);
 
   const plan = props.plan;
   const devices = props.devices || [];
   const activeDevices = devices.filter((d) => !d.revokedAt);
   const recoveryKeyCreatedAt = props.recoveryKeyCreatedAt;
   const pendingRotation = props.pendingRotation;
-
-  // Track clipboard state: check on focus, visibility change, and document copy events
-  useEffect(() => {
-    async function verifyClipboard() {
-      try {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          const text = await navigator.clipboard.readText();
-          setCliCopiedLocally(text.trim() === CLI_COMMAND.trim());
-        }
-      } catch {
-        // Permissions may deny clipboard reading without direct user interaction
-      }
-    }
-
-    function handleCopyEvent() {
-      // If the user copied something else in the page, revert copy state
-      setTimeout(verifyClipboard, 50);
-    }
-
-    window.addEventListener("focus", verifyClipboard);
-    document.addEventListener("visibilitychange", verifyClipboard);
-    document.addEventListener("copy", handleCopyEvent);
-    const interval = setInterval(verifyClipboard, 2500);
-    return () => {
-      window.removeEventListener("focus", verifyClipboard);
-      document.removeEventListener("visibilitychange", verifyClipboard);
-      document.removeEventListener("copy", handleCopyEvent);
-      clearInterval(interval);
-    };
-  }, []);
+  // Never read the clipboard to track this: it may hold the user's secrets, and
+  // WebView2 on Windows prompts for clipboard-read permission.
+  const cliCopied = props.cliConnected;
 
   const visibleKpis = dashboardConfig.visible_kpis || ["secrets", "assets", "notes", "devices"];
   const widgets = dashboardConfig.widgets || ["recent_secrets", "recent_notes", "quick_actions", "checklist"];
@@ -92,7 +64,6 @@ export function OverviewScreen(props: Props) {
     try {
       await navigator.clipboard.writeText(CLI_COMMAND);
       setCopyFailed(false);
-      setCliCopiedLocally(true);
       props.onCliCopied();
     } catch {
       setCopyFailed(true);
@@ -140,8 +111,8 @@ export function OverviewScreen(props: Props) {
       detail: copyFailed
         ? `Copy isn't available here. Run: ${CLI_COMMAND}`
         : "Run apps with secrets as environment variables.",
-      done: cliCopiedLocally,
-      action: !cliCopiedLocally ? (
+      done: cliCopied,
+      action: !cliCopied ? (
         <Button variant="secondary" icon="copy" onClick={copyCli}>
           Copy command
         </Button>
