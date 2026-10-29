@@ -207,7 +207,7 @@ class _DepthObserver extends NavigatorObserver {
   }
 }
 
-/// The mobile bottom bar (apps/desktop/src/layout/BottomTabs.module.css):
+/// The mobile bottom bar, as on desktop:
 /// three equal tabs on one baseline, no top line, no blur. From 64 px above
 /// the bar the color deepens from the page background to the sunken shade
 /// and the opacity rises along one smootherstep curve, both full at 80%.

@@ -27,7 +27,7 @@ enum SecwetNative {
     // iOS 16+ returns only the model ("iPhone") without the
     // user-assigned-device-name entitlement, which needs Apple's approval.
     // Onboarding shows the name in an editable field, and Settings >
-    // General changes it later (docs/mobile-ffi.md).
+    // General changes it later.
     let name = Array(UIDevice.current.name.utf8)
     _ = secwet_ffi_register_platform(&platform, dir, dir.count, name, name.count)
   }

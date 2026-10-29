@@ -68,7 +68,7 @@ function deviceMeta(d: Device, plan?: Plan | "paused") {
   if (d.revokedAt) return `${d.platform}, revoked ${formatDate(d.revokedAt)}.`;
   if (d.current) return `${d.platform}, added ${formatDate(d.addedAt)}, key ${d.fingerprint}`;
   const sync = d.lastSyncAt ? `last synced ${formatAgo(d.lastSyncAt)}` : "active";
-  // When Pro ends, the other devices stop syncing (F13).
+  // When Pro ends, the other devices stop syncing.
   return `${d.platform}, ${plan === "paused" ? `sync paused, ${sync}` : sync}, key ${d.fingerprint}`;
 }
 
@@ -137,7 +137,7 @@ export function SettingsScreen(props: Props) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
 
-  // Plan (F13): the real plan from the relay entitlement, cached in the core.
+  // Plan: the real plan from the relay entitlement, cached in the core.
   const planStatus = usePlanStatus();
   const realPlan = planStatus?.plan ?? "free";
   const planEnd = planEndDate(planStatus?.expires_at);

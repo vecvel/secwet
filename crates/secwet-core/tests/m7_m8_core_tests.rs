@@ -1,5 +1,5 @@
-//! Core tests for F16 (revocation, key rotation) and F19 (tree-wise RBAC with
-//! cryptographically scoped branch keys). Real crypto, real SQLite, no relay:
+//! Core tests for revocation, key rotation and tree-wise RBAC with
+//! cryptographically scoped branch keys. Real crypto, real SQLite, no relay:
 //! relay round trips are covered in `crates/secwet-relay/tests/m7_m8_e2e.rs`.
 
 use secrecy::ExposeSecret;
@@ -60,7 +60,7 @@ fn deliver(from: &Dev, to: &mut Dev, seq: &mut u64) -> usize {
 }
 
 // ============================================================================
-// M7: rotation
+// Master key rotation
 // ============================================================================
 
 #[test]
@@ -139,7 +139,7 @@ fn revoked_device_cannot_read_after_rotation() {
 }
 
 // ============================================================================
-// M7: revocation directives
+// Revocation directives
 // ============================================================================
 
 #[test]
@@ -226,7 +226,7 @@ fn revoke_sync_only_preserves_offline_read_only_archive() {
 }
 
 // ============================================================================
-// M8: tree-wise RBAC and branch-key isolation
+// Tree-wise RBAC and branch-key isolation
 // ============================================================================
 
 struct Team {

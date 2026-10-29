@@ -1,8 +1,6 @@
 //! Store commands: lifecycle, spaces, groups, items, environments, secrets,
 //! assets, notes, overview, settings, recovery, relay, devices and pairing.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §9.1 and `PROJECT.md`.
-//!
 //! Invariants:
 //! - All commands return `Result<T, UiError>`.
 //! - Secrets and file bytes are never exposed in listings or overview.
@@ -937,7 +935,7 @@ impl AppState {
     // ========================================================================
 
     /// Relay connection and plan. On Free this reports the cached plan and
-    /// makes no network call (F13); otherwise it checks the relay and caches
+    /// makes no network call; otherwise it checks the relay and caches
     /// the entitlement it returns.
     pub async fn relay_status(&self) -> Result<secwet_proto::RelayStatusDto, UiError> {
         let (relay_url, info, device_id, secwet_id, sign_key, active_devices, pending) = {
@@ -989,8 +987,8 @@ impl AppState {
         Ok(secwet_proto::RelayStatusDto { connected: true, ..offline(&info) })
     }
 
-    /// Registers the store with the relay. Free never contacts the relay
-    /// (F13); a Free store registers through `plan_activate` instead.
+    /// Registers the store with the relay. Free never contacts the relay;
+    /// a Free store registers through `plan_activate` instead.
     pub async fn relay_register(&self) -> Result<secwet_proto::RegisterSecwetResponse, UiError> {
         let (relay_url, device_id, secwet_id, sign_pub, enc_pub, sign_key) = {
             let guard = self
@@ -1042,7 +1040,7 @@ impl AppState {
     }
 
     // ========================================================================
-    // 14. Devices & pairing (F14)
+    // 14. Devices & pairing
     // ========================================================================
 
     pub fn devices_list(&self) -> Result<Vec<secwet_proto::DeviceDto>, UiError> {
@@ -1056,7 +1054,7 @@ impl AppState {
                 .lock()
                 .map_err(|_| UiError::internal("Secwet mutex poisoned"))?;
             let secwet = guard.as_ref().ok_or_else(UiError::locked)?;
-            // F13: pairing needs an active Pro plan; Free never calls the relay.
+            // Pairing needs an active Pro plan; Free never calls the relay.
             secwet.ensure_relay_allowed(secwet_core::RelayOp::Sync)?;
             let relay_url = secwet
                 .relay_url()
@@ -1338,7 +1336,7 @@ impl AppState {
     }
 
     // ========================================================================
-    // Sync (M6)
+    // Sync
     // ========================================================================
 
     /// Pushes and pulls one sync round; returns (pushed, pulled).

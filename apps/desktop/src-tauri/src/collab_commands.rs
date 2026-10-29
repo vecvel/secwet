@@ -1,7 +1,7 @@
-//! Tauri commands for revocation, key rotation (F16) and collaboration (F19).
+//! Tauri commands for revocation, key rotation and collaboration.
 //!
-//! IPC contract: `docs/m7-m8-architecture.md` §10. The logic lives in
-//! `secwet_app::collab`; these wrappers only adapt Tauri arguments.
+//! The logic lives in `secwet_app::collab`; these wrappers only adapt Tauri
+//! arguments.
 
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use crate::error::UiError;
 use crate::state::{AppState, SecwetStatusDto};
 
 // ============================================================================
-// M7
+// Revocation and key rotation
 // ============================================================================
 
 #[tauri::command]
@@ -47,7 +47,7 @@ pub fn link_status(state: State<'_, AppState>) -> Result<LinkStatusDto, UiError>
 }
 
 // ============================================================================
-// M8
+// Collaboration
 // ============================================================================
 
 #[tauri::command]

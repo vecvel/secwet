@@ -1,7 +1,5 @@
 //! Public Secwet API Engine.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F1-F6, F8).
-//!
 //! Invariants:
 //! - All cryptographic keys are zeroized upon `lock()`.
 //! - KeyStore writes occur before database creation.
@@ -467,7 +465,7 @@ pub struct Secwet {
     pub(crate) device_sign_key: ed25519_dalek::SigningKey,
     pub(crate) device_sign_pub: [u8; 32],
     pub(crate) device_enc_pub: [u8; 32],
-    /// Every known master key epoch and every held branch bundle (F16, F19).
+    /// Every known master key epoch and every held branch bundle.
     pub(crate) keyring: crate::collab::Keyring,
     /// X25519 secret used to unwrap HPKE-wrapped keys sent to this device.
     pub(crate) enc_secret: SecretBox<[u8; 32]>,
@@ -496,7 +494,7 @@ impl std::fmt::Debug for Secwet {
 
 impl Secwet {
     // ========================================================================
-    // Lifecycle (F1, F2)
+    // Lifecycle
     // ========================================================================
 
     /// Inspects the data directory for an existing vault database and status.
@@ -1258,7 +1256,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Labels CRUD & Reorder (F3)
+    // Labels CRUD & Reorder
     // ========================================================================
 
     /// Lists all active organizational labels ordered by position ASC.
@@ -1500,7 +1498,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Items CRUD (F3)
+    // Items CRUD
     // ========================================================================
 
     /// Lists all active items under a label.
@@ -1708,7 +1706,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Optional Environments CRUD (F4)
+    // Optional Environments CRUD
     // ========================================================================
 
     /// Lists all active environments belonging to an item, sorted by position ASC.
@@ -1988,7 +1986,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Secrets CRUD & Copy (F5)
+    // Secrets CRUD & Copy
     // ========================================================================
 
     /// Lists secret metadata for an item or specific environment.
@@ -3629,7 +3627,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Overview & Dashboard Configuration (F8)
+    // Overview & Dashboard Configuration
     // ========================================================================
 
     /// Computes aggregated statistics across labels, items, environments, secrets,
@@ -3918,7 +3916,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Settings (F17)
+    // Settings
     // ========================================================================
 
     /// Retrieves preferences from the local settings table and encrypted device name from devices table.
@@ -4042,7 +4040,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Recovery and Export (F9, F10)
+    // Recovery and Export
     // ========================================================================
 
     /// Generates a new 125-bit recovery key, computes the `recovery_check` seal,
@@ -5056,7 +5054,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // Device Management & Pairing (F14)
+    // Device Management & Pairing
     // ========================================================================
 
     /// Lists all registered devices (active and revoked).
@@ -5213,7 +5211,7 @@ impl Secwet {
         })
     }
 // ========================================================================
-    // Synchronization & Outbox Engine (F15 - M6)
+    // Synchronization & Outbox Engine
     // ========================================================================
 
     /// Enqueues an encrypted, signed mutation event to the outbox when on the Pro plan.
@@ -5249,7 +5247,7 @@ impl Secwet {
             },
         };
 
-        // Records in shared spaces travel under their branch key (F19);
+        // Records in shared spaces travel under their branch key;
         // everything else is workspace-private and sealed with K_evt.
         let scope = self.scope_for_mutation(record_id, record_type, payload)?;
         let signed_event = match scope {

@@ -1,6 +1,4 @@
 //! Secrets CRUD, copy, and security invariants acceptance tests.
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F5, F6), §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secrecy::ExposeSecret;
 use secwet_core::keys::MemoryStore;

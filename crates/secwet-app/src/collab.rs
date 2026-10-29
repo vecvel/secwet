@@ -1,6 +1,4 @@
-//! Revocation, key rotation (F16) and collaboration (F19) commands.
-//!
-//! IPC contract: `docs/m7-m8-architecture.md` §10.
+//! Revocation, key rotation and collaboration commands.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -171,7 +169,7 @@ enum Notify {
 
 impl AppState {
     /// Takes the unlocked store out of state so it can be used across awaits.
-    /// Free stores never contact the relay (F13): they get `needs_pro` here,
+    /// Free stores never contact the relay: they get `needs_pro` here,
     /// before any network call.
     pub(crate) fn take(&self) -> Result<(Secwet, RelayClient, Ticket), UiError> {
         self.take_inner(true)
@@ -286,7 +284,7 @@ impl AppState {
     }
 
     // ========================================================================
-    // M7
+    // Revocation and key rotation
     // ========================================================================
 
     /// Revokes one of this Secwet's devices. On the Pro plan the relay is told
@@ -357,7 +355,7 @@ impl AppState {
     }
 
     // ========================================================================
-    // M8
+    // Collaboration
     // ========================================================================
 
     pub async fn members_list(&self) -> Result<Vec<MemberView>, UiError> {

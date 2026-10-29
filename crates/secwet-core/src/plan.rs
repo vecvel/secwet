@@ -1,6 +1,6 @@
-//! Plans and entitlements (F13).
+//! Plans and entitlements.
 //!
-//! The relay owns the entitlement (section 8.3). The store caches it in
+//! The relay owns the entitlement. The store caches it in
 //! `meta` and refreshes it on every sync round:
 //!
 //! | meta key             | value                                          |

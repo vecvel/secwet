@@ -1,4 +1,4 @@
-//! The new device's side of pairing (F14, docs/IMPLEMENTATION.md §7.14).
+//! The new device's side of pairing.
 //!
 //! The approving device shows `secwet://pair?v=1&s=<session>&k=<A_eph_pub>&r=<relay>`.
 //! This device generates its own identity and an ephemeral X25519 key,

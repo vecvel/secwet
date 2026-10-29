@@ -1,7 +1,7 @@
-//! Revocation, master key rotation (F16, M7) and collaboration with
-//! cryptographically scoped tree-wise roles (F19, M8).
+//! Revocation, master key rotation and collaboration with
+//! cryptographically scoped tree-wise roles.
 //!
-//! Design: `docs/m7-m8-architecture.md`. Wire types: `secwet_proto::collab`.
+//! Wire types: `secwet_proto::collab`.
 //!
 //! Invariants:
 //! - A remote wipe only runs after the signed directive verifies against a
@@ -325,13 +325,13 @@ pub(crate) fn open_rec_with(ring: &Keyring, aad: &RecordAad, blob: &[u8]) -> Res
     Err(Error::Crypto)
 }
 
-/// Writes a master key epoch under the §4.1 entry name `master-key/<epoch>`.
+/// Writes a master key epoch under the entry name `master-key/<epoch>`.
 /// Readers also accept the legacy `vault-key/<epoch>` name of earlier builds.
 pub fn store_master_key(keystore: &dyn KeyStore, secwet_id: &Uuid, epoch: u32, key: &[u8; 32]) -> Result<()> {
     keystore.set(&format!("secwet/{secwet_id}/master-key/{epoch}"), key)
 }
 
-/// Reads a master key epoch, preferring the §4.1 name.
+/// Reads a master key epoch, preferring the `master-key/<epoch>` name.
 pub fn load_master_key(keystore: &dyn KeyStore, secwet_id: &Uuid, epoch: u32) -> Result<Option<crate::SecretVec<u8>>> {
     match keystore.get(&format!("secwet/{secwet_id}/master-key/{epoch}"))? {
         Some(k) => Ok(Some(k)),
@@ -723,7 +723,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M7: revocation state
+    // Revocation state
     // ========================================================================
 
     /// `Some(revoked_at)` when this device was unlinked with "Revoke sync only".
@@ -746,7 +746,7 @@ impl Secwet {
         Ok(())
     }
 
-    /// Local role check before a write (F19). Owner stores only check the
+    /// Local role check before a write. Owner stores only check the
     /// archive state; member stores also check their signed grants.
     pub(crate) fn guard_write(&self, target: WriteTarget) -> Result<()> {
         self.ensure_writable()?;
@@ -869,7 +869,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M7: devices from the relay
+    // Devices from the relay
     // ========================================================================
 
     /// Mirrors the relay's device list into the local `devices` table.
@@ -1489,7 +1489,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M7: master key rotation
+    // Master key rotation
     // ========================================================================
 
     /// Rotates the workspace master key to epoch N+1 for every active owner
@@ -1718,7 +1718,7 @@ impl Secwet {
             self.switch_current_epoch(epoch)?;
         }
         let resealed = self.reseal_to_current()?;
-        // F9: the recovery blob wraps master keys per epoch and needs the
+        // The recovery blob wraps master keys per epoch and needs the
         // recovery key, which is never stored; the UI asks for a new one.
         if records::get_meta(&self.db, "recovery_created_at")?.is_some() {
             set_meta(&self.db, "recovery_needs_refresh", "1")?;
@@ -1937,7 +1937,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M8: scope resolution for local records
+    // Scope resolution for local records
     // ========================================================================
 
     /// Space and path of a group (label).
@@ -2035,7 +2035,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M8: tree listing for scope pickers
+    // Tree listing for scope pickers
     // ========================================================================
 
     /// Space, groups, items, General and environments of a space, depth-first.
@@ -2133,7 +2133,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M8: branch keys
+    // Branch keys
     // ========================================================================
 
     /// Children of a node in the local tree (for bundle computation).
@@ -2949,7 +2949,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M8: members and invitations (admin side)
+    // Members and invitations (admin side)
     // ========================================================================
 
     fn sign_grant_set(&self, member_id: Uuid, version: u64, grants: Vec<MemberGrant>) -> Result<SignedGrantSet> {
@@ -3097,7 +3097,7 @@ impl Secwet {
         Err(Error::Crypto)
     }
 
-    /// Admin side of step 3 in §7: for every accepted invitation this device
+    /// Admin side of the invitation flow: for every accepted invitation this device
     /// created, verify the key binding, certify the device, deliver branch
     /// keys and seed the shared data, then activate the invitation.
     pub async fn process_invitations(&mut self, client: &RelayClient, keystore: &dyn KeyStore) -> Result<usize> {
@@ -3344,7 +3344,7 @@ impl Secwet {
     }
 
     // ========================================================================
-    // M8: invitee side
+    // Invitee side
     // ========================================================================
 
     /// Accepts an invite link on a device with no store yet: creates the member
@@ -3432,7 +3432,7 @@ impl Secwet {
         }
     }
 
-    /// Authorization of an incoming event (F19).
+    /// Authorization of an incoming event.
     ///
     /// Workspace-private events are sealed with the workspace event key, so
     /// decrypting them already proves an owner device wrote them; they are
@@ -3653,7 +3653,7 @@ impl Secwet {
         if self.unlinked_at()?.is_some() {
             return Err(Error::Revoked);
         }
-        // F13: Free never contacts the relay; a paused store only checks
+        // Free never contacts the relay; a paused store only checks
         // whether Pro was renewed.
         self.ensure_relay_allowed(crate::plan::RelayOp::Entitlement)?;
         let result = async {

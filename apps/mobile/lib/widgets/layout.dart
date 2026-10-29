@@ -219,8 +219,7 @@ class Crumb {
 /// 52 px tall. A pushed screen leads with its parents as a breadcrumb
 /// ("Projects · Payments API", as the desktop header and the approved
 /// preview); each parent is a 44 px tap target that goes back to it. Never a
-/// logo, wordmark, status badge or helper text (docs/design-decisions.md,
-/// "Mobile unlock and header").
+/// logo, wordmark, status badge or helper text.
 class TopBar extends StatelessWidget {
   const TopBar({super.key, required this.title, this.actions = const [], this.crumbs = const []});
 
@@ -276,7 +275,7 @@ class TopBar extends StatelessWidget {
   }
 }
 
-/// Text input in the desktop Field style: label, 44 px control, help or error.
+/// Text input in the desktop field style: label, 44 px control, help or error.
 class SecwetField extends StatelessWidget {
   const SecwetField({
     super.key,

@@ -1,4 +1,4 @@
-//! Joining a Secwet from another device's pairing code (F14), on a device
+//! Joining a Secwet from another device's pairing code, on a device
 //! that has no Secwet yet. The approving side is `pairing_start` /
 //! `pairing_poll` / `pairing_approve` in `commands.rs`.
 //!

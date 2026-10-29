@@ -22,7 +22,7 @@ import 'workspace_model.dart';
 
 enum ContentTab { secrets, assets, notes }
 
-/// An entry (desktop screens/items/ItemScreen.tsx): environment tabs
+/// An entry, as on desktop: environment tabs
 /// (General plus each environment, with rename and delete), Secrets / Assets /
 /// Notes tabs with count pills, and the entry menu (Share, Rename, Add
 /// environment, Delete). Roles decide every control.

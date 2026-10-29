@@ -383,7 +383,7 @@ impl EntitlementRow {
 }
 
 /// Fails with `not_entitled` unless the workspace has an active Pro
-/// entitlement. Guards pairing, sync and collaboration (F13).
+/// entitlement. Guards pairing, sync and collaboration.
 pub async fn require_active_pro<'e, E>(executor: E, secwet_id: Uuid) -> Result<(), RelayApiError>
 where
     E: Executor<'e, Database = crate::sqlx::Postgres>,
@@ -765,7 +765,7 @@ pub async fn approve_pairing_and_register_device(
     .await?;
 
     // 6. Mirror the wrapped master keys into `wrapped_keys` so the new device
-    //    can catch up later through `GET /v1/secwets/{id}/keys` (M7 §3).
+    //    can catch up later through `GET /v1/secwets/{id}/keys`.
     for key in keys {
         query(
             r#"
@@ -790,7 +790,7 @@ pub async fn approve_pairing_and_register_device(
 }
 
 // ============================================================================
-// Sync Queries & Mutations (M6)
+// Sync Queries & Mutations
 // ============================================================================
 
 /// Result of [`append_events`].
@@ -818,7 +818,7 @@ pub enum EventVisibility {
 }
 
 impl EventVisibility {
-    /// Visibility for a member holding `grants` (`granted_spaces`, F19 §6).
+    /// Visibility for a member holding `grants` (`granted_spaces`).
     pub fn for_member(grants: &[MemberGrant]) -> Self {
         match secwet_proto::granted_spaces(grants) {
             None => EventVisibility::AllScoped,
@@ -1035,7 +1035,7 @@ pub async fn append_events(
             )));
         }
 
-        // Role enforcement for collaborator devices (F19 §6).
+        // Role enforcement for collaborator devices.
         if let Some(grants) = member_grants {
             let permitted = envelope
                 .scope

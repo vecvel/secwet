@@ -22,7 +22,7 @@ pub enum RelayApiError {
     Revoked,
 
     /// Revoked device whose request signature verified: the response carries
-    /// the signed directive so the device can wipe or archive itself (F16).
+    /// the signed directive so the device can wipe or archive itself.
     #[error("Device is revoked")]
     RevokedWithDirective(Box<SignedRevocation>),
 

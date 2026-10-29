@@ -1,6 +1,6 @@
 //! Empirical Adversarial Challenger Test Suite for `secwet-proto`.
 //!
-//! Written by M1 Challenger 1: Adversarial Bug Finder (Protocol & Serialization).
+//! Written by Challenger 1: Adversarial Bug Finder (Protocol & Serialization).
 //!
 //! Objectives:
 //! 1. Fuzz / test invalid discriminators (`RecordType::try_from(0)`, `7`, `255`, and exhaustive 0..=255).

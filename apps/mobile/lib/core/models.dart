@@ -473,7 +473,7 @@ class BiometricStatus {
   /// `face`, `iris`, `multiple` or `none`.
   final String platformKind;
 
-  /// Name used mid-sentence, as desktop biometricName (lib/biometric.ts):
+  /// Name used mid-sentence, as on desktop:
   /// proper nouns keep their capitals ("Face ID"), the rest is lowercase
   /// ("fingerprint", "face unlock", "biometrics").
   String get label => switch (platformKind) {
@@ -720,7 +720,7 @@ class SyncStatus {
 }
 
 // ---------------------------------------------------------------------------
-// M7: revocation and key rotation
+// Revocation and key rotation
 // ---------------------------------------------------------------------------
 
 class RevokeResult {
@@ -782,11 +782,11 @@ class LinkStatus {
 }
 
 // ---------------------------------------------------------------------------
-// M8: collaboration
+// Collaboration
 // ---------------------------------------------------------------------------
 
 /// A grant to give: [kind] is `space`, `group` or `item` (or `all`), [role]
-/// `viewer`, `editor` or `admin` (docs/m7-m8-architecture.md).
+/// `viewer`, `editor` or `admin`.
 class GrantInput {
   const GrantInput({required this.kind, this.id, required this.role});
 
@@ -907,7 +907,7 @@ class Access {
 }
 
 // ---------------------------------------------------------------------------
-// Plan (F13)
+// Plan
 // ---------------------------------------------------------------------------
 
 /// The plan as the app layer caches it (`plan_status`); `plan` is `free`,

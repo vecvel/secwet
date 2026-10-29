@@ -4,7 +4,6 @@
 //! `Result<T, UiError>` with serde-ready DTOs. Platform services come in
 //! through small traits: [`KeyStore`] (secure key storage), [`ClipboardPort`]
 //! (native clipboard) and [`EventSink`] (UI change notifications).
-//! See `docs/app-layer.md`.
 
 pub mod biometric;
 pub mod clipboard;

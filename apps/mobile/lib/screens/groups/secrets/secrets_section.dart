@@ -16,7 +16,7 @@ import 'secret_dialogs.dart';
 
 const _mask = '••••••••••••';
 
-/// The Secrets tab of an entry (desktop ItemScreen secrets section): search,
+/// The Secrets tab of an entry, as on desktop: search,
 /// add, type filter tabs with counts, and the secret rows.
 class SecretsSection extends StatefulWidget {
   const SecretsSection({
@@ -192,7 +192,7 @@ class _SecretsSectionState extends State<SecretsSection> {
   }
 }
 
-/// One secret (desktop SecretRow): name with In use, type and note, the masked
+/// One secret: name with In use, type and note, the masked
 /// value with copy, and reveal plus the actions menu. A revealed value lives
 /// only in this row's state and is dropped on hide, dispose and lock.
 class SecretRow extends StatefulWidget {

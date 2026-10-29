@@ -1,7 +1,5 @@
 //! Adversarial challenge and stress test suite for secwet-core SQLite local storage & records.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.2, §11.2, and `ORIGINAL_REQUEST.md`.
-//!
 //! Evaluates:
 //! 1. Plaintext Leakage (`db_contains_no_plaintext_names`):
 //!    - Varied Unicode scripts (CJK, Cyrillic, Arabic, Hebrew, Greek).

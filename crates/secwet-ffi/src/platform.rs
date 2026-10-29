@@ -68,7 +68,7 @@ fn entry_cstr(entry: &str) -> secwet_core::Result<CString> {
 /// [`KeyStore`] over the native secure storage: iOS Keychain items behind
 /// `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly` and user presence,
 /// Android entries sealed under a data key that an authentication-bound
-/// Android Keystore key wraps (see `docs/mobile-ffi.md`).
+/// Android Keystore key wraps.
 pub struct NativeKeyStore(pub SecwetPlatform);
 
 impl KeyStore for NativeKeyStore {

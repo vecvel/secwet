@@ -1,7 +1,5 @@
 //! Live Standalone End-to-End Roundtrip Demonstration Test
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §7 (F9, F10) & `ORIGINAL_REQUEST.md` (R6).
-//!
 //! Demonstrates:
 //! 1. Fresh workspace provisioning on Device A.
 //! 2. Population of full entity variety: Spaces, Labels, Items, Environments,

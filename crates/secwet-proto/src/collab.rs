@@ -1,5 +1,5 @@
-//! Wire types for device revocation, master key rotation (F16, M7) and
-//! workspace collaboration with tree-wise RBAC (F19, M8).
+//! Wire types for device revocation, master key rotation and
+//! workspace collaboration with tree-wise RBAC.
 //!
 //! Pure data and pure permission logic: no I/O and no cryptography. Every
 //! byte string that is signed is produced by a `signing_bytes` method here so
@@ -25,7 +25,7 @@ pub const MAX_GRANTS_PER_MEMBER: usize = 256;
 pub const RESEAL_BATCH_SIZE: usize = 100;
 
 // ============================================================================
-// M7: Revocation
+// Revocation
 // ============================================================================
 
 /// Statement an active device signs to revoke another device. The revoked
@@ -129,7 +129,7 @@ pub struct DeviceCertificates {
 }
 
 // ============================================================================
-// M7: Master key rotation
+// Master key rotation
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,7 +192,7 @@ pub struct WrappedKeysResponse {
 }
 
 // ============================================================================
-// M8: Tree roles and nodes
+// Tree roles and nodes
 // ============================================================================
 
 /// Deterministic role held on a tree node. Ordered: `NoAccess < Viewer < Editor < Admin`.
@@ -415,7 +415,7 @@ pub struct SignedGrantSet {
 }
 
 // ============================================================================
-// M8: Scoped events
+// Scoped events
 // ============================================================================
 
 /// Which branch key protects an event.
@@ -498,7 +498,7 @@ impl EventScope {
 }
 
 // ============================================================================
-// M8: Branch keys
+// Branch keys
 // ============================================================================
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -664,7 +664,7 @@ pub struct BranchKeysResponse {
 }
 
 // ============================================================================
-// M8: Members and invitations
+// Members and invitations
 // ============================================================================
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

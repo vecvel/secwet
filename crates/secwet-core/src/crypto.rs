@@ -601,7 +601,7 @@ pub fn derive_recovery_key_from_str(
 }
 
 // ============================================================================
-// 10. Device Pairing Cryptography (F14)
+// 10. Device Pairing Cryptography
 // ============================================================================
 
 /// Generates an ephemeral X25519 keypair for pairing session initiation or join.

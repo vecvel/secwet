@@ -1,5 +1,5 @@
 // Small pieces the Groups and Overview screens share: formatting helpers as
-// in the desktop lib/format.ts, the one-field name dialog, a select field
+// on desktop, the one-field name dialog, a select field
 // that opens a bottom sheet, and check and radio rows.
 import 'package:flutter/widgets.dart';
 
@@ -69,7 +69,7 @@ void showError(BuildContext context, Object e, String fallback) {
 }
 
 // ---------------------------------------------------------------------------
-// Name dialog (desktop components/NameDialog.tsx)
+// Name dialog
 // ---------------------------------------------------------------------------
 
 /// One-field dialog for creating or renaming something. [validate] returns an
@@ -356,7 +356,7 @@ class RadioRow extends StatelessWidget {
   }
 }
 
-/// The read-only archive notice (desktop App.tsx banner).
+/// The read-only archive notice (the desktop banner).
 class UnlinkedNotice extends StatelessWidget {
   const UnlinkedNotice({super.key});
 

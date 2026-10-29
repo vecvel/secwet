@@ -1,6 +1,4 @@
 //! Security and local storage acceptance test suite.
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.2, §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secwet_core::crypto::{open_record, seal_record};
 use secwet_core::records::{
@@ -13,7 +11,7 @@ use secwet_proto::{EnvironmentBody, ProjectBody, RecordAad, RecordType, SecretBo
 use tempfile::tempdir;
 use uuid::Uuid;
 
-/// Acceptance test mandated by `docs/IMPLEMENTATION.md` §11.2 and `ORIGINAL_REQUEST.md`:
+/// Acceptance test:
 /// `db_contains_no_plaintext_names`
 ///
 /// Verifies:
@@ -514,7 +512,7 @@ fn test_update_record_blob_and_soft_delete() {
     }
 }
 
-/// Acceptance test mandated by `docs/IMPLEMENTATION.md` §11.2 and `ORIGINAL_REQUEST.md`:
+/// Acceptance test:
 /// `lock_zeroizes_keys`
 ///
 /// Verifies:

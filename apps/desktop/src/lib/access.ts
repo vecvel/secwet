@@ -1,7 +1,7 @@
 /**
  * apps/desktop/src/lib/access.ts
  *
- * Pure role and permission helpers for member mode (docs/m7-m8-architecture.md §4).
+ * Pure role and permission helpers for member mode.
  * No React, no IPC: every function here takes plain data so it can be unit tested.
  */
 import type {
@@ -280,7 +280,7 @@ export function spaceOfGrant(
 }
 
 // ============================================================================
-// Plans (F13)
+// Plans
 // ============================================================================
 
 /** Why sharing is unavailable on this device, or null when it is available. */

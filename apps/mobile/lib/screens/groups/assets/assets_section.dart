@@ -55,7 +55,7 @@ Future<bool> saveAssetBytes(BuildContext context, String name, Uint8List bytes) 
   return scope.session.external(() => scope.api.platform.saveBytes(bytes, safe));
 }
 
-/// The Assets tab of an entry (desktop AssetManager): upload through the
+/// The Assets tab of an entry, as on desktop: upload through the
 /// system file picker, the asset list, preview, download, rename, delete.
 class AssetsSection extends StatefulWidget {
   const AssetsSection({

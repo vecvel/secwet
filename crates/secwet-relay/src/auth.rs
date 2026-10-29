@@ -81,7 +81,7 @@ pub async fn verify_request_auth(
         Ok(v) => v,
         Err(err) => {
             // An unsigned or malformed request naming a revoked device gets the
-            // plain `revoked` answer, never the directive (F16 §2.2).
+            // plain `revoked` answer, never the directive.
             if limiter.check_device(&device_id) {
                 if let Ok(Some(dev)) = get_device(pool, &device_id).await {
                     if dev.revoked_at.is_some() {
@@ -159,7 +159,7 @@ pub async fn verify_request_auth(
     let signature_valid = verify_signature_strict_bytes(&sign_pub, &canonical, &sig_64).is_ok();
 
     // Revoked devices: the signed directive is only disclosed to a request that
-    // proves possession of the revoked device's key (F16 §2.2).
+    // proves possession of the revoked device's key.
     if device.revoked_at.is_some() {
         if signature_valid {
             if let Some(bytes) = device.revocation.as_deref() {

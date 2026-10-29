@@ -58,7 +58,7 @@ class _Entry {
   }
 }
 
-/// Add or edit secrets (desktop SecretDialog): type and environment for the
+/// Add or edit secrets, as on desktop: type and environment for the
 /// batch, then name, value and note per entry; "Add another"; pasting an
 /// .env, JSON or key=value block fills several entries. Resolves true when saved.
 Future<bool> showSecretDialog(
@@ -343,7 +343,7 @@ class _SecretDialogState extends State<_SecretDialog> {
   }
 }
 
-/// Copies a secret into another environment of the same item (desktop CopySecretDialog).
+/// Copies a secret into another environment of the same item.
 Future<String?> showCopySecretDialog(
   BuildContext context, {
   required SecretMeta secret,
@@ -417,7 +417,7 @@ class _CopySecretDialogState extends State<_CopySecretDialog> {
   }
 }
 
-/// CLI commands and code snippets for reading a secret (desktop SecretUsageDialog),
+/// CLI commands and code snippets for reading a secret,
 /// with the running process when the CLI injected it.
 Future<void> showSecretUsage(
   BuildContext context, {

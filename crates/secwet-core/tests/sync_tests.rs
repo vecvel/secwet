@@ -1,6 +1,4 @@
-//! Milestone 6: Core Event Synchronization Test Suite (F15).
-//!
-//! Authoritative source: docs/IMPLEMENTATION.md §15.1 - §15.6
+//! Core Event Synchronization Test Suite.
 //!
 //! Invariants:
 //! 1. All entity changes on Pro workspaces produce signed, encrypted `SignedEvent` envelopes.

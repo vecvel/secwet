@@ -5,7 +5,7 @@ import '../../core/secwet_api.dart';
 import '../../theme/secwet_theme.dart';
 import '../../theme/secwet_tokens.dart';
 
-/// The lock screen (docs/design-decisions.md, "Mobile unlock and header").
+/// The lock screen.
 ///
 /// With a screen lock it is blank: the system prompt (Face ID, Touch ID or
 /// fingerprint, with the passcode or PIN as fallback) opens by itself once

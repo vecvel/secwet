@@ -15,7 +15,7 @@ import '../common.dart';
 import 'rich_text.dart';
 import 'rich_text_controller.dart';
 
-/// Rich-text note editor (desktop screens/items/RichTextEditor.tsx): title,
+/// Rich-text note editor, as on desktop: title,
 /// formatting toolbar (headings, bold, italic, underline, strikethrough,
 /// lists, quote, code, table, link, undo, redo), the formatted body, and
 /// Copy as plain text. [note] null creates a new note in [environmentId].

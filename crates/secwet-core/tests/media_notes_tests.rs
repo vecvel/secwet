@@ -1,7 +1,5 @@
 //! Empirical integration tests for Encrypted Files and Rich-Text Notes in secwet-core.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.1, §6, and Milestone 2 specification.
-//!
 //! Evaluates:
 //! 1. Encrypted Files CRUD:
 //!    - Upload file with SHA-256 calculation and RecordAad record_type 5 (File).

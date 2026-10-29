@@ -1,6 +1,4 @@
 //! End-to-end integration tests for CLI export commands and flags.
-//!
-//! Authoritative source: `ORIGINAL_REQUEST.md` (R5) and `docs/IMPLEMENTATION.md` (F10, F11).
 
 use assert_cmd::Command;
 use predicates::prelude::*;

@@ -1,4 +1,4 @@
-//! The new device's side of pairing (F14) end to end: a real owner store
+//! The new device's side of pairing end to end: a real owner store
 //! approves, a fresh store is created from the scanned link with
 //! `secwet_core::pairing_join::PairingJoin`, and the data arrives by sync.
 //! Real relay router over HTTP, Postgres, Ed25519, HPKE and SQLite.

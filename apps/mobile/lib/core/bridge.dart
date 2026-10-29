@@ -6,8 +6,8 @@ import 'dart:typed_data';
 
 import 'ffi_bindings.dart';
 
-/// Structured error from the app layer (`UiError`): `code` is stable (see
-/// docs/IMPLEMENTATION.md §10), `message` is fit for the UI.
+/// Structured error from the app layer (`UiError`): `code` is stable,
+/// `message` is fit for the UI.
 class SecwetException implements Exception {
   const SecwetException(this.code, this.message, {this.field});
 

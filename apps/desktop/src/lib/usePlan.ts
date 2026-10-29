@@ -1,7 +1,7 @@
 /**
  * apps/desktop/src/lib/usePlan.ts
  *
- * The real plan of this Secwet (F13), shared by every screen. It comes from
+ * The real plan of this Secwet, shared by every screen. It comes from
  * the relay entitlement cached in the core; reading it never contacts the
  * relay. Reloads when the backend reports a plan, device or full change.
  */

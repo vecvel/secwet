@@ -6,7 +6,7 @@ import '../theme/secwet_tokens.dart';
 import 'icon.dart';
 import 'layout.dart';
 
-/// Tap target with no hover, focus, press or ripple styling (docs/ui-rules.md).
+/// Tap target with no hover, focus, press or ripple styling.
 class Tappable extends StatelessWidget {
   const Tappable({super.key, required this.child, this.onTap, this.label, this.button = true, this.selected});
 
@@ -219,7 +219,7 @@ class SecwetBadge extends StatelessWidget {
   final String label;
   final BadgeTone tone;
 
-  /// Defaults like desktop Badge.tsx: on for every tone but neutral.
+  /// Defaults like the desktop badge: on for every tone but neutral.
   final bool? dot;
 
   @override

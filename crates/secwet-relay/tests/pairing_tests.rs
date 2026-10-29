@@ -1,4 +1,4 @@
-//! Comprehensive Test Suite for Device Pairing (F14).
+//! Comprehensive Test Suite for Device Pairing.
 //!
 //! Mandatory Tests:
 //! 1. `pairing_happy_path`: Two Secwet instances and an in-process relay.
@@ -358,7 +358,7 @@ async fn test_pairing_expires_after_5_minutes() {
         .await
         .expect("Device A register");
 
-    // Pairing needs an active Pro entitlement (F13).
+    // Pairing needs an active Pro entitlement.
     secwet_relay::db::grant_entitlement(&pool, secwet_id, "pro", 5, None)
         .await
         .expect("Grant pro");
@@ -431,7 +431,7 @@ async fn test_pairing_respects_device_limit() {
         .await
         .expect("Device A register");
 
-    // Pairing needs an active Pro entitlement (F13).
+    // Pairing needs an active Pro entitlement.
     secwet_relay::db::grant_entitlement(&pool, secwet_id, "pro", 2, None)
         .await
         .expect("Grant pro");

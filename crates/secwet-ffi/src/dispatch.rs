@@ -340,7 +340,7 @@ impl Bridge {
             "pairing_join_poll" => out(runtime::block_on(s.pairing_join_poll())),
             "pairing_join_cancel" => out(s.pairing_join_cancel()),
 
-            // Plan (F13). Free never contacts the relay except plan_activate.
+            // Plan. Free never contacts the relay except plan_activate.
             "plan_status" => out(s.plan_status()),
             "plan_refresh" => out(runtime::block_on(s.plan_refresh())),
             "plan_activate" => out(runtime::block_on(s.plan_activate())),
@@ -352,7 +352,7 @@ impl Bridge {
             }
             "sync_status" => out(s.sync_status()),
 
-            // M7: revocation and key rotation
+            // Revocation and key rotation
             "device_revoke" => {
                 let wipe: Option<bool> = opt(a, "wipe")?;
                 out(runtime::block_on(
@@ -363,7 +363,7 @@ impl Bridge {
             "key_rotate" => out(runtime::block_on(s.key_rotate())),
             "link_status" => out(s.link_status()),
 
-            // M8: collaboration
+            // Collaboration
             "members_list" => out(runtime::block_on(s.members_list())),
             "member_invite" => out(runtime::block_on(
                 s.member_invite(req(a, "email")?, req::<Vec<GrantInput>>(a, "grants")?),

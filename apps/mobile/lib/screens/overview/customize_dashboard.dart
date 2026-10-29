@@ -17,7 +17,7 @@ const allWidgets = [
   ('checklist', 'Setup and Safety Checklist'),
 ];
 
-/// Customize dashboard (desktop CustomizeDashboardDialog): Home title, the
+/// Customize dashboard, as on desktop: Home title, the
 /// visible KPI tiles, and which widgets show in what order. Resolves with
 /// the saved config.
 Future<DashboardConfig?> showCustomizeDashboard(BuildContext context, DashboardConfig config, Future<void> Function(DashboardConfig) save) =>

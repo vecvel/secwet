@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::error::UiError;
 use crate::events::{AppEvent, EventSink};
 
-/// Discriminated status DTO for frontend consumption matching §9.1 and §13.
+/// Discriminated status DTO for frontend consumption.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum SecwetStatusDto {
@@ -57,7 +57,7 @@ pub struct ActivePairingSession {
 }
 
 /// Application state. One per process; hosts keep it for the app's lifetime
-/// and call the command methods on it (see `docs/app-layer.md`).
+/// and call the command methods on it.
 pub struct AppState {
     pub secwet: Mutex<Option<Secwet>>,
     pub active_pairing: Mutex<Option<ActivePairingSession>>,

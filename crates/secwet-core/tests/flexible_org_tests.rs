@@ -1,7 +1,5 @@
 //! Empirical integration tests for Secwet Flexible Organization Secwet APIs.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.1, §6, and Milestone 2 specification.
-//!
 //! Evaluates:
 //! 1. Labels CRUD & Reordering:
 //!    - Default "Projects" label seeded at position 0 on secwet creation.

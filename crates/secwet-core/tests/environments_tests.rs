@@ -1,6 +1,4 @@
 //! Environments CRUD and invariants acceptance tests.
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F4), §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secwet_core::keys::MemoryStore;
 use secwet_core::records::get_record;

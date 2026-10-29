@@ -82,7 +82,7 @@ export function App() {
     }
     setCliConnected(true);
   }
-  // The real plan comes from the relay entitlement (F13). The "Simulate plan"
+  // The real plan comes from the relay entitlement. The "Simulate plan"
   // switch in Settings overrides it in development builds only.
   const planStatus = usePlanStatus();
   const [simulatedPlan, setPlan] = useState<Plan | null>(null);
@@ -162,7 +162,7 @@ export function App() {
     setIsEditingHomeTitle(false);
   }, [uninitialized]);
 
-  // Member mode and read-only archive (M7 / M8)
+  // Member mode and read-only archive
   const access = appState.access;
   const readOnly = isReadOnly(appState.linkStatus);
   const canPair = canPairDevices(appState.access, readOnly);

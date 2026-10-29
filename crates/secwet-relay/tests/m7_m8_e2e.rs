@@ -1,6 +1,7 @@
-//! End-to-end M7/M8 flows: real `Secwet` stores (core) talking to the real
-//! relay router over HTTP, backed by Postgres. No mocks: real Ed25519, HPKE,
-//! XChaCha20-Poly1305, SQLite and keystore code paths.
+//! End-to-end revocation, key rotation and collaboration flows: real `Secwet`
+//! stores (core) talking to the real relay router over HTTP, backed by
+//! Postgres. No mocks: real Ed25519, HPKE, XChaCha20-Poly1305, SQLite and
+//! keystore code paths.
 
 use secrecy::ExposeSecret;
 use secwet_core::collab::RevocationOutcome;
@@ -111,7 +112,7 @@ fn all_secret_names(s: &Secwet) -> Vec<String> {
 }
 
 // ============================================================================
-// M7
+// Revocation and key rotation
 // ============================================================================
 
 #[tokio::test]
@@ -232,7 +233,7 @@ async fn offline_device_catches_up_on_new_epoch() {
 }
 
 // ============================================================================
-// M8
+// Collaboration
 // ============================================================================
 
 struct Tree {

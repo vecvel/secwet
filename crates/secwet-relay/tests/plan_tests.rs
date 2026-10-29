@@ -1,4 +1,4 @@
-//! F13 plans and entitlements against the real relay router and Postgres:
+//! Plans and entitlements against the real relay router and Postgres:
 //! admin grant (also before registration), expiry evaluated on every read,
 //! admin expire/ungrant, and the client side of an ended Pro plan with real
 //! `Secwet` stores. No mocks.
@@ -250,7 +250,7 @@ async fn expired_entitlement_reads_free_and_blocks_sync_and_pairing() {
     assert!(bad.is_err());
 }
 
-/// F13: when Pro ends, sync stops and other devices show "Paused", but every
+/// When Pro ends, sync stops and other devices show "Paused", but every
 /// local read, write and export keeps working, nothing is deleted or locked,
 /// and the changes made meanwhile go out once Pro is renewed.
 #[tokio::test]

@@ -1,4 +1,4 @@
-//! Plan commands (F13), shared by every host.
+//! Plan commands, shared by every host.
 //!
 //! The plan lives in `secwet_core::plan`; this module exposes it to the UI.
 //! Free never contacts the relay: `plan_status` and `plan_refresh` read the

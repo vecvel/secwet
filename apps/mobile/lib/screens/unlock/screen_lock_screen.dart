@@ -7,7 +7,7 @@ import '../../widgets/controls.dart';
 import '../../widgets/icon.dart';
 
 /// Shown instead of onboarding and the lock screen on a phone with no screen
-/// lock (docs/design-decisions.md, "Mobile unlock and header"). Secwet's keys
+/// lock. Secwet's keys
 /// live behind the screen lock, so there is no way around this screen: the
 /// button opens the phone's security settings, and RootGate re-reads the
 /// status whenever the app comes back, continuing once a lock is set.

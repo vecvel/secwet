@@ -1,4 +1,4 @@
-//! Empirical Challenger 2 Adversarial Stress Test Suite for Milestone 3-1.
+//! Empirical Challenger 2 Adversarial Stress Test Suite.
 //!
 //! Scope:
 //! 1. Multi-epoch key replacement:

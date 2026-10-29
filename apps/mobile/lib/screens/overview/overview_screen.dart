@@ -33,7 +33,7 @@ void openSettingsTab(BuildContext context, String tabName) {
   }
 }
 
-/// The Overview tab (desktop screens/overview/OverviewScreen.tsx): KPI tiles,
+/// The Overview tab, as on desktop: KPI tiles,
 /// recently changed secrets, recent notes, quick actions and the setup and
 /// safety checklist, in the order the dashboard config sets. Counts follow
 /// the active space like the desktop.
@@ -125,7 +125,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Actions (desktop App.tsx wiring)
+  // Actions (wired as on desktop)
   // ---------------------------------------------------------------------------
 
   Item? get _activeItem {

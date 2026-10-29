@@ -1,7 +1,5 @@
 //! Recovery and Backup Integration and Invariant Test Suite.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §7 (F9, F10), §11.2, and `ORIGINAL_REQUEST.md` (R2).
-//!
 //! Mandatory Invariants Tested:
 //! 1. `export_then_restore_roundtrip`: Full roundtrip of rich workspace state (spaces, labels, items,
 //!    environments, secrets, rich-text notes, binary files, settings) with 100% data fidelity.

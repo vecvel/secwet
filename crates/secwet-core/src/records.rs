@@ -1,7 +1,5 @@
 //! SQLite local storage, migrations, and record operations.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.2.
-//!
 //! Architectural Invariant: Sensitive data (label names, item names, descriptions, environment names,
 //! secret names, secret values, secret notes, file data, note content) exists only inside encrypted
 //! `blob` columns (in `records` or `labels`). The database schema holds only non-secret metadata
@@ -26,7 +24,7 @@ pub const MIGRATION_0003_SQL: &str = include_str!("../migrations/0003_spaces.sql
 // 1. Connection Initializer & PRAGMA Settings
 // ============================================================================
 
-/// Configures mandatory SQLite PRAGMAs required by `docs/IMPLEMENTATION.md` §5.2:
+/// Configures mandatory SQLite PRAGMAs:
 /// - `PRAGMA journal_mode = WAL;` (Write-Ahead Logging for concurrency)
 /// - `PRAGMA foreign_keys = ON;` (Referential integrity)
 /// - `PRAGMA busy_timeout = 5000;` (5-second lock timeout for CLI & desktop coordination)
@@ -1204,7 +1202,7 @@ pub fn cascade_delete_item(
 
 /// Deletes an environment with optional content preservation.
 ///
-/// Invariant: Unlike Milestone 0, does NOT reject deletion if it is the only remaining
+/// Invariant: Unlike earlier versions, does NOT reject deletion if it is the only remaining
 /// environment; items require no environments.
 ///
 /// If `preserve_content` is true:
@@ -1357,7 +1355,7 @@ pub fn cascade_delete_label(
 }
 
 /// Cascades deletion of a project and all its child environments and grandchild secrets.
-/// Retained for backward compatibility with Milestone 0/1 tests.
+/// Retained for backward compatibility with older tests.
 pub fn cascade_delete_project(
     conn: &mut Connection,
     project_id: Uuid,

@@ -86,7 +86,7 @@ pub enum Error {
     /// directive; `Secwet::handle_revocation_notice` verifies and executes it.
     #[error("this device was revoked")]
     RevocationNotice(Box<secwet_proto::SignedRevocation>),
-    /// The local role does not allow this change (F19).
+    /// The local role does not allow this change.
     #[error("you don't have permission to do this")]
     Forbidden,
     #[error("wrong recovery key or damaged file")]

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-/// A notification for the UI. Event names and payloads match `docs/IMPLEMENTATION.md` §9.1.
+/// A notification for the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppEvent {
     /// Data in `scope` changed (`spaces`, `labels`, `items`, `secrets`, `all`, ...).

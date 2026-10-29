@@ -2,7 +2,6 @@
  * apps/desktop/src/lib/store.ts
  *
  * Unified reactive state management for Secwet Desktop using useSyncExternalStore.
- * Authoritative: docs/IMPLEMENTATION.md §9.2 and Milestone 4 requirements.
  */
 import { useSyncExternalStore } from "react";
 import {
@@ -57,11 +56,11 @@ export interface AppStateSnapshot {
   loading: boolean;
   error: string | null;
 
-  /** What this device may do (M8). Null until loaded; treated as owner. */
+  /** What this device may do. Null until loaded; treated as owner. */
   access: AccessView | null;
-  /** "unlinked" after a sync-only revocation: the store is a read-only archive (M7). */
+  /** "unlinked" after a sync-only revocation: the store is a read-only archive. */
   linkStatus: LinkStatusDto | null;
-  /** Master key epoch and rotation prompt (M7). */
+  /** Master key epoch and rotation prompt. */
   keyStatus: KeyStatusDto | null;
   /** True after joining with an invite until shared data arrives. */
   joining: boolean;
@@ -538,7 +537,7 @@ class AppStore {
   }
 
   // ==========================================================================
-  // Access, key and link status (M7 / M8)
+  // Access, key and link status
   // ==========================================================================
 
   public async reloadAccess(): Promise<AccessView | null> {

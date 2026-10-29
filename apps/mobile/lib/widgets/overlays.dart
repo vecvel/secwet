@@ -12,7 +12,7 @@ import 'layout.dart';
 const _overlayShadow = [BoxShadow(color: Color(0x24000000), offset: Offset(0, 12), blurRadius: 32)];
 const _ease = Cubic(0.16, 1, 0.3, 1);
 
-/// Opens a dialog as a bottom sheet over the scrim (the desktop Dialog at
+/// Opens a dialog as a bottom sheet over the scrim (the desktop dialog at
 /// compact width). Resolves with the value passed to `Navigator.pop`.
 Future<T?> showSecwetDialog<T>(BuildContext context, {required WidgetBuilder builder, bool dismissible = true}) async {
   final p = context.palette;

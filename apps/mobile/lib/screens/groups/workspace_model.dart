@@ -94,7 +94,7 @@ class WorkspaceModel extends ChangeNotifier {
   List<Item> itemsOf(String groupId) => [for (final i in items) if (i.groupId == groupId) i];
 
   // ---------------------------------------------------------------------------
-  // Permissions (desktop App.tsx)
+  // Permissions (as on desktop)
   // ---------------------------------------------------------------------------
 
   Permissions spacePerms(String? spaceId) => permissionsFor(access, readOnly, NodePath(spaceId: spaceId));

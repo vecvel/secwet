@@ -1,4 +1,4 @@
-//! Empirical Adversarial Verification Suite for Milestone M3-1:
+//! Empirical Adversarial Verification Suite for
 //! Core Cryptography, Recovery Key Lifecycle, and Encrypted Export/Restore.
 //!
 //! Mandatory Verification Invariants:

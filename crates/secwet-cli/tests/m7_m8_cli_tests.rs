@@ -51,7 +51,7 @@ fn member_invite_rejects_bad_grant_spec() {
     let ks = FileKeyStore::new(temp.path().join(".test_keystore.json"));
     let mut s = Secwet::create(temp.path(), "cli", &ks).unwrap();
     s.set_relay_url("http://127.0.0.1:9").unwrap();
-    // On Free the plan check comes first (F13: no relay contact at all).
+    // On Free the plan check comes first (no relay contact at all).
     s.set_plan("pro").unwrap();
     s.lock();
     secwet(temp.path())

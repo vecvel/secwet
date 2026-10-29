@@ -1143,7 +1143,7 @@ pub struct EventEnvelope {
     pub key_epoch: u32,
     pub nonce: [u8; 24],
     pub ciphertext: Vec<u8>,
-    /// Routing scope for events in collaborative spaces (F19). `None` for
+    /// Routing scope for events in collaborative spaces. `None` for
     /// workspace-private events, which only the owner's devices receive.
     #[serde(default)]
     pub scope: Option<EventScope>,
@@ -1494,7 +1494,7 @@ pub enum PairingPollResponse {
 }
 
 // ============================================================================
-// Sync DTOs (M6)
+// Sync DTOs
 // ============================================================================
 
 /// Request body for POST /v1/secwets/{id}/events.
@@ -1509,7 +1509,7 @@ pub struct PushEventsResponse {
     pub accepted: usize,
     pub latest_server_seq: u64,
     /// Event ids the relay consumed without storing because the author's role
-    /// does not permit them (F19). Counted in `accepted`.
+    /// does not permit them. Counted in `accepted`.
     #[serde(default)]
     pub rejected: Vec<[u8; 16]>,
 }
@@ -1644,7 +1644,7 @@ pub struct RelayErrorDetail {
 pub struct RelayError {
     pub error: RelayErrorDetail,
     /// Present on `revoked` errors sent to the revoked device itself: the
-    /// signed directive it verifies before wiping or archiving (F16).
+    /// signed directive it verifies before wiping or archiving.
     #[serde(default)]
     pub revocation: Option<SignedRevocation>,
 }
@@ -2343,7 +2343,7 @@ pub fn snippet_from_content(content: &str, max_chars: usize) -> String {
 }
 
 // ============================================================================
-// 10. Snapshot, Export, and Recovery Models (Milestone 3)
+// 10. Snapshot, Export, and Recovery Models
 // ============================================================================
 
 /// Snapshot representation of an organizational space.

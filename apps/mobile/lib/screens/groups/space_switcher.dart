@@ -21,7 +21,7 @@ SecwetIcons spaceIcon(Space? s) {
   return s?.isDefault ?? false ? SecwetIcons.user : SecwetIcons.folder;
 }
 
-/// The space switcher at the top of the Groups tab (desktop layout/SpaceSwitcher):
+/// The space switcher at the top of the Groups tab, as on desktop:
 /// the current space; tapping it lists the spaces with their group counts,
 /// Global, and New space, each space with Edit, Share, Members and Delete.
 class SpaceSwitcher extends StatelessWidget {
@@ -263,7 +263,7 @@ const _spaceIcons = [
   Choice(SecwetIcons.key, 'Security'),
 ];
 
-/// New Space (no [space]) or Edit Space dialog (desktop NewSpaceDialog / EditSpaceDialog).
+/// New Space (no [space]) or Edit Space dialog, as on desktop.
 Future<void> showSpaceDialog(BuildContext context, {required WorkspaceModel model, Space? space}) =>
     showSecwetDialog<void>(context, builder: (_) => _SpaceDialog(model: model, space: space, outer: context));
 

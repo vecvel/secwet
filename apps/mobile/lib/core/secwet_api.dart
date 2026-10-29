@@ -10,8 +10,8 @@ export 'platform_services.dart' show PickedFile, PlatformServices;
 export 'read_when_idle.dart';
 
 /// The stable Dart API of the Secwet app layer. Every method maps to one
-/// app-layer command (the same contract as the desktop Tauri commands, see
-/// docs/mobile-ffi.md) and throws [SecwetException] on failure.
+/// app-layer command (the same contract as the desktop Tauri commands)
+/// and throws [SecwetException] on failure.
 ///
 /// Screens get it with `SecwetScope.of(context).api`. Lists come back fresh
 /// on every call; listen to [events] (`changed` with a scope) to refresh.
@@ -280,7 +280,7 @@ class SecwetApi {
   Future<void> cancelPairingJoin() => _call('pairing_join_cancel');
 
   // -------------------------------------------------------------------------
-  // Plan (F13)
+  // Plan
   // -------------------------------------------------------------------------
 
   /// The cached plan; never contacts the relay.
@@ -301,7 +301,7 @@ class SecwetApi {
   Future<SyncStatus> syncStatus() async => SyncStatus.fromJson(await _obj('sync_status'));
 
   // -------------------------------------------------------------------------
-  // M7: revocation and key rotation
+  // Revocation and key rotation
   // -------------------------------------------------------------------------
 
   /// Revokes a device. With [wipe] the device erases its local copy (remote
@@ -316,7 +316,7 @@ class SecwetApi {
   Future<LinkStatus> linkStatus() async => LinkStatus.fromJson(await _obj('link_status'));
 
   // -------------------------------------------------------------------------
-  // M8: collaboration
+  // Collaboration
   // -------------------------------------------------------------------------
 
   Future<List<Member>> members() => _list('members_list', Member.fromJson);

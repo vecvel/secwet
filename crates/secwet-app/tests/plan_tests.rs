@@ -1,4 +1,4 @@
-//! F13: plans in the app layer. A Free store never contacts the relay.
+//! Plans in the app layer. A Free store never contacts the relay.
 //!
 //! The relay here is a trap: a real TCP listener that counts every
 //! connection. Any network call from a Free store fails the test.

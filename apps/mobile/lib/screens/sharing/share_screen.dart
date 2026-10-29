@@ -11,8 +11,8 @@ import '../../widgets/layout.dart';
 import '../settings/settings_widgets.dart';
 import 'access.dart';
 
-/// Invite someone to a space, or change a member's access (desktop
-/// ShareDialog). Access is a tree: the space, its groups, their items, and
+/// Invite someone to a space, or change a member's access, as on desktop.
+/// Access is a tree: the space, its groups, their items, and
 /// each item's General scope and environments; a row inherits from its
 /// parent unless a role is set on it. Pops `true` when something changed.
 class ShareScreen extends StatefulWidget {
@@ -37,7 +37,7 @@ class ShareScreen extends StatefulWidget {
   State<ShareScreen> createState() => _ShareScreenState();
 }
 
-/// A node of the access tree to start an invite on (desktop ShareDialog `focus`).
+/// A node of the access tree to start an invite on.
 class ShareFocus {
   const ShareFocus.item(this.id) : kind = 'item';
   const ShareFocus.environment(this.id) : kind = 'environment';

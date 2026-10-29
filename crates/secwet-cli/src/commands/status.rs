@@ -5,7 +5,7 @@ pub fn execute_status(secwet: &Secwet, json_output: bool) -> Result<(), String> 
     let settings = secwet.settings().map_err(|e| format!("{e}"))?;
     let device_name = settings.device_name;
 
-    // The cached plan (F13); status never contacts the relay.
+    // The cached plan; status never contacts the relay.
     let info = secwet.plan_info().map_err(|e| format!("{e}"))?;
     // `sync_state` keeps its machine values for scripts; `sync_line` is for people.
     let (sync_state, sync_line) = match info.state {

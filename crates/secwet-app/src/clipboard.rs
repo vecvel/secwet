@@ -1,7 +1,5 @@
 //! Clipboard copy with OS history suppression and 30-second auto-clear.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §7 F5, §9.1, §9.2.
-//!
 //! Security Invariants:
 //! 1. The webview never receives the plaintext secret value for a copy operation.
 //! 2. `write_secret` sets OS-level hints (ConcealedType/CLIPBOARD_HIST_DONT_RECORD)

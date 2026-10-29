@@ -17,7 +17,7 @@ import 'settings_screen.dart';
 import 'settings_widgets.dart';
 
 /// Settings > Devices: this Secwet's devices, pairing a new one (this phone
-/// shows the code) and revoking with the M7 choice. Member devices cannot
+/// shows the code) and revoking with the erase or keep choice. Member devices cannot
 /// pair: the relay only adds devices for the owner.
 class DevicesTab extends StatefulWidget {
   const DevicesTab({super.key, required this.model});
@@ -37,7 +37,7 @@ class _DevicesTabState extends State<DevicesTab> {
     if (d.revoked) return '${d.platform}, revoked ${formatDate(d.revokedAt!)}.';
     if (d.isCurrent) return '${d.platform}, added ${formatDate(d.addedAt)}, key ${d.fingerprint}';
     final sync = d.lastSeenAt > 0 ? 'last synced ${formatAgo(d.lastSeenAt).toLowerCase()}' : 'active';
-    // When Pro ends, the other devices stop syncing (F13).
+    // When Pro ends, the other devices stop syncing.
     return '${d.platform}, ${paused ? 'sync paused, $sync' : sync}, key ${d.fingerprint}';
   }
 
@@ -344,7 +344,7 @@ class _PairDeviceSheetState extends State<PairDeviceSheet> {
   }
 }
 
-/// M7 revoke: erase the device's copy on its next contact (remote wipe), or
+/// Revoke: erase the device's copy on its next contact (remote wipe), or
 /// stop its sync and leave it a read-only copy.
 class RevokeDeviceSheet extends StatefulWidget {
   const RevokeDeviceSheet({super.key, required this.api, required this.device});

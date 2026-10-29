@@ -1,4 +1,4 @@
-//! Empirical Challenger Stress & Invariant Test Suite for Milestone 3.
+//! Empirical Challenger Stress & Invariant Test Suite.
 //!
 //! Objectives:
 //! 1. Verify rapid lock/unlock during active auto-clear timers.

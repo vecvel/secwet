@@ -1,6 +1,5 @@
-// Role and permission helpers for member mode (docs/m7-m8-architecture.md
-// §4), ported from apps/desktop/src/lib/access.ts. Pure functions over the
-// app-layer DTOs so they can be unit tested.
+// Role and permission helpers for member mode, ported from the desktop.
+// Pure functions over the app-layer DTOs so they can be unit tested.
 import '../../core/secwet_api.dart';
 
 const roles = ['admin', 'editor', 'viewer', 'no_access'];
@@ -191,7 +190,7 @@ String? spaceOfGrant(Grant g, List<Group> groups, List<Item> items) {
 }
 
 // ---------------------------------------------------------------------------
-// Plans (F13)
+// Plans
 // ---------------------------------------------------------------------------
 
 /// Why sharing is unavailable, or null when it is available.

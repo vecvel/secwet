@@ -13,7 +13,7 @@ import 'group_dialogs.dart';
 import 'item_screen.dart';
 import 'workspace_model.dart';
 
-/// A group's entries as cards with the desktop pills (screens/groups/GroupScreen.tsx),
+/// A group's entries as cards with the desktop pills,
 /// with search, New, and Rename, reorder, move to space and Delete in the menu.
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key, required this.groupId});

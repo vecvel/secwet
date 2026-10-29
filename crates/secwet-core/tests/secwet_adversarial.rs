@@ -1,7 +1,5 @@
 //! Adversarial challenge and stress test suite for secwet-core Secwet.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F1-F6, F8), and `ORIGINAL_REQUEST.md`.
-//!
 //! Evaluates 8 adversarial challenge dimensions:
 //! 1. Double `Secwet::create` attempt at the same directory (clean failure & duplicate prevention).
 //! 2. Lifecycle sequence violations (uninitialized unlock, missing/corrupted keystore keys, state transitions).
@@ -64,8 +62,7 @@ fn collect_paths(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
 /// Adversarial Challenge 1: Double `Secwet::create` attempt at the same directory.
 ///
 /// Invariant: Creating a second secwet in an already-initialized data directory must not
-/// silently create a duplicate or orphaned database (`docs/IMPLEMENTATION.md` §7 F1:
-/// "do not create a second secwet silently"). Must reject cleanly with `Error::AlreadyInitialized`,
+/// silently create a duplicate or orphaned database. Must reject cleanly with `Error::AlreadyInitialized`,
 /// leak zero keys to KeyStore, create zero directory/database artifacts, and leave the
 /// existing secwet completely unharmed.
 #[test]

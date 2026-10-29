@@ -1,7 +1,4 @@
-//! Comprehensive Milestone 3 E2E Recovery and Export Test Suite.
-//!
-//! Authoritative source: `ORIGINAL_REQUEST.md` (R1-R6), `docs/IMPLEMENTATION.md` (F9, F10, M3),
-//! and `PROJECT.md` (Architecture, Milestones, Contracts).
+//! Comprehensive E2E Recovery and Export Test Suite.
 //!
 //! Structure:
 //! - Reference Cryptographic Oracle: `SecwetArchiveOracle`
@@ -143,7 +140,7 @@ pub struct SnapshotFile {
     pub updated_at: i64,
 }
 
-/// Standalone reference oracle implementing `docs/IMPLEMENTATION.md §4, §F9, §F10`.
+/// Standalone reference oracle for the recovery and export formats.
 pub struct SecwetArchiveOracle;
 
 impl SecwetArchiveOracle {

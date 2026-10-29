@@ -24,7 +24,7 @@ const _status = {
   'expired': ('Expired', BadgeTone.neutral),
 };
 
-/// Members of one space (desktop MembersDialog): who has access, invite,
+/// Members of one space, as on desktop: who has access, invite,
 /// change access, remove (erase their copy or leave a read-only one) and
 /// revoke invitations. Open it with
 /// `pushScreen(context, SharingScreen(spaceId: id))`; without a space it
@@ -287,7 +287,7 @@ class _SharingScreenState extends State<SharingScreen> {
   }
 }
 
-/// M8 remove: their devices erase this workspace on next contact, or keep a
+/// Remove a member: their devices erase this workspace on next contact, or keep a
 /// read-only copy of what was shared. Pops with the wipe choice once removed.
 class _RemoveMemberSheet extends StatefulWidget {
   const _RemoveMemberSheet({required this.api, required this.member});

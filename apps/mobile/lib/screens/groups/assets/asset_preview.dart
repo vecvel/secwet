@@ -14,7 +14,7 @@ import '../../../widgets/layout.dart';
 import '../common.dart';
 import 'assets_section.dart';
 
-/// Full-screen preview of an asset (desktop AssetPreviewDialog): images,
+/// Full-screen preview of an asset: images,
 /// text and Markdown, PDF pages drawn by the platform, otherwise the type and
 /// checksum. The decrypted bytes stay in memory only while the screen is open.
 class AssetPreviewScreen extends StatefulWidget {

@@ -1,10 +1,8 @@
-//! M7 (device revocation, master key rotation) and M8 (collaboration,
-//! tree-wise RBAC, branch keys, invitations) relay test suite.
-//!
-//! Contract: docs/m7-m8-architecture.md §2, §3, §6, §7, §8, §9.
+//! Device revocation, master key rotation and collaboration (tree-wise
+//! RBAC, branch keys, invitations) relay test suite.
 //!
 //! Every signature is a real Ed25519 signature, every wrapped key a real HPKE
-//! wrap. Requests are built by hand (signed headers per §8.2) so the suite
+//! wrap. Requests are built by hand (with signed headers) so the suite
 //! exercises the relay's wire contract directly.
 
 use data_encoding::BASE64URL_NOPAD;
@@ -624,7 +622,7 @@ async fn member_status(pool: &PgPool, secwet_id: Uuid, member_id: Uuid) -> Strin
 }
 
 // ============================================================================
-// M7: revocation
+// Revocation
 // ============================================================================
 
 #[tokio::test]
@@ -889,7 +887,7 @@ async fn revoked_device_rejected_on_every_endpoint_and_stream_closed() {
 }
 
 // ============================================================================
-// M7: master key rotation
+// Master key rotation
 // ============================================================================
 
 #[tokio::test]
@@ -1062,7 +1060,7 @@ async fn concurrent_rotations_exactly_one_wins() {
 }
 
 // ============================================================================
-// M8: invitations
+// Invitations
 // ============================================================================
 
 #[tokio::test]
@@ -1351,7 +1349,7 @@ async fn member_grant_update_requires_newer_version() {
 }
 
 // ============================================================================
-// M8: scoped events
+// Scoped events
 // ============================================================================
 
 #[tokio::test]
@@ -1523,7 +1521,7 @@ async fn member_cannot_access_snapshot() {
 }
 
 // ============================================================================
-// M8: branch keys
+// Branch keys
 // ============================================================================
 
 #[tokio::test]
@@ -1647,7 +1645,7 @@ async fn branch_key_publish_epochs_and_recipients() {
 }
 
 // ============================================================================
-// M8: member removal
+// Member removal
 // ============================================================================
 
 #[tokio::test]
@@ -1747,7 +1745,7 @@ async fn member_removal_revokes_all_devices() {
 }
 
 // ============================================================================
-// Zero-knowledge leakage scan over every table, including the M7/M8 ones
+// Zero-knowledge leakage scan over every table, including the collaboration ones
 // ============================================================================
 
 #[tokio::test]

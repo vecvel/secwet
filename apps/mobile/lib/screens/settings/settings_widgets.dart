@@ -9,7 +9,7 @@ import '../../widgets/overlays.dart';
 
 /// Settings list row: title with inline badges, a description that wraps,
 /// and an action. Wide actions (fields, selects) sit below the text so the
-/// text never squeezes on a narrow phone (docs/ui-rules.md).
+/// text never squeezes on a narrow phone.
 class SettingRow extends StatelessWidget {
   const SettingRow({
     super.key,
@@ -358,7 +358,7 @@ class _SaveOnDoneFieldState extends State<SaveOnDoneField> {
 }
 
 // ---------------------------------------------------------------------------
-// Formatting (apps/desktop/src/lib/format.ts)
+// Formatting (as on desktop)
 // ---------------------------------------------------------------------------
 
 /// The app layer reports some times in Unix seconds and some in ms.

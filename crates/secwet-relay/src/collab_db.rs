@@ -1,5 +1,5 @@
-//! PostgreSQL queries for device revocation and master key rotation (M7) and
-//! for collaboration: members, invitations, grants and branch keys (M8).
+//! PostgreSQL queries for device revocation and master key rotation and
+//! for collaboration: members, invitations, grants and branch keys.
 //!
 //! Every value stored here is either an identifier, a hash, a public key, a
 //! signed statement or client-side ciphertext. Nothing is plaintext.

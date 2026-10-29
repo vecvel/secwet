@@ -1,6 +1,5 @@
-// Role and permission helpers for member mode, ported 1:1 from the desktop
-// (apps/desktop/src/lib/access.ts, docs/m7-m8-architecture.md §4). Pure
-// functions over plain data so they can be unit tested.
+// Role and permission helpers for member mode, ported 1:1 from the desktop.
+// Pure functions over plain data so they can be unit tested.
 import '../../core/models.dart';
 
 /// Where an action happens, from the space down. Leave deeper levels unset

@@ -18,7 +18,6 @@ interface Props {
 
 /**
  * Strips HTML tags while preserving meaningful document structure.
- * Authoritative: IMPLEMENTATION.md §7 F5c & §9.2(4).
  */
 export function extractPlainTextFromHtml(html: string): string {
   if (!html) return "";

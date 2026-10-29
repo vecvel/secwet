@@ -1,4 +1,4 @@
-//! CLI commands for key rotation (F16) and collaboration (F19):
+//! CLI commands for key rotation and collaboration:
 //! `secwet key`, `secwet member`, `secwet space share`.
 
 use clap::{Args, Subcommand};
@@ -8,7 +8,7 @@ use secwet_proto::{TreeNode, TreeRole};
 use uuid::Uuid;
 
 fn client(secwet: &Secwet) -> Result<RelayClient> {
-    // F13: a Free store never contacts the relay.
+    // A Free store never contacts the relay.
     secwet.ensure_relay_allowed(secwet_core::RelayOp::Entitlement)?;
     Ok(RelayClient::new(secwet.relay_url()?, secwet.device_id().to_string()))
 }

@@ -1,6 +1,4 @@
-//! Empirical adversarial tests for secwet-core storage and migration (Milestone 1).
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.1, §5.2, §11.2, and `ORIGINAL_REQUEST.md`.
+//! Empirical adversarial tests for secwet-core storage and migration.
 //!
 //! Evaluates:
 //! 1. Migration `0002_flexible_organization.sql` on a database with existing v1 schema and records:
@@ -2465,7 +2463,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
 }
 
 // ============================================================================
-// 6. Milestone 2 Challenger 2: Adversarial Legacy v1 Migration & Zeroization
+// 6. Challenger 2: Adversarial Legacy v1 Migration & Zeroization
 // ============================================================================
 
 #[derive(serde::Serialize)]

@@ -14,7 +14,7 @@ import 'item_screen.dart';
 import 'space_switcher.dart';
 import 'workspace_model.dart';
 
-/// The Groups tab: the desktop sidebar as a screen (layout/Sidebar.tsx) on
+/// The Groups tab: the desktop sidebar as a screen on
 /// the sidebar color. Space switcher, then each group of the active space
 /// with its entries, then New. Group and entry screens push inside the tab.
 class GroupsScreen extends StatefulWidget {

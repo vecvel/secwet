@@ -1,4 +1,4 @@
-//! CLI commands for device management (F14).
+//! CLI commands for device management.
 
 use clap::{Args, Subcommand};
 use secwet_core::secwet::Secwet;

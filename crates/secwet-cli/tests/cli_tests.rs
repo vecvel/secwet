@@ -592,7 +592,7 @@ fn cli_concurrency_with_open_secwet() {
 }
 
 // =========================================================================
-// Milestone 3: Item and Zero-Environment Integration Tests
+// Item and Zero-Environment Integration Tests
 // =========================================================================
 
 #[test]

@@ -35,11 +35,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/v1/pairing", post(handlers::start_pairing))
         .route("/v1/pairing/{id}", get(handlers::get_pairing_status))
         .route("/v1/pairing/{id}/approve", post(handlers::approve_pairing))
-        // M7: devices, revocation, master key rotation
+        // Devices, revocation, master key rotation
         .route("/v1/secwets/{id}/devices", get(collab::list_devices))
         .route("/v1/secwets/{id}/devices/{device_id}/revoke", post(collab::revoke_device))
         .route("/v1/secwets/{id}/keys", post(collab::rotate_keys).get(collab::get_keys))
-        // M8: access, members, invitations, branch keys
+        // Access, members, invitations, branch keys
         .route("/v1/secwets/{id}/access", get(collab::get_access))
         .route("/v1/secwets/{id}/members", get(collab::list_members))
         .route("/v1/secwets/{id}/invitations", post(collab::create_invitation))

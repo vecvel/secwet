@@ -1,4 +1,4 @@
-//! CLI integration tests for device management and pairing commands (F14).
+//! CLI integration tests for device management and pairing commands.
 
 use assert_cmd::Command;
 use predicates::prelude::*;

@@ -1,6 +1,5 @@
 //! Structured error taxonomy shared by every host.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §9.1 and §10.
 //! Every app-layer call returns `Result<T, UiError>`; hosts serialize it as is
 //! (the desktop webview receives it as the rejected Promise value).
 
@@ -112,7 +111,7 @@ impl From<secwet_core::Error> for UiError {
             }
             secwet_core::Error::Storage => UiError::new("storage_error", None, "Storage error."),
             secwet_core::Error::Crypto => {
-                // §10: "Crypto failures say only 'This item could not be decrypted.' and are logged as a code with the record id, never with data."
+                // "Crypto failures say only 'This item could not be decrypted.' and are logged as a code with the record id, never with data."
                 UiError::new("crypto_error", None, "This item could not be decrypted.")
             }
             secwet_core::Error::Unimplemented(msg) => UiError::new(

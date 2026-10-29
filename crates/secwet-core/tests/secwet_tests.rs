@@ -1,6 +1,4 @@
 //! Secwet lifecycle acceptance tests.
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F1, F2), §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secwet_core::keys::{KeyStore, MemoryStore, SecretVec};
 use secwet_core::secwet::Settings;

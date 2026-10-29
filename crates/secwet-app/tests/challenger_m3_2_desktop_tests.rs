@@ -1,4 +1,4 @@
-//! Challenger Adversarial Integration Test Suite for Milestone M3-2 Desktop Tauri IPC.
+//! Challenger Adversarial Integration Test Suite for Desktop Tauri IPC.
 //!
 //! Scope:
 //! 1. Comprehensive verification that ALL recovery and export commands strictly reject calls

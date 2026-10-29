@@ -1,5 +1,5 @@
 // Key-value parser for pasted environment files and credential blocks, the
-// same rules as the desktop lib/secretParser.ts:
+// same rules as the desktop:
 // KEY=VALUE, KEY: VALUE, quoted keys and values, ";" and "," record
 // separators outside quotes, "#" and "//" comments, "export " prefixes.
 

@@ -1,6 +1,6 @@
 //! Comprehensive Sync Engine Integration Test Suite for Secwet Relay Server.
 //!
-//! Validates (docs/IMPLEMENTATION.md §15.1–§15.6, M6):
+//! Validates:
 //! 1. `test_sync_unentitled_free_tier_rejected`: Free workspace sync attempts are strictly rejected.
 //! 2. `test_sync_push_events_monotonic_gap_rejected`: Relay rejects non-monotonic device sequence numbers.
 //! 3. `test_sync_push_events_bad_signature_rejected`: Forged / corrupted event signatures are rejected.
@@ -584,7 +584,7 @@ async fn test_sync_snapshot_upload_and_download() {
         .await
         .expect("Register workspace");
 
-    // Relay-stored snapshots are Pro only (F13).
+    // Relay-stored snapshots are Pro only.
     secwet_relay::db::grant_entitlement(&pool, secwet_id, "pro", 5, None)
         .await
         .expect("Grant pro");

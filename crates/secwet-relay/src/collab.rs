@@ -1,7 +1,7 @@
-//! HTTP handlers for device revocation and master key rotation (M7) and for
-//! collaboration: members, invitations, tree-wise grants and branch keys (M8).
+//! HTTP handlers for device revocation and master key rotation and for
+//! collaboration: members, invitations, tree-wise grants and branch keys.
 //!
-//! Contract: docs/m7-m8-architecture.md §2, §3, §6, §7, §9. Every decision
+//! Every decision
 //! that destroys data or grants access is backed by an Ed25519 signature the
 //! relay verifies here and the clients verify again.
 
@@ -222,7 +222,7 @@ async fn member_dto(
 }
 
 // ============================================================================
-// M7: devices and revocation
+// Devices and revocation
 // ============================================================================
 
 /// GET /v1/secwets/{id}/devices
@@ -302,7 +302,7 @@ pub async fn revoke_device(
 }
 
 // ============================================================================
-// M7: master key rotation
+// Master key rotation
 // ============================================================================
 
 /// POST /v1/secwets/{id}/keys
@@ -398,7 +398,7 @@ pub async fn get_keys(
 }
 
 // ============================================================================
-// M8: access, members, invitations
+// Access, members, invitations
 // ============================================================================
 
 /// GET /v1/secwets/{id}/access
@@ -715,7 +715,7 @@ pub async fn accept_invitation(
 }
 
 // ============================================================================
-// M8: branch keys
+// Branch keys
 // ============================================================================
 
 /// POST /v1/secwets/{id}/spaces/{space_id}/keys

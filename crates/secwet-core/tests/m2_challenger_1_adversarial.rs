@@ -1,4 +1,4 @@
-//! Empirical Challenger 1 Adversarial Test Suite for Milestone 2.
+//! Empirical Challenger 1 Adversarial Test Suite.
 //!
 //! Scope:
 //! 1. File upload boundary: 50 MiB (52,428,800 bytes allowed), 50 MiB + 1 byte (rejected),

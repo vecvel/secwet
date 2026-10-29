@@ -9,8 +9,6 @@
 //! - Every buffer handed out is zeroized when freed ([`secwet_ffi_free`]).
 //! - Change notifications reach Dart through one callback
 //!   ([`secwet_ffi_set_event_callback`]).
-//!
-//! The protocol is documented in `docs/mobile-ffi.md`.
 
 #[cfg(target_os = "android")]
 mod android;

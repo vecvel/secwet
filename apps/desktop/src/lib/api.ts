@@ -2,7 +2,7 @@
  * apps/desktop/src/lib/api.ts
  *
  * Typed Tauri 2 IPC client and seamless browser mock fallback.
- * Authoritative: docs/IMPLEMENTATION.md §9.1, §9.2, and secwet-proto.
+ * The types mirror the secwet-proto wire contract.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -169,7 +169,7 @@ export interface RelayStatusDto {
   pending_outbox_count: number;
 }
 
-/** Plan of this Secwet (F13). `paused` means Pro ended: sync is paused, local data is untouched. */
+/** Plan of this Secwet. `paused` means Pro ended: sync is paused, local data is untouched. */
 export type PlanState = "free" | "pro" | "paused";
 
 export interface PlanStatusDto {
@@ -353,7 +353,7 @@ export interface ExportSummaryDto {
 }
 
 // ----------------------------------------------------------------------------
-// M7: revocation, key rotation, link status (docs/m7-m8-architecture.md §2, §3, §10)
+// Revocation, key rotation, link status
 // ----------------------------------------------------------------------------
 
 export interface RevokeResultDto {
@@ -384,7 +384,7 @@ export interface LinkStatusDto {
 }
 
 // ----------------------------------------------------------------------------
-// M8: members, roles, invitations (docs/m7-m8-architecture.md §4, §7, §10)
+// Members, roles, invitations
 // ----------------------------------------------------------------------------
 
 export type TreeRole = "admin" | "editor" | "viewer" | "no_access";
@@ -1731,7 +1731,7 @@ export class BrowserMockBackend {
   }
 
   // --------------------------------------------------------------------------
-  // M7: key rotation and link status (browser preview only)
+  // Key rotation and link status (browser preview only)
   // --------------------------------------------------------------------------
 
   private keyState: KeyStatusDto = {
@@ -1782,7 +1782,7 @@ export class BrowserMockBackend {
   }
 
   // --------------------------------------------------------------------------
-  // M8: members and invitations (browser preview only)
+  // Members and invitations (browser preview only)
   // --------------------------------------------------------------------------
 
   private members: MemberView[] = [
@@ -2720,7 +2720,7 @@ export const api = {
     return mockBackend.projectDelete(id);
   },
 
-  // 11. Devices & Pairing (F14)
+  // 11. Devices & Pairing
   devicesList: async (): Promise<DeviceView[]> => {
     if (isTauri()) {
       return invoke<DeviceView[]>("devices_list");
@@ -2736,7 +2736,7 @@ export const api = {
     return mockBackend.deviceRevoke(deviceId, wipe);
   },
 
-  // 11a. Key rotation and link status (M7)
+  // 11a. Key rotation and link status
   keyStatus: async (): Promise<KeyStatusDto> => {
     if (isTauri()) {
       return invoke<KeyStatusDto>("key_status");
@@ -2758,7 +2758,7 @@ export const api = {
     return mockBackend.linkStatus();
   },
 
-  // 11c. Members, roles and invitations (M8)
+  // 11c. Members, roles and invitations
   myAccess: async (): Promise<AccessView> => {
     if (isTauri()) {
       return invoke<AccessView>("my_access");
@@ -3004,7 +3004,7 @@ export const api = {
     return mockBackend.relaySetUrl(url);
   },
 
-  // 13b. Plans (F13)
+  // 13b. Plans
   /** Cached plan. Never contacts the relay. */
   planStatus: async (): Promise<PlanStatusDto> => {
     if (isTauri()) {

@@ -1,9 +1,7 @@
 //! Tauri 2 IPC commands for Secwet Desktop.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §9.1 and `PROJECT.md`.
-//!
 //! Every command is a thin wrapper over `secwet_app::AppState` (shared with
-//! the mobile hosts, see `docs/app-layer.md`). Only desktop pieces live here:
+//! the mobile hosts). Only desktop pieces live here:
 //! the native clipboard, file dialogs, biometrics and the CLI installer.
 
 use std::path::PathBuf;
@@ -631,7 +629,7 @@ pub fn relay_set_url(state: State<'_, AppState>, url: String) -> Result<(), UiEr
 }
 
 // ============================================================================
-// Plans (F13)
+// Plans
 // ============================================================================
 
 #[tauri::command]
@@ -650,7 +648,7 @@ pub async fn plan_activate(state: State<'_, AppState>) -> Result<secwet_app::Pla
 }
 
 // ============================================================================
-// 14. Devices & pairing (F14)
+// 14. Devices & pairing
 // ============================================================================
 
 #[tauri::command]
@@ -685,7 +683,7 @@ pub fn pairing_cancel(state: State<'_, AppState>) -> Result<(), UiError> {
 }
 
 // ============================================================================
-// Sync (M6)
+// Sync
 // ============================================================================
 
 #[tauri::command]

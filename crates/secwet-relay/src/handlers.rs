@@ -36,7 +36,7 @@ pub struct AppState {
     pub limiter: RateLimitManager,
     pub stream_tx: tokio::sync::broadcast::Sender<(Uuid, u64)>,
     /// Device ids revoked on this relay instance; open streams of those
-    /// devices receive `{"type":"revoked"}` and are closed (F16).
+    /// devices receive `{"type":"revoked"}` and are closed.
     pub revoke_tx: tokio::sync::broadcast::Sender<String>,
 }
 
@@ -469,7 +469,7 @@ pub async fn get_pairing_result(
 }
 
 // ============================================================================
-// Sync Handlers (M6)
+// Sync Handlers
 // ============================================================================
 
 /// POST /v1/secwets/{id}/events
@@ -569,7 +569,7 @@ pub async fn ack_events(
 }
 
 /// The workspace snapshot is sealed under the master key, which member
-/// devices never hold (F19 §6).
+/// devices never hold.
 fn require_snapshot_access(device: &AuthenticatedDevice) -> Result<(), RelayApiError> {
     if device.member_id.is_some() {
         return Err(RelayApiError::Forbidden(
@@ -593,7 +593,7 @@ pub async fn upload_snapshot(
         ));
     }
     require_snapshot_access(&auth_device)?;
-    // Storing on the relay is Pro only (F13), like push.
+    // Storing on the relay is Pro only, like push.
     db::require_active_pro(&state.pool, secwet_id).await?;
 
     db::save_snapshot(
@@ -644,7 +644,7 @@ pub async fn stream_events(
         ));
     }
 
-    // Live sync is Pro only (F13); a paused workspace pulls on demand.
+    // Live sync is Pro only; a paused workspace pulls on demand.
     db::require_active_pro(&state.pool, secwet_id).await?;
 
     // Subscribe before the final revocation check so a revocation landing in

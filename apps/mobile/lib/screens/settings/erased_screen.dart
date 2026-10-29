@@ -6,7 +6,7 @@ import '../../theme/secwet_tokens.dart';
 import '../../widgets/controls.dart';
 import '../../widgets/icon.dart';
 
-/// Shown after a remote wipe (M7): this device was revoked with "erase", so
+/// Shown after a remote wipe: this device was revoked with "erase", so
 /// the app layer crypto-shredded its keys and deleted the local store.
 class ErasedScreen extends StatelessWidget {
   const ErasedScreen({super.key});

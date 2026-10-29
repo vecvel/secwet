@@ -1,4 +1,4 @@
-//! Challenger Adversarial Integration Test Suite for Milestone M3-2.
+//! Challenger Adversarial Integration Test Suite.
 //!
 //! Verifies:
 //! 1. `secwet export` strictly rejects unencrypted `dotenv` export without `--plaintext`

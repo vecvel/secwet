@@ -10,7 +10,7 @@ import '../../widgets/overlays.dart';
 import 'settings_screen.dart';
 import 'settings_widgets.dart';
 
-/// Settings > Plan (F13): the real plan from the relay entitlement, cached
+/// Settings > Plan: the real plan from the relay entitlement, cached
 /// in the app layer. Free never contacts the relay except "Check for Pro".
 class PlanTab extends StatefulWidget {
   const PlanTab({super.key, required this.model});
@@ -169,7 +169,7 @@ const _plans = [
   ),
 ];
 
-/// Free and Pro side by side (desktop PlanDialog). [reason] explains why it
+/// Free and Pro side by side, as on desktop. [reason] explains why it
 /// opened, for example when pairing needs Pro.
 Future<void> showPlanDialog(BuildContext context, {required PlanStatus plan, String? reason}) {
   return showSecwetDialog<void>(context, builder: (context) {

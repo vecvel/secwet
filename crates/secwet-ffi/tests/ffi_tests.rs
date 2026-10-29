@@ -483,7 +483,7 @@ fn recovery_key_export_and_restore() {
     );
 }
 
-/// F13 through the phone's JSON contract: a Free store answers every relay
+/// Plans through the phone's JSON contract: a Free store answers every relay
 /// command with `needs_pro` and never opens a connection, even with a relay
 /// address set. The relay is a listener that counts connections.
 #[test]

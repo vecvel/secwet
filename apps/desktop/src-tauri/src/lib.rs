@@ -145,7 +145,7 @@ pub fn run() {
             commands::relay_status,
             commands::relay_register,
             commands::relay_set_url,
-            // Plans (F13)
+            // Plans
             commands::plan_status,
             commands::plan_refresh,
             commands::plan_activate,

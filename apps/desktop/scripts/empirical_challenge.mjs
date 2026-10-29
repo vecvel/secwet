@@ -2,7 +2,7 @@
  * apps/desktop/scripts/empirical_challenge.mjs
  *
  * Empirical verification and adversarial stress-testing harness for
- * Milestone 2B: Desktop Frontend State & Isolation.
+ * desktop frontend state and isolation.
  *
  * Runs self-contained inside Node.js using Vite's ssrLoadModule.
  */
@@ -673,7 +673,7 @@ async function runSuite() {
   );
 
   // ===========================================================================
-  // SECTION 7: Milestone 3 IPC & CLI Parity Audit
+  // SECTION 7: IPC & CLI Parity Audit
   // ===========================================================================
 
   suite.push(
@@ -768,7 +768,7 @@ async function runSuite() {
   );
 
   // ===========================================================================
-  // SECTION 8: Milestone M3-3 Desktop UI Integration & UI/UX Audit Fixes
+  // SECTION 8: Desktop UI Integration & UI/UX Audit Fixes
   // ===========================================================================
 
   suite.push(

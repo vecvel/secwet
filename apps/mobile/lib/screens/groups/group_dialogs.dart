@@ -8,7 +8,7 @@ import 'common.dart';
 import 'space_switcher.dart';
 import 'workspace_model.dart';
 
-/// New Group dialog (desktop NewGroupDialog): name and parent space. Resolves
+/// New Group dialog: name and parent space. Resolves
 /// with the created group.
 Future<Group?> showNewGroupDialog(BuildContext context, WorkspaceModel model) =>
     showSecwetDialog<Group>(context, builder: (_) => _NewGroupDialog(model: model));
@@ -90,7 +90,7 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
   }
 }
 
-/// New entry dialog (desktop NewItemDialog): group, name, description; no
+/// New entry dialog: group, name, description; no
 /// environments. Resolves with the created item.
 Future<Item?> showNewItemDialog(
   BuildContext context,
@@ -198,7 +198,7 @@ class _NewItemDialogState extends State<_NewItemDialog> {
   }
 }
 
-/// Rename an entry and its description (desktop EditItemDialog), with the
+/// Rename an entry and its description, with the
 /// duplicate-name check inside its group.
 Future<void> showEditItemDialog(BuildContext context, WorkspaceModel model, Item item) =>
     showSecwetDialog<void>(context, builder: (_) => _EditItemDialog(model: model, item: item));

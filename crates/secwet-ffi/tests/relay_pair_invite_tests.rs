@@ -1,6 +1,6 @@
 //! The phone's Settings and Members flows end to end through the mobile
 //! command contract (`{cmd, args}` JSON into `Bridge::handle`, exactly what
-//! Dart sends): pairing two stores, an invite join, and M7 remote wipe and
+//! Dart sends): pairing two stores, an invite join, and remote wipe and
 //! sync-only revoke. Real relay router over HTTP and the Docker Postgres
 //! (`DATABASE_URL`, default postgres://secwet:secwet@localhost:5432/secwet_relay).
 
@@ -348,7 +348,7 @@ fn pairing_two_stores_then_remote_wipe_and_sync_only_revoke() {
     );
     assert_eq!(ok(&b, "my_access", json!({}))["is_owner"], true);
 
-    // Sync-only revoke: the phone keeps a read-only copy (M7 archive mode).
+    // Sync-only revoke: the phone keeps a read-only copy (archive mode).
     let r = ok(
         &a,
         "device_revoke",

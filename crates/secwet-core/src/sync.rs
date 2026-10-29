@@ -1,6 +1,4 @@
-//! Zero-Knowledge Event-Driven Synchronization Engine (F15).
-//!
-//! Authoritative source: docs/IMPLEMENTATION.md §15.1 - §15.6
+//! Zero-Knowledge Event-Driven Synchronization Engine.
 //!
 //! Architectural Invariants:
 //! 1. All entity changes on Pro workspaces produce signed, encrypted `SignedEvent` envelopes.
@@ -59,7 +57,7 @@ pub fn create_signed_event(
 }
 
 /// Creates and signs an event. `scope` is set for events in collaborative
-/// spaces (F19); `k_evt` is then the branch key named by the scope and
+/// spaces; `k_evt` is then the branch key named by the scope and
 /// `key_epoch` the branch epoch.
 #[allow(clippy::too_many_arguments)]
 pub fn create_signed_event_scoped(
@@ -378,7 +376,7 @@ pub fn set_sync_cursor(conn: &Connection, cursor: u64) -> Result<(), Error> {
 
 /// Applies a verified and decrypted event mutation with Last-Writer-Wins (LWW) conflict resolution.
 ///
-/// Invariant (§15.4):
+/// Invariant:
 /// Stored record is replaced ONLY if `(event.lamport, event.origin_device) > (stored.lamport, stored.origin_device)`
 /// lexicographically.
 ///
