@@ -51,14 +51,14 @@ class SecwetDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final media = MediaQuery.of(context);
-    // The home indicator area, unless the keyboard already covers it. The
-    // last part of the sheet (footer, body or header) clears it.
-    final homeInset = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
+    // The keyboard, or else the home indicator area. The sheet reaches the
+    // bottom of the screen and its last part (footer, body or header) pads
+    // past this, so the sheet's own color shows around the keyboard's
+    // rounded corners instead of the dimmed page.
+    final homeInset = media.viewInsets.bottom > 0 ? media.viewInsets.bottom : media.padding.bottom;
     return Material(
       type: MaterialType.transparency,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
-        child: Align(
+      child: Align(
           alignment: Alignment.bottomCenter,
           child: Container(
             constraints: BoxConstraints(maxHeight: media.size.height - media.padding.top - SecwetSpace.s8),
@@ -99,7 +99,7 @@ class SecwetDialog extends StatelessWidget {
                         SecwetSpace.s5,
                         SecwetSpace.s2,
                         SecwetSpace.s5,
-                        SecwetSpace.s3 + (actions.isEmpty ? homeInset : 0),
+                        SecwetSpace.s5 + (actions.isEmpty ? homeInset : 0),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,7 +139,6 @@ class SecwetDialog extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }

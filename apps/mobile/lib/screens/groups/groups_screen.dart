@@ -61,7 +61,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
       listenable: model,
       builder: (context, _) {
         final groups = model.visibleGroups;
-        return ShellPage(
+        // The sidebar color is a surface: its switcher and New row use the
+        // page background so they stand out, like the inputs in Settings.
+        return InputSurface(
+          child: ShellPage(
           background: p.sidebarBg,
           topBar: const TopBar(title: 'Groups'),
           children: [
@@ -79,6 +82,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ),
             if (model.canCreateGroupHere) _NewRow(onTap: _newGroup),
           ],
+          ),
         );
       },
     );
@@ -193,6 +197,7 @@ class _NewRow extends StatelessWidget {
           height: SecwetControl.touchTarget,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
+            color: InputSurface.background(context),
             border: Border.all(color: p.borderStrong),
             borderRadius: BorderRadius.circular(SecwetRadius.control),
           ),

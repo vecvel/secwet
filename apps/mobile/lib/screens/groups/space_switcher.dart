@@ -93,10 +93,6 @@ class _SpaceSheet extends StatelessWidget {
                     onTap: () => pick(s.id),
                     menu: _menuFor(context, s),
                   ),
-              ],
-            ),
-            SecwetCard(
-              children: [
                 _SpaceRow(
                   icon: SecwetIcons.globe,
                   name: 'Global',

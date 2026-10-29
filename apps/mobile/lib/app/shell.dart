@@ -164,7 +164,7 @@ class _DepthObserver extends NavigatorObserver {
 }
 
 /// The mobile bottom bar (apps/desktop/src/layout/BottomTabs.module.css):
-/// three equal tabs on one baseline, no top line, no blur. From 32 px above
+/// three equal tabs on one baseline, no top line, no blur. From 64 px above
 /// the bar the color deepens from the page background to the sunken shade
 /// and the opacity rises along one smootherstep curve, both full at 80%.
 class BottomTabs extends StatelessWidget {
@@ -176,7 +176,7 @@ class BottomTabs extends StatelessWidget {
   /// The page color behind the bar (sidebar color on the Groups list).
   final Color background;
 
-  static const _fadeAbove = 32.0;
+  static const _fadeAbove = 64.0;
 
   // smootherstep(t) for t = 0, 0.1, ... 1.0, as in the CSS stops.
   static const _alphas = [0.0, 0.009, 0.058, 0.163, 0.317, 0.5, 0.683, 0.837, 0.942, 0.991, 1.0];

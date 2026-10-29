@@ -291,16 +291,16 @@ class _Toolbar extends StatelessWidget {
     final p = context.palette;
     final block = controller.currentBlock;
     Widget tool(String label, String semantics, VoidCallback onTap, {bool active = false, TextStyle? style, bool enabled = true}) {
-      return Opacity(
-        opacity: enabled ? 1 : 0.4,
-        child: Tappable(
-          label: semantics,
-          selected: active,
-          onTap: enabled ? onTap : null,
-          child: TouchTarget(
+      return TouchTarget(
+        child: Opacity(
+          opacity: enabled ? 1 : 0.4,
+          child: Tappable(
+            label: semantics,
+            selected: active,
+            onTap: enabled ? onTap : null,
             child: Container(
-              height: SecwetControl.touchTarget,
-              constraints: const BoxConstraints(minWidth: SecwetControl.touchTarget),
+              height: SecwetControl.height,
+              constraints: const BoxConstraints(minWidth: SecwetControl.height),
               padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s2),
               alignment: Alignment.center,
               decoration: BoxDecoration(

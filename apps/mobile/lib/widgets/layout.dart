@@ -41,10 +41,13 @@ class SecwetCard extends StatelessWidget {
       if (i > 0 && padding == null) rows.add(Container(height: 1, color: p.borderSeparator));
       rows.add(child);
     }
+    // A card inside a dialog or sheet (a list of choices) uses the page
+    // background, so it reads as a list rather than blending into the panel.
+    final nested = context.dependOnInheritedWidgetOfExactType<InputSurface>() != null;
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: p.surface,
+        color: nested ? p.bg : p.surface,
         border: Border.all(color: p.border),
         borderRadius: BorderRadius.circular(SecwetRadius.card),
       ),

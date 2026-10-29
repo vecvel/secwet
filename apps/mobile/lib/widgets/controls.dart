@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../theme/secwet_theme.dart';
@@ -27,18 +28,34 @@ class Tappable extends StatelessWidget {
 }
 
 /// Gives a smaller control a tap area of at least 44 x 44 (the approved touch
-/// target, like the desktop's coarse-pointer min-height). The control keeps
-/// its own size and sits centered in the area.
-class TouchTarget extends StatelessWidget {
-  const TouchTarget({super.key, required this.child});
-
-  final Widget child;
+/// target, like the desktop's coarse-pointer min-height) without taking any
+/// layout space: the control lays out at its own size, so spacing around it
+/// is exactly what the layout says, and taps just outside it still land on
+/// it. Wrap it outside the control's [Tappable].
+class TouchTarget extends SingleChildRenderObjectWidget {
+  const TouchTarget({super.key, required Widget super.child});
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: SecwetControl.touchTarget, minHeight: SecwetControl.touchTarget),
-        child: Align(widthFactor: 1, heightFactor: 1, child: child),
-      );
+  RenderObject createRenderObject(BuildContext context) => _RenderTouchTarget();
+}
+
+class _RenderTouchTarget extends RenderProxyBox {
+  Rect get _area {
+    final dx = ((SecwetControl.touchTarget - size.width) / 2).clamp(0.0, double.infinity);
+    final dy = ((SecwetControl.touchTarget - size.height) / 2).clamp(0.0, double.infinity);
+    return Rect.fromLTRB(-dx, -dy, size.width + dx, size.height + dy);
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!_area.contains(position)) return false;
+    // Hand the child a point inside its own bounds (an edge counts as
+    // outside) so its gesture detector takes the tap.
+    final inside = Offset(position.dx.clamp(0.5, size.width - 0.5), position.dy.clamp(0.5, size.height - 0.5));
+    final hit = child?.hitTest(result, position: inside) ?? false;
+    if (hit) result.add(BoxHitTestEntry(this, position));
+    return hit;
+  }
 }
 
 /// 24 px moss tile holding an icon or an initial; filled when selected. The
@@ -81,7 +98,7 @@ enum ButtonVariant { primary, secondary, tertiary, danger }
 
 /// Desktop Button: primary is deep moss with light text in both themes,
 /// danger deep red, secondary a quiet tinted fill, tertiary accent text.
-/// 44 px tall (touch), or 32 px when [small] with a 44 px tap area.
+/// 32 px tall like the desktop control height, in a 44 px tap area.
 class SecwetButton extends StatelessWidget {
   const SecwetButton({
     super.key,
@@ -126,14 +143,14 @@ class SecwetButton extends StatelessWidget {
         ),
       ],
     );
-    return Opacity(
-      opacity: onPressed == null ? 0.5 : 1,
-      child: Tappable(
-        onTap: onPressed,
-        label: label,
-        child: TouchTarget(
+    return TouchTarget(
+      child: Opacity(
+        opacity: onPressed == null ? 0.5 : 1,
+        child: Tappable(
+          onTap: onPressed,
+          label: label,
           child: Container(
-            height: SecwetControl.touchTarget,
+            height: SecwetControl.height,
             padding: EdgeInsets.symmetric(horizontal: variant == ButtonVariant.tertiary ? SecwetSpace.s1 : SecwetSpace.s3),
             decoration: BoxDecoration(
               color: bg,
@@ -148,7 +165,7 @@ class SecwetButton extends StatelessWidget {
   }
 }
 
-/// Square icon-only button, 44 px like every button on touch screens.
+/// Square icon-only button, 32 px like every button, in a 44 px tap area.
 class SecwetIconButton extends StatelessWidget {
   const SecwetIconButton({
     super.key,
@@ -170,13 +187,13 @@ class SecwetIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    const size = SecwetControl.touchTarget;
-    return Opacity(
-      opacity: onPressed == null ? 0.5 : 1,
-      child: Tappable(
-        onTap: onPressed,
-        label: label,
-        child: TouchTarget(
+    const size = SecwetControl.height;
+    return TouchTarget(
+      child: Opacity(
+        opacity: onPressed == null ? 0.5 : 1,
+        child: Tappable(
+          onTap: onPressed,
+          label: label,
           child: Container(
             width: size,
             height: size,
