@@ -1,9 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-import '../theme/brand_mark.g.dart';
 import '../theme/icon_shapes.dart';
 import '../theme/secwet_icons.g.dart';
-import '../theme/svg_path.dart';
 
 export '../theme/secwet_icons.g.dart' show SecwetIcons;
 
@@ -64,52 +62,4 @@ class _IconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_IconPainter old) => old.icon != icon || old.color != color;
-}
-
-/// Splash Twin mark with no background, in [color] (the accent by default at
-/// the call sites). Uses the optical small cut at 32 px and below.
-class BrandMark extends StatelessWidget {
-  const BrandMark({super.key, this.size = 26, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: size,
-      child: CustomPaint(painter: _BrandPainter(size <= BrandMarkPaths.smallMaxPx, color)),
-    );
-  }
-}
-
-class _BrandPainter extends CustomPainter {
-  _BrandPainter(this.small, this.color);
-
-  final bool small;
-  final Color color;
-
-  static final _paths = <bool, (Path, Path)>{};
-
-  static (Path, Path) _get(bool small) => _paths.putIfAbsent(small, () {
-        Path p(String d) => parseSvgPath(d)..fillType = PathFillType.evenOdd;
-        return small
-            ? (p(BrandMarkPaths.smallBack), p(BrandMarkPaths.smallFront))
-            : (p(BrandMarkPaths.largeBack), p(BrandMarkPaths.largeFront));
-      });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final (back, front) = _get(small);
-    canvas.save();
-    // viewBox "12 12 40 40"
-    canvas.scale(size.width / 40);
-    canvas.translate(-12, -12);
-    canvas.drawPath(back, Paint()..color = color.withValues(alpha: color.a * BrandMarkPaths.backOpacity));
-    canvas.drawPath(front, Paint()..color = color);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_BrandPainter old) => old.small != small || old.color != color;
 }

@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:secwet_mobile/theme/brand_mark.g.dart';
 import 'package:secwet_mobile/theme/secwet_icons.g.dart';
 import 'package:secwet_mobile/theme/svg_path.dart';
 
@@ -40,13 +39,6 @@ void main() {
         expect(b.isEmpty && b.width == 0 && b.height == 0, isFalse, reason: icon.name);
         expect(b.left >= 0 && b.top >= 0 && b.right <= 20 && b.bottom <= 20, isTrue, reason: '${icon.name} $b');
       }
-    }
-  });
-
-  test('brand mark fits its 40 pt box at (12, 12)', () {
-    for (final d in [BrandMarkPaths.largeBack, BrandMarkPaths.largeFront, BrandMarkPaths.smallBack, BrandMarkPaths.smallFront]) {
-      final b = parseSvgPath(d).getBounds();
-      expect(b.left >= 11.9 && b.top >= 11.9 && b.right <= 52.1 && b.bottom <= 52.1, isTrue, reason: '$b');
     }
   });
 }

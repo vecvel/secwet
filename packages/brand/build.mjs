@@ -5,7 +5,7 @@
 //   assets/                         icon.png, icon-dark.png, icon-light.png, tile-dark.svg, tile-light.svg, mark-dark.svg, mark-light.svg, mark.svg, favicon.svg
 //   apps/desktop/public/            favicon.svg
 //   apps/desktop/src/components/    brandMark.generated.ts
-//   apps/mobile/lib/theme/          brand_mark.g.dart, secwet_icons.g.dart (flutter.mjs)
+//   apps/mobile/lib/theme/          secwet_icons.g.dart (flutter.mjs)
 //   apps/desktop/src-tauri/icons/   icon.icns, icon.ico, 32x32, 64x64, 128x128, 128x128@2x, icon.png, Windows Store logos
 //   apps/mobile/ios/.../AppIcon     1024 default, dark and tinted + Contents.json
 //   apps/mobile/android/.../res     adaptive icon (foreground, monochrome, background) + legacy mipmaps
