@@ -167,7 +167,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             entries: [MenuEntry('Plain text', icon: SecwetIcons.file, onSelected: _copyPlain)],
           ),
           if (note != null && widget.canDelete)
-            SecwetIconButton(icon: SecwetIcons.trash, label: 'Delete note', small: true, onPressed: _delete),
+            SecwetIconButton(icon: SecwetIcons.trash, label: 'Delete note', onPressed: _delete),
         ],
       ),
       children: [
@@ -299,8 +299,8 @@ class _Toolbar extends StatelessWidget {
           onTap: enabled ? onTap : null,
           child: TouchTarget(
             child: Container(
-              height: SecwetControl.height,
-              constraints: const BoxConstraints(minWidth: SecwetControl.height),
+              height: SecwetControl.touchTarget,
+              constraints: const BoxConstraints(minWidth: SecwetControl.touchTarget),
               padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s2),
               alignment: Alignment.center,
               decoration: BoxDecoration(

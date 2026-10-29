@@ -362,7 +362,6 @@ class _ShareScreenState extends State<ShareScreen> {
               SecwetIconButton(
                 icon: SecwetIcons.info,
                 label: 'What the roles allow',
-                small: true,
                 onPressed: () => setState(() => _showRoles = !_showRoles),
               ),
             ],
@@ -523,7 +522,7 @@ class _Card extends StatelessWidget {
         border: Border.all(color: p.border),
         borderRadius: BorderRadius.circular(SecwetRadius.card),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+      child: InputSurface(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children)),
     );
   }
 }

@@ -283,7 +283,6 @@ class _SecretDialogState extends State<_SecretDialog> {
                       SecwetIconButton(
                         icon: SecwetIcons.trash,
                         label: 'Remove secret from batch',
-                        small: true,
                         onPressed: () => setState(() => _entries.removeAt(i).dispose()),
                       ),
                     ],
@@ -293,7 +292,6 @@ class _SecretDialogState extends State<_SecretDialog> {
                   controller: e.name,
                   hint: 'DATABASE_URL',
                   error: e.errorName,
-                  onDialog: true,
                   autofocus: i == 0 && !_editing,
                   autocorrect: false,
                   onChanged: (v) {
@@ -307,7 +305,6 @@ class _SecretDialogState extends State<_SecretDialog> {
                   controller: e.value,
                   hint: 'postgres://user:password@host:5432/db',
                   error: e.errorValue,
-                  onDialog: true,
                   multiline: true,
                   autocorrect: false,
                   onChanged: (v) {
@@ -321,7 +318,6 @@ class _SecretDialogState extends State<_SecretDialog> {
                   controller: e.note,
                   hint: 'Rotates every 90 days',
                   help: 'Optional. Encrypted with the secret.',
-                  onDialog: true,
                 ),
               ],
             ),
@@ -502,7 +498,6 @@ class _SecretUsageState extends State<_SecretUsage> {
                     label: _stopping ? 'Stopping...' : 'Stop process',
                     icon: SecwetIcons.stop,
                     variant: ButtonVariant.danger,
-                    small: true,
                     onPressed: _stopping ? null : _stop,
                   ),
                 ),

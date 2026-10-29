@@ -89,7 +89,6 @@ class SecwetButton extends StatelessWidget {
     this.onPressed,
     this.icon,
     this.variant = ButtonVariant.primary,
-    this.small = false,
     this.expand = false,
   });
 
@@ -97,7 +96,6 @@ class SecwetButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final SecwetIcons? icon;
   final ButtonVariant variant;
-  final bool small;
   final bool expand;
 
   @override
@@ -135,7 +133,7 @@ class SecwetButton extends StatelessWidget {
         label: label,
         child: TouchTarget(
           child: Container(
-            height: small ? SecwetControl.height : SecwetControl.touchTarget,
+            height: SecwetControl.touchTarget,
             padding: EdgeInsets.symmetric(horizontal: variant == ButtonVariant.tertiary ? SecwetSpace.s1 : SecwetSpace.s3),
             decoration: BoxDecoration(
               color: bg,
@@ -150,15 +148,13 @@ class SecwetButton extends StatelessWidget {
   }
 }
 
-/// Square icon-only button: 44 px (touch), or 32 px when [small] with a
-/// 44 px tap area.
+/// Square icon-only button, 44 px like every button on touch screens.
 class SecwetIconButton extends StatelessWidget {
   const SecwetIconButton({
     super.key,
     required this.icon,
     required this.label,
     this.onPressed,
-    this.small = false,
     this.color,
     this.filled = false,
   });
@@ -166,7 +162,6 @@ class SecwetIconButton extends StatelessWidget {
   final SecwetIcons icon;
   final String label;
   final VoidCallback? onPressed;
-  final bool small;
   final Color? color;
 
   /// Deep moss fill, like the desktop's primary icon button.
@@ -175,7 +170,7 @@ class SecwetIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final size = small ? SecwetControl.height : SecwetControl.touchTarget;
+    const size = SecwetControl.touchTarget;
     return Opacity(
       opacity: onPressed == null ? 0.5 : 1,
       child: Tappable(

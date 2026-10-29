@@ -100,7 +100,7 @@ class _SyncTabState extends State<SyncTab> {
             label: 'Free',
             tone: BadgeTone.accent,
             text: 'Sync comes with Pro. On Free, everything stays on this phone and Secwet never contacts the relay.',
-            action: SecwetButton(label: 'See plan', variant: ButtonVariant.tertiary, small: true, onPressed: widget.onShowPlan),
+            action: SecwetButton(label: 'See plan', variant: ButtonVariant.tertiary, onPressed: widget.onShowPlan),
           ),
         if (name == 'paused')
           SettingsNotice(
@@ -139,7 +139,6 @@ class _SyncTabState extends State<SyncTab> {
                 trailing: SecwetButton(
                   label: _registering ? 'Registering…' : 'Register',
                   variant: ButtonVariant.secondary,
-                  small: true,
                   onPressed: _registering || readOnly ? null : _register,
                 ),
               ),
@@ -168,7 +167,6 @@ class _SyncTabState extends State<SyncTab> {
               trailing: SecwetButton(
                 label: _syncing ? 'Syncing…' : 'Sync now',
                 variant: ButtonVariant.secondary,
-                small: true,
                 onPressed: _syncing || readOnly || name == 'free' || savedUrl.isEmpty ? null : _sync,
               ),
             ),

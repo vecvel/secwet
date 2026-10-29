@@ -121,7 +121,7 @@ class SelectControl<T> extends StatelessWidget {
             height: SecwetControl.touchTarget,
             padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s3),
             decoration: BoxDecoration(
-              color: p.surface,
+              color: InputSurface.background(context),
               border: Border.all(color: p.borderStrong),
               borderRadius: BorderRadius.circular(SecwetRadius.control),
             ),

@@ -7,6 +7,22 @@ import 'controls.dart';
 import 'icon.dart';
 
 /// Card with an optional tinted header; rows inside are split by separators.
+/// Marks a surface panel (card, dialog, sheet). Inputs inside it use the
+/// page background so they stand out from the panel; on the page they use
+/// the surface color. Same rule as the desktop `--input-bg`.
+class InputSurface extends InheritedWidget {
+  const InputSurface({super.key, required super.child});
+
+  /// Background for an input at [context].
+  static Color background(BuildContext context) {
+    final p = context.palette;
+    return context.dependOnInheritedWidgetOfExactType<InputSurface>() != null ? p.bg : p.surface;
+  }
+
+  @override
+  bool updateShouldNotify(InputSurface oldWidget) => false;
+}
+
 class SecwetCard extends StatelessWidget {
   const SecwetCard({super.key, this.title, this.headerTrailing, required this.children, this.padding});
 
@@ -33,9 +49,10 @@ class SecwetCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(SecwetRadius.card),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: InputSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           if (title != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -51,7 +68,8 @@ class SecwetCard extends StatelessWidget {
               ),
             ),
           if (padding != null) Padding(padding: padding!, child: Column(children: rows)) else ...rows,
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -200,14 +218,10 @@ class Crumb {
 /// logo, wordmark, status badge or helper text (docs/design-decisions.md,
 /// "Mobile unlock and header").
 class TopBar extends StatelessWidget {
-  const TopBar({super.key, required this.title, this.actions = const [], this.large = false, this.crumbs = const []});
+  const TopBar({super.key, required this.title, this.actions = const [], this.crumbs = const []});
 
   final String title;
   final List<Widget> actions;
-
-  /// The page-title style (20 px, semibold) of the Overview and Groups tab
-  /// roots; pushed screens and Settings keep the smaller title.
-  final bool large;
 
   /// Parents of this screen, outermost first.
   final List<Crumb> crumbs;
@@ -215,7 +229,9 @@ class TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final style = large ? SecwetText.pageTitle(p) : SecwetText.md(p, color: p.textPrimary, weight: FontWeight.w500);
+    // One title style on every screen (20 px, semibold); parents in the
+    // breadcrumb use it too, in the tertiary color.
+    final style = SecwetText.pageTitle(p);
     Widget dot() => Padding(
           padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s2),
           child: Container(
@@ -233,10 +249,13 @@ class TopBar extends StatelessWidget {
               child: Tappable(
                 label: 'Back to ${c.label}',
                 onTap: c.onTap,
-                child: Container(
+                child: SizedBox(
                   height: SecwetControl.touchTarget,
-                  alignment: Alignment.centerLeft,
-                  child: Text(c.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: style.copyWith(color: p.textTertiary)),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: 1,
+                    child: Text(c.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: style.copyWith(color: p.textTertiary)),
+                  ),
                 ),
               ),
             ),
@@ -268,7 +287,6 @@ class SecwetField extends StatelessWidget {
     this.onChanged,
     this.onSubmitted,
     this.keyboardType,
-    this.onDialog = false,
     this.autocorrect = true,
   });
 
@@ -284,8 +302,6 @@ class SecwetField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final TextInputType? keyboardType;
 
-  /// Inside a dialog the control uses the page background, like desktop.
-  final bool onDialog;
   final bool autocorrect;
 
   @override
@@ -309,7 +325,7 @@ class SecwetField extends StatelessWidget {
           onChanged: onChanged,
           onSubmitted: onSubmitted,
           keyboardType: keyboardType,
-          background: onDialog ? p.bg : p.surface,
+          background: InputSurface.background(context),
           autocorrect: autocorrect,
         ),
         if (error != null || help != null) ...[
@@ -336,8 +352,7 @@ class SearchField extends StatelessWidget {
       controller: controller,
       hint: hint,
       onChanged: onChanged,
-      background: p.surface,
-      border: p.border,
+      background: InputSurface.background(context),
       leading: SecwetIcon(SecwetIcons.search, size: 16, color: p.textTertiary),
     );
   }
@@ -355,7 +370,6 @@ class _Control extends StatelessWidget {
     this.onSubmitted,
     this.keyboardType,
     required this.background,
-    this.border,
     this.leading,
     this.autocorrect = true,
   });
@@ -370,7 +384,6 @@ class _Control extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final TextInputType? keyboardType;
   final Color background;
-  final Color? border;
   final Widget? leading;
   final bool autocorrect;
 
@@ -408,7 +421,7 @@ class _Control extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: SecwetSpace.s3, vertical: multiline ? SecwetSpace.s2 : 0),
       decoration: BoxDecoration(
         color: background,
-        border: Border.all(color: invalid ? p.danger : (border ?? p.borderStrong)),
+        border: Border.all(color: invalid ? p.danger : p.borderStrong),
         borderRadius: BorderRadius.circular(SecwetRadius.control),
       ),
       child: Row(

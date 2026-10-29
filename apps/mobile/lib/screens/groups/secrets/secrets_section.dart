@@ -355,7 +355,6 @@ class _SecretRowState extends State<SecretRow> {
                     SecwetIconButton(
                       icon: _copiedValue ? SecwetIcons.check : SecwetIcons.copy,
                       label: _copiedValue ? 'Value copied' : 'Copy ${s.name} value',
-                      small: true,
                       color: _copiedValue ? p.success : null,
                       onPressed: _copyValue,
                     ),
@@ -368,7 +367,6 @@ class _SecretRowState extends State<SecretRow> {
           SecwetIconButton(
             icon: _revealed != null ? SecwetIcons.eyeOff : SecwetIcons.eye,
             label: _revealed != null ? 'Hide ${s.name}' : 'Reveal ${s.name}',
-            small: true,
             onPressed: _toggleReveal,
           ),
           SecwetMenuButton(entries: menu, label: 'Actions for ${s.name}'),

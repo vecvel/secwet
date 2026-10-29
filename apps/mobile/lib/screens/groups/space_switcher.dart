@@ -41,7 +41,7 @@ class SpaceSwitcher extends StatelessWidget {
         height: SecwetControl.touchTarget,
         padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s3),
         decoration: BoxDecoration(
-          color: p.surface,
+          color: InputSurface.background(context),
           border: Border.all(color: p.borderStrong),
           borderRadius: BorderRadius.circular(SecwetRadius.control),
         ),
@@ -216,7 +216,7 @@ class _SpaceRow extends StatelessWidget {
             ),
           ),
           if (menu.isNotEmpty)
-            SecwetMenuButton(entries: menu, label: 'Options for $name', small: false)
+            SecwetMenuButton(entries: menu, label: 'Options for $name')
           else
             const SizedBox(width: SecwetSpace.s2),
         ],
@@ -339,7 +339,6 @@ class _SpaceDialogState extends State<_SpaceDialog> {
           controller: _name,
           hint: 'e.g. Work, Freelance, Family, Startup',
           error: _error,
-          onDialog: true,
           autofocus: true,
           onChanged: (_) => setState(() => _error = null),
           onSubmitted: (_) => _submit(),

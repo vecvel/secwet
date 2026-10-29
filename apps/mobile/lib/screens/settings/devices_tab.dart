@@ -102,14 +102,13 @@ class _DevicesTabState extends State<DevicesTab> {
             action: SecwetButton(
               label: 'Dismiss',
               variant: ButtonVariant.tertiary,
-              small: true,
               onPressed: () => setState(() => _notice = null),
             ),
           ),
         if (recommended && canPair) RotationNotice(model: model),
         SectionLabel(
           'Active Devices',
-          trailing: canPair ? SecwetButton(label: 'Pair a device', icon: SecwetIcons.plus, small: true, onPressed: _pair) : null,
+          trailing: canPair ? SecwetButton(label: 'Pair a device', icon: SecwetIcons.plus, onPressed: _pair) : null,
         ),
         SecwetCard(
           children: [
@@ -125,7 +124,7 @@ class _DevicesTabState extends State<DevicesTab> {
                     ? const SecwetBadge('Active', tone: BadgeTone.success)
                     : readOnly || !model.isOwner
                         ? null
-                        : SecwetButton(label: 'Revoke', variant: ButtonVariant.tertiary, small: true, onPressed: () => _revoke(d)),
+                        : SecwetButton(label: 'Revoke', variant: ButtonVariant.tertiary, onPressed: () => _revoke(d)),
               ),
             if (active.isEmpty) const SettingRow(title: 'Loading devices…'),
           ],

@@ -101,7 +101,7 @@ class _AssetPreviewScreenState extends State<AssetPreviewScreen> {
       topBar: TopBar(
         title: _asset.name,
         actions: [
-          SecwetButton(label: 'Download', icon: SecwetIcons.download, small: true, onPressed: _bytes == null ? null : _download),
+          SecwetButton(label: 'Download', icon: SecwetIcons.download, onPressed: _bytes == null ? null : _download),
         ],
       ),
       children: [

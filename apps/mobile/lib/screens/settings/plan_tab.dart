@@ -80,7 +80,6 @@ class _PlanTabState extends State<PlanTab> {
             action: SecwetButton(
               label: 'Dismiss',
               variant: ButtonVariant.tertiary,
-              small: true,
               onPressed: () => setState(() => _message = null),
             ),
           ),
@@ -103,7 +102,6 @@ class _PlanTabState extends State<PlanTab> {
               trailing: SecwetButton(
                 label: 'Compare',
                 variant: ButtonVariant.tertiary,
-                small: true,
                 onPressed: plan == null ? null : () => showPlanDialog(context, plan: plan),
               ),
             ),
@@ -113,7 +111,6 @@ class _PlanTabState extends State<PlanTab> {
               trailing: SecwetButton(
                 label: 'Copy',
                 variant: ButtonVariant.tertiary,
-                small: true,
                 onPressed: plan == null ? null : _copyId,
               ),
             ),
@@ -129,7 +126,6 @@ class _PlanTabState extends State<PlanTab> {
               trailing: SecwetButton(
                 label: _busy ? 'Checking…' : (name == 'free' ? 'Check' : 'Check now'),
                 variant: ButtonVariant.secondary,
-                small: true,
                 onPressed: _busy || readOnly || !relaySaved ? null : _check,
               ),
             ),

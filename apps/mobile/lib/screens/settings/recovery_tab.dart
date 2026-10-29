@@ -61,7 +61,6 @@ class RecoveryTab extends StatelessWidget {
                   : 'Without a recovery key, losing all approved devices means losing access to Secwet forever.',
               trailing: SecwetButton(
                 label: created ? 'Replace' : 'Create',
-                small: true,
                 variant: created ? ButtonVariant.secondary : ButtonVariant.primary,
                 onPressed: () => _createKey(context, created),
               ),
@@ -73,7 +72,6 @@ class RecoveryTab extends StatelessWidget {
                   : 'Create a recovery key first. The backup is encrypted with your recovery key.',
               trailing: SecwetButton(
                 label: created ? 'Export data' : 'Create key first',
-                small: true,
                 variant: ButtonVariant.secondary,
                 onPressed: created
                     ? () => showSecwetDialog<void>(context, builder: (_) => const ExportSheet())
@@ -346,7 +344,6 @@ class _ExportSheetState extends State<ExportSheet> {
           controller: _key,
           obscure: true,
           autocorrect: false,
-          onDialog: true,
           error: _error,
         ),
       ],

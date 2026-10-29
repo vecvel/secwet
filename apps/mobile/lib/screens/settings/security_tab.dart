@@ -48,7 +48,6 @@ class SecurityTab extends StatelessWidget {
               trailing: model.isOwner
                   ? SecwetButton(
                       label: 'Rotate key',
-                      small: true,
                       variant: recommended ? ButtonVariant.primary : ButtonVariant.secondary,
                       onPressed: canRotate ? () => showRotateKeyDialog(context, model) : null,
                     )
@@ -65,7 +64,7 @@ class SecurityTab extends StatelessWidget {
               meta: session.lockTimeoutMinutes > 0
                   ? 'Secwet also locks after ${_minutes(session.lockTimeoutMinutes)} idle or away from the app.'
                   : 'Auto-lock is off. Secwet still locks every time it starts.',
-              trailing: SecwetButton(label: 'Lock', variant: ButtonVariant.secondary, small: true, onPressed: session.lock),
+              trailing: SecwetButton(label: 'Lock', variant: ButtonVariant.secondary, onPressed: session.lock),
             ),
           ],
         ),
@@ -134,7 +133,6 @@ class RotationNotice extends StatelessWidget {
       action: SecwetButton(
         label: 'Rotate encryption key',
         variant: ButtonVariant.tertiary,
-        small: true,
         onPressed: () => showRotateKeyDialog(context, model),
       ),
     );

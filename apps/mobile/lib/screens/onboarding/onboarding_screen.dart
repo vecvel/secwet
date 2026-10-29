@@ -293,7 +293,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             trailing: SecwetButton(
               label: _backup == null ? 'Choose' : 'Change',
               variant: ButtonVariant.secondary,
-              small: true,
               onPressed: _busy ? null : _pickBackup,
             ),
           ),

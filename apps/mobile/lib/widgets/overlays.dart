@@ -69,7 +69,8 @@ class SecwetDialog extends StatelessWidget {
               boxShadow: _overlayShadow,
             ),
             clipBehavior: Clip.antiAlias,
-            child: Column(
+            child: InputSurface(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -134,6 +135,7 @@ class SecwetDialog extends StatelessWidget {
                     ),
                   ),
               ],
+              ),
             ),
           ),
         ),
@@ -232,7 +234,6 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
               SecwetField(
                 controller: _typed,
                 hint: widget.typedName,
-                onDialog: true,
                 autofocus: true,
                 autocorrect: false,
                 onChanged: (_) => setState(() {}),
@@ -265,19 +266,17 @@ class MenuEntry {
 /// Desktop Menu: a "more" trigger that opens a floating list under it
 /// (above it near the bottom of the screen).
 class SecwetMenuButton extends StatelessWidget {
-  const SecwetMenuButton({super.key, required this.entries, this.icon = SecwetIcons.more, this.label = 'More', this.small = true});
+  const SecwetMenuButton({super.key, required this.entries, this.icon = SecwetIcons.more, this.label = 'More'});
 
   final List<MenuEntry> entries;
   final SecwetIcons icon;
   final String label;
-  final bool small;
 
   @override
   Widget build(BuildContext context) {
     return SecwetIconButton(
       icon: icon,
       label: label,
-      small: small,
       onPressed: () => showSecwetMenu(context, entries),
     );
   }

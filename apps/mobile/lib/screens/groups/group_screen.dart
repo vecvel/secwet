@@ -137,7 +137,7 @@ class _GroupScreenState extends State<GroupScreen> {
             crumbs: [Crumb('Groups', () => openCrumb(context))],
             actions: [
               if (canManage) ...[
-                SecwetButton(label: 'New', icon: SecwetIcons.plus, small: true, onPressed: () => _newItem(group)),
+                SecwetButton(label: 'New', icon: SecwetIcons.plus, onPressed: () => _newItem(group)),
                 SecwetMenuButton(
                   label: 'Actions',
                   entries: [

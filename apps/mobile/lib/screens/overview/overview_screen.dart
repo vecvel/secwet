@@ -180,10 +180,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
     return ShellPage(
       topBar: TopBar(
         title: home,
-        large: true,
         actions: [
-          SecwetIconButton(icon: SecwetIcons.customize, label: 'Customize', small: true, onPressed: _customize),
-          if (canCreate) SecwetButton(label: 'New', icon: SecwetIcons.plus, small: true, onPressed: _newEntry),
+          SecwetIconButton(icon: SecwetIcons.customize, label: 'Customize', onPressed: _customize),
+          if (canCreate) SecwetButton(label: 'New', icon: SecwetIcons.plus, onPressed: _newEntry),
         ],
       ),
       children: [
@@ -339,14 +338,14 @@ class _OverviewScreenState extends State<OverviewScreen> {
           title: 'Rotate encryption key',
           detail: '$rotationReason Rotating stops revoked devices reading changes made from now on.',
           done: false,
-          actions: [SecwetButton(label: 'Rotate', small: true, onPressed: () => open('security'))],
+          actions: [SecwetButton(label: 'Rotate', onPressed: () => open('security'))],
         ),
       _Step(title: 'Initialized on this device', detail: '$_deviceName holds your device key.', done: true),
       _Step(
         title: 'Create a recovery key',
         detail: recoveryDone ? 'Stored by you, away from this device.' : 'The only way back in if you lose every device.',
         done: recoveryDone,
-        actions: [SecwetButton(label: 'Create', small: true, onPressed: () => open('recovery'))],
+        actions: [SecwetButton(label: 'Create', onPressed: () => open('recovery'))],
       ),
       // No "Connect the command line" step: the CLI runs on a computer and
       // connects to that computer's own store, so this phone can never
@@ -358,9 +357,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
           done: pro && ((checklist?.addDeviceDone ?? false) || (o?.activeDevicesCount ?? 0) > 1),
           actions: [
             if (pro)
-              SecwetButton(label: 'Pair a device', variant: ButtonVariant.secondary, small: true, onPressed: () => open('devices'))
+              SecwetButton(label: 'Pair a device', variant: ButtonVariant.secondary, onPressed: () => open('devices'))
             else
-              SecwetButton(label: 'Compare plans', variant: ButtonVariant.tertiary, small: true, onPressed: () => open('plan')),
+              SecwetButton(label: 'Compare plans', variant: ButtonVariant.tertiary, onPressed: () => open('plan')),
           ],
         ),
     ];

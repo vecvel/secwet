@@ -63,7 +63,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         final groups = model.visibleGroups;
         return ShellPage(
           background: p.sidebarBg,
-          topBar: const TopBar(title: 'Groups', large: true),
+          topBar: const TopBar(title: 'Groups'),
           children: [
             if (model.spaces.isNotEmpty) SpaceSwitcher(model: model),
             if (model.readOnly) ...[const SizedBox(height: SecwetSpace.s3), const UnlinkedNotice()],
@@ -108,7 +108,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ),
             ),
             if (canAdd)
-              SecwetIconButton(icon: SecwetIcons.plus, label: 'Add to ${g.name}', small: true, onPressed: () => _newItem(g.id)),
+              SecwetIconButton(icon: SecwetIcons.plus, label: 'Add to ${g.name}', onPressed: () => _newItem(g.id)),
           ],
         ),
       ),

@@ -218,7 +218,6 @@ class _SharingScreenState extends State<SharingScreen> {
             SecwetButton(
               label: 'Invite',
               icon: SecwetIcons.plus,
-              small: true,
               onPressed: readOnly || block != null ? null : () => _openShare(),
             ),
         ],
@@ -239,7 +238,6 @@ class _SharingScreenState extends State<SharingScreen> {
             action: SecwetButton(
               label: 'Dismiss',
               variant: ButtonVariant.tertiary,
-              small: true,
               onPressed: () => setState(() => _notice = null),
             ),
           ),

@@ -98,7 +98,6 @@ class _CustomizeDialogState extends State<_CustomizeDialog> {
           controller: _home,
           hint: 'e.g. Overview, Workspace, Command Center',
           help: 'Rename the Home view in the sidebar and top navigation.',
-          onDialog: true,
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,12 +126,11 @@ class _CustomizeDialogState extends State<_CustomizeDialog> {
                         onChanged: (on) => setState(() => on ? _enabled.add(id) : _enabled.remove(id)),
                       ),
                     ),
-                    SecwetButton(label: 'Up', variant: ButtonVariant.tertiary, small: true, onPressed: i == 0 ? null : () => _move(i, -1)),
+                    SecwetButton(label: 'Up', variant: ButtonVariant.tertiary, onPressed: i == 0 ? null : () => _move(i, -1)),
                     const SizedBox(width: SecwetSpace.s2),
                     SecwetButton(
                       label: 'Down',
                       variant: ButtonVariant.tertiary,
-                      small: true,
                       onPressed: i == _order.length - 1 ? null : () => _move(i, 1),
                     ),
                   ],

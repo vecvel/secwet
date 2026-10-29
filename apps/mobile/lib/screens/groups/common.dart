@@ -171,7 +171,6 @@ class _NameDialogState extends State<_NameDialog> {
           controller: _value,
           hint: widget.placeholder,
           error: _error,
-          onDialog: true,
           autofocus: true,
           autocorrect: false,
           onChanged: (_) {
@@ -207,7 +206,6 @@ class ChoiceField<T> extends StatelessWidget {
     required this.choices,
     required this.onChanged,
     this.error,
-    this.onDialog = true,
   });
 
   final String? label;
@@ -215,7 +213,6 @@ class ChoiceField<T> extends StatelessWidget {
   final List<Choice<T>> choices;
   final ValueChanged<T> onChanged;
   final String? error;
-  final bool onDialog;
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +257,7 @@ class ChoiceField<T> extends StatelessWidget {
             height: SecwetControl.touchTarget,
             padding: const EdgeInsets.symmetric(horizontal: SecwetSpace.s3),
             decoration: BoxDecoration(
-              color: onDialog ? p.bg : p.surface,
+              color: InputSurface.background(context),
               border: Border.all(color: error != null ? p.danger : p.borderStrong),
               borderRadius: BorderRadius.circular(SecwetRadius.control),
             ),

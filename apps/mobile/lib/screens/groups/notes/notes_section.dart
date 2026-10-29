@@ -148,7 +148,7 @@ class _NotesSectionState extends State<NotesSection> {
                             child: Text(n.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: SecwetText.md(p, weight: FontWeight.w600)),
                           ),
                           if (widget.perms.canDelete)
-                            SecwetIconButton(icon: SecwetIcons.trash, label: 'Delete ${n.title}', small: true, onPressed: () => _delete(n))
+                            SecwetIconButton(icon: SecwetIcons.trash, label: 'Delete ${n.title}', onPressed: () => _delete(n))
                           else
                             const SizedBox(height: SecwetControl.height),
                         ],
