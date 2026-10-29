@@ -96,7 +96,7 @@ fn cli_reads_project_from_secwet_toml() {
     std::fs::write(
         &config_path,
         format!(
-            "project = \"payments-api\"\nenv = \"staging\"\nvault = \"{}\"\n",
+            "project = \"payments-api\"\nenv = \"staging\"\nvault = '{}'\n",
             root.display()
         ),
     )
@@ -705,7 +705,7 @@ fn cli_secwet_toml_item_and_project_key_support() {
 
     // Test with item = "billing-service"
     let toml_path = root.join(".secwet.toml");
-    std::fs::write(&toml_path, format!("item = \"billing-service\"\nvault = \"{}\"\n", root.display())).unwrap();
+    std::fs::write(&toml_path, format!("item = \"billing-service\"\nvault = '{}'\n", root.display())).unwrap();
 
     Command::cargo_bin("secwet").unwrap()
         .current_dir(root)
@@ -716,7 +716,7 @@ fn cli_secwet_toml_item_and_project_key_support() {
         .stdout(predicate::str::contains("STRIPE_KEY"));
 
     // Test with legacy project = "billing-service"
-    std::fs::write(&toml_path, format!("project = \"billing-service\"\nvault = \"{}\"\n", root.display())).unwrap();
+    std::fs::write(&toml_path, format!("project = \"billing-service\"\nvault = '{}'\n", root.display())).unwrap();
 
     Command::cargo_bin("secwet").unwrap()
         .current_dir(root)
