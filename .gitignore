@@ -9,16 +9,6 @@ apps/desktop/src-tauri/gen/
 *.sqlite3-wal
 *.sqlite3-shm
 
-# Documentation & notes (the shipped docs are listed explicitly; a bare
-# `docs/` would hide every file below it from negation)
-docs/*
-!docs/IMPLEMENTATION.md
-!docs/design-decisions.md
-!docs/ui-rules.md
-!docs/mobile-ffi.md
-!docs/app-layer.md
-!docs/biometric-unlock.md
-!docs/m7-m8-architecture.md
 *.log
 
 # Scripts & temporary verification scripts
@@ -44,5 +34,7 @@ venv/
 # Flutter
 apps/mobile/.dart_tool/
 apps/mobile/build/
-.agents/
-.claude/
+
+# Claude Code personal settings (docs, .agents and the rest of .claude are
+# shared so other machines, such as the Windows test box, have them)
+.claude/settings.local.json
