@@ -95,6 +95,14 @@ const paths = {
   ),
   check: <path d="M4.5 10.5l3.5 3.5 7.5-8.5" />,
   close: <path d="M5 5l10 10M15 5L5 15" />,
+  windowMinimize: <path d="M5 10h10" />,
+  windowMaximize: <rect x="5" y="5" width="10" height="10" rx="1" />,
+  windowRestore: (
+    <>
+      <rect x="5" y="7" width="8" height="8" rx="1" />
+      <path d="M7.5 4.5h7a1 1 0 0 1 1 1v7" />
+    </>
+  ),
   chevronDown: <path d="M6 8l4 4 4-4" />,
   chevronRight: <path d="M8 6l4 4-4 4" />,
   file: (

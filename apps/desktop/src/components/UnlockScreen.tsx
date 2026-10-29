@@ -3,6 +3,7 @@ import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { BrandMark } from "./Icon";
 import { Notice } from "./Notice";
+import { WindowControls } from "./WindowControls";
 import { formatUiError } from "../lib/api";
 import { onWindowDragMouseDown } from "../lib/windowDrag";
 import styles from "./UnlockScreen.module.css";
@@ -42,6 +43,7 @@ export function UnlockScreen({ onUnlock, deviceName }: UnlockScreenProps) {
         <span className={styles.brand} aria-hidden="true">
           <BrandMark size={20} />
         </span>
+        <WindowControls />
       </header>
 
       <div className={styles.content}>

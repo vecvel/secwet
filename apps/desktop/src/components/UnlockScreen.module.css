@@ -32,6 +32,16 @@
   color: var(--color-accent);
 }
 
+/* Windows and Linux: brand on the left, window buttons on the right. */
+:global([data-titlebar="custom"]) .header {
+  padding-right: var(--space-3);
+}
+
+:global([data-titlebar="custom"]) .brand {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .content {
   display: flex;
   flex-direction: column;
