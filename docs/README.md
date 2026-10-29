@@ -57,7 +57,7 @@ Every byte stored or transmitted by Secwet is governed by strict cryptographic b
 6. **In-Memory Secret Scrubbing.** Sensitive keys and plaintext secrets are guarded with `secrecy::SecretString` and `zeroize::Zeroizing`. Plaintext memory is wiped on drop, and sensitive values are automatically redacted from `Debug` logs and error messages.
 7. **Durable Local Storage.** Secwet storage uses an embedded SQLite database with Write-Ahead Logging (`PRAGMA journal_mode = WAL`), foreign key integrity, and immediate durability.
 
-The core security model lives in [`crates/secwet-core/src/crypto.rs`](crates/secwet-core/src/crypto.rs) and is covered by property tests and unit test suites.
+The core security model lives in [`crates/secwet-core/src/crypto.rs`](../crates/secwet-core/src/crypto.rs) and is covered by property tests and unit test suites.
 
 ## Private by default
 
@@ -177,4 +177,4 @@ Secwet is designed around quiet, tactile software principles:
 
 ## License
 
-Secwet is proprietary software. You are welcome to read the code, but you may not copy, modify or redistribute it without written permission. See [LICENSE](LICENSE). Taking part in this project means following the [code of conduct](CODE_OF_CONDUCT.md).
+Secwet is proprietary software. You are welcome to read the code, but you may not copy, modify or redistribute it without written permission. See [LICENSE](../LICENSE). Taking part in this project means following the [code of conduct](CODE_OF_CONDUCT.md).
