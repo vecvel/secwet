@@ -423,7 +423,7 @@ fn test_dashboard_config_and_overview_aggregation() {
 
     // 1. Dashboard config default and persistence
     let initial_cfg = secwet.dashboard_config().expect("dashboard config");
-    assert_eq!(initial_cfg.home_label, "Home");
+    assert_eq!(initial_cfg.home_label, "Overview");
 
     let new_cfg = DashboardConfig {
         home_label: "Production Services".to_string(),

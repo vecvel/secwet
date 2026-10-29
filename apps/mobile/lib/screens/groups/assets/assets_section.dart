@@ -161,7 +161,7 @@ class _AssetsSectionState extends State<AssetsSection> {
     }
   }
 
-  void _preview(AssetMeta asset) => pushScreen(context, AssetPreviewScreen(asset: asset, itemName: widget.item.name));
+  void _preview(AssetMeta asset) => pushFullScreen(context, AssetPreviewScreen(asset: asset, itemName: widget.item.name));
 
   @override
   Widget build(BuildContext context) {

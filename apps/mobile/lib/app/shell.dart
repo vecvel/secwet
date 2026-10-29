@@ -25,8 +25,40 @@ enum ShellTab {
 /// Bottom bar height above the safe area (tokens: layout.bottomBarHeight).
 const double kBottomBarHeight = 56;
 
-/// Space a scrolling tab screen leaves at its bottom so its last row clears the bar.
-double bottomBarClearance(BuildContext context) => kBottomBarHeight + MediaQuery.paddingOf(context).bottom + SecwetSpace.s4;
+/// Space a scrolling tab screen leaves at its bottom so its last row clears
+/// the bar (only the home indicator on a full-screen task).
+double bottomBarClearance(BuildContext context) =>
+    (_FullScreen.of(context) ? 0 : kBottomBarHeight) + MediaQuery.paddingOf(context).bottom + SecwetSpace.s4;
+
+/// Marks a route opened with [pushFullScreen].
+const _fullScreenRoute = Object();
+
+/// Marks the subtree of a full-screen task, for [bottomBarClearance].
+class _FullScreen extends InheritedWidget {
+  const _FullScreen({required super.child});
+
+  static bool of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_FullScreen>() != null;
+
+  @override
+  bool updateShouldNotify(_FullScreen oldWidget) => false;
+}
+
+/// Pushes a focused full-screen task (note editor, asset preview) inside the
+/// current tab, so it locks with the app, and hides the bottom bar while it
+/// is on top.
+Future<T?> pushFullScreen<T>(BuildContext context, Widget screen) => Navigator.of(context).push<T>(
+      CupertinoPageRoute<T>(builder: (_) => _FullScreen(child: screen), settings: const RouteSettings(arguments: _fullScreenRoute)),
+    );
+
+/// Opens [screen] in the Groups tab from another tab (an entry from Overview),
+/// so the highlighted tab always matches what is on screen.
+Future<void> openInGroups(BuildContext context, Widget screen) async {
+  final shell = SecwetShell.of(context);
+  shell.select(ShellTab.groups);
+  final nav = shell.navigatorFor(ShellTab.groups);
+  nav?.popUntil((r) => r.isFirst);
+  await nav?.push(CupertinoPageRoute<void>(builder: (_) => screen));
+}
 
 /// Pushes [screen] inside the current tab (the bar stays visible). [name]
 /// lets a breadcrumb find the screen again ([openCrumb]).
@@ -67,6 +99,7 @@ class SecwetShellState extends State<SecwetShell> {
   late ShellTab _tab = widget.initialTab;
   final _navigators = {for (final t in ShellTab.values) t: GlobalKey<NavigatorState>()};
   final _depth = {for (final t in ShellTab.values) t: ValueNotifier<int>(1)};
+  final _fullScreen = {for (final t in ShellTab.values) t: ValueNotifier<bool>(false)};
 
   ShellTab get tab => _tab;
 
@@ -122,7 +155,7 @@ class SecwetShellState extends State<SecwetShell> {
                   HeroControllerScope.none(
                     child: Navigator(
                       key: _navigators[t],
-                      observers: [_DepthObserver(_depth[t]!)],
+                      observers: [_DepthObserver(_depth[t]!, _fullScreen[t]!)],
                       onGenerateRoute: (_) => CupertinoPageRoute(builder: (_) => _root(t)),
                     ),
                   ),
@@ -132,14 +165,20 @@ class SecwetShellState extends State<SecwetShell> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: ValueListenableBuilder<int>(
-                valueListenable: _depth[ShellTab.groups]!,
-                builder: (context, groupsDepth, _) => BottomTabs(
-                  selected: _tab,
-                  onSelect: select,
-                  // The Groups tab's first screen is the sidebar, on the sidebar color.
-                  background: _tab == ShellTab.groups && groupsDepth <= 1 ? p.sidebarBg : p.bg,
-                ),
+              // Hidden while a full-screen task is on top of the current tab.
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _fullScreen[_tab]!,
+                builder: (context, fullScreen, _) => fullScreen
+                    ? const SizedBox.shrink()
+                    : ValueListenableBuilder<int>(
+                        valueListenable: _depth[ShellTab.groups]!,
+                        builder: (context, groupsDepth, _) => BottomTabs(
+                          selected: _tab,
+                          onSelect: select,
+                          // The Groups tab's first screen is the sidebar, on the sidebar color.
+                          background: _tab == ShellTab.groups && groupsDepth <= 1 ? p.sidebarBg : p.bg,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -150,18 +189,32 @@ class SecwetShellState extends State<SecwetShell> {
 }
 
 class _DepthObserver extends NavigatorObserver {
-  _DepthObserver(this.depth);
+  _DepthObserver(this.depth, this.fullScreen);
 
   final ValueNotifier<int> depth;
 
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => depth.value++;
+  /// Whether the top route is a full-screen task (the bar hides).
+  final ValueNotifier<bool> fullScreen;
+
+  static bool _isFullScreen(Route<dynamic>? r) => identical(r?.settings.arguments, _fullScreenRoute);
 
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => depth.value--;
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    depth.value++;
+    fullScreen.value = _isFullScreen(route);
+  }
 
   @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) => depth.value--;
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    depth.value--;
+    fullScreen.value = _isFullScreen(previousRoute);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    depth.value--;
+    fullScreen.value = _isFullScreen(previousRoute);
+  }
 }
 
 /// The mobile bottom bar (apps/desktop/src/layout/BottomTabs.module.css):

@@ -1073,7 +1073,7 @@ pub struct DashboardConfig {
 impl Default for DashboardConfig {
     fn default() -> Self {
         Self {
-            home_label: "Home".to_string(),
+            home_label: "Overview".to_string(),
             visible_kpis: vec![
                 "items".to_string(),
                 "secrets".to_string(),

@@ -314,7 +314,7 @@ async fn test_full_lifecycle_and_crud_workflow() {
 
     // 9. Dashboard Configuration Get / Set
     let dash = state.dashboard_get().unwrap();
-    assert_eq!(dash.home_label, "Home");
+    assert_eq!(dash.home_label, "Overview");
 
     let custom_dash = DashboardConfig {
         home_label: "Executive Dashboard".into(),

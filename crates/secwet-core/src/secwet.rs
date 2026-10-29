@@ -3863,7 +3863,7 @@ impl Secwet {
                 [],
                 |r| r.get(0),
             )
-            .unwrap_or_else(|_| "Home".to_string());
+            .unwrap_or_else(|_| "Overview".to_string());
 
         Ok(DashboardConfig {
             home_label,

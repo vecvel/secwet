@@ -143,7 +143,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
   Future<void> _openItem(String itemId, [String? environmentId]) async {
     _model!.selectItem(itemId);
-    await pushScreen(context, ItemScreen(itemId: itemId, environmentId: environmentId));
+    // Entries belong to Groups: open them there so that tab is highlighted.
+    await openInGroups(context, ItemScreen(itemId: itemId, environmentId: environmentId));
   }
 
   Future<void> _newEntry() async {
@@ -322,10 +323,10 @@ class _OverviewScreenState extends State<OverviewScreen> {
     return null;
   }
 
-  Future<void> _openNote(NoteMeta n) => pushScreen(
-        context,
-        ItemScreen(itemId: n.itemId, environmentId: n.environmentId, initialTab: ContentTab.notes),
-      );
+  Future<void> _openNote(NoteMeta n) {
+    _model!.selectItem(n.itemId);
+    return openInGroups(context, ItemScreen(itemId: n.itemId, environmentId: n.environmentId, initialTab: ContentTab.notes));
+  }
 
   List<_Step> _steps(BuildContext context, WorkspaceModel model, Overview? o) {
     final checklist = o?.checklist;

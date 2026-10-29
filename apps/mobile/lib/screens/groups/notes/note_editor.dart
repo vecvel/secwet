@@ -256,7 +256,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 }
 
-/// Opens a note full screen; resolves true when it was saved or deleted.
+/// Opens a note full screen (no bottom bar); resolves true when it was saved or deleted.
 Future<bool?> openNoteEditor(
   BuildContext context, {
   Note? note,
@@ -266,7 +266,7 @@ Future<bool?> openNoteEditor(
   required bool readOnly,
   required bool canDelete,
 }) =>
-    pushScreen<bool>(
+    pushFullScreen<bool>(
       context,
       NoteEditorScreen(
         note: note,
