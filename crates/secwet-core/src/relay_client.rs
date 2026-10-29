@@ -16,10 +16,30 @@ use secwet_proto::{
     HEADER_DEVICE, HEADER_NONCE, HEADER_SIGNATURE, HEADER_TIME,
 };
 use sha2::{Digest, Sha256};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use crate::{crypto::sign_payload, Error};
+
+/// Longest wait for the TCP and TLS handshake.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Longest silence while a response is coming in: a stalled network
+/// (Wi-Fi to cellular handoff, captive portal) fails here.
+const READ_TIMEOUT: Duration = Duration::from_secs(15);
+/// Longest any one request may take, snapshot uploads included.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Commands hold the store while a request runs, so every request has a
+/// time limit; a timeout reads as [`Error::Offline`] ("Offline, will retry").
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        // Building only fails when the TLS backend cannot start.
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
 
 #[derive(Debug, Clone)]
 pub struct RelayClient {
@@ -34,7 +54,7 @@ impl RelayClient {
         Self {
             base_url: base,
             device_id: device_id.into(),
-            client: reqwest::Client::new(),
+            client: http_client(),
         }
     }
 

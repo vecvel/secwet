@@ -89,11 +89,13 @@ pub trait KeyStore: Send + Sync {
 }
 
 /// Production OS Keychain/Credential Manager backend using the `keyring` crate.
+#[cfg(feature = "os-keyring")]
 #[derive(Debug, Default, Clone)]
 pub struct KeyringStore {
     service: String,
 }
 
+#[cfg(feature = "os-keyring")]
 impl KeyringStore {
     pub const DEFAULT_SERVICE: &'static str = "secwet";
 
@@ -114,6 +116,7 @@ impl KeyringStore {
     }
 }
 
+#[cfg(feature = "os-keyring")]
 impl KeyStore for KeyringStore {
     fn get(&self, entry: &str) -> Result<Option<SecretVec<u8>>> {
         let user = self.user_for_entry(entry);

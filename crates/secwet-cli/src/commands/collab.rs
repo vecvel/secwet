@@ -8,6 +8,8 @@ use secwet_proto::{TreeNode, TreeRole};
 use uuid::Uuid;
 
 fn client(secwet: &Secwet) -> Result<RelayClient> {
+    // F13: a Free store never contacts the relay.
+    secwet.ensure_relay_allowed(secwet_core::RelayOp::Entitlement)?;
     Ok(RelayClient::new(secwet.relay_url()?, secwet.device_id().to_string()))
 }
 

@@ -972,7 +972,7 @@ impl Secwet {
     /// workspace-key-sealed event for owner devices that do not trust this
     /// device's key yet (just paired).
     pub(crate) fn emit_device_certificate(&self, device_id: &str, sign_pub: &[u8; 32], enc_pub: &[u8; 32], member_id: Option<Uuid>) -> Result<()> {
-        if !self.is_owner() || self.plan().unwrap_or_default() != "pro" {
+        if !self.is_owner() || self.plan_state().unwrap_or(crate::plan::PlanState::Free) == crate::plan::PlanState::Free {
             return Ok(());
         }
         if device_id != self.device_id {
@@ -1366,9 +1366,12 @@ impl Secwet {
     /// the local database, its WAL and every cached file, and zeroizes memory.
     /// The `Secwet` is unusable afterwards and must be dropped.
     ///
-    /// When some keystore entries cannot be deleted, their names (never
-    /// values) are written to a marker next to the workspace directory so
-    /// `Secwet::finish_pending_wipes` retries on the next start.
+    /// Before any key is deleted, a marker next to the workspace directory
+    /// records the wipe and the entry names (never values), synced to disk.
+    /// It is removed only once the keys and files are gone, so a process
+    /// killed midway (common on phones) is finished by
+    /// `Secwet::finish_pending_wipes` on the next start instead of leaving a
+    /// store that can neither unlock nor be created again.
     pub fn crypto_shred(&mut self, keystore: &dyn KeyStore) -> Result<()> {
         let id = self.secwet_id;
         let max_epoch = self.keyring.epochs.keys().next_back().copied().unwrap_or(1).max(self.key_epoch);
@@ -1389,6 +1392,8 @@ impl Secwet {
         let mut entries = vec![
             format!("secwet/{id}/device-sign"),
             format!("secwet/{id}/device-enc"),
+            // The app layer's biometric-unlock flag (no key material).
+            format!("secwet/{id}/biometric-unlock"),
         ];
         for e in 1..=max_epoch + 1 {
             entries.push(format!("secwet/{id}/vault-key/{e}"));
@@ -1397,20 +1402,21 @@ impl Secwet {
         for (s, e) in &branches {
             entries.push(format!("secwet/{id}/branch-bundle/{s}/{e}"));
         }
-        // Delete keys first: once they are gone the database is unreadable
-        // even if file deletion is interrupted.
-        let failed: Vec<String> = entries.iter().filter(|e| keystore.delete(e).is_err()).cloned().collect();
         let data_dir = self
             .db_path
             .parent()
             .and_then(Path::parent)
             .and_then(Path::parent)
             .map(Path::to_path_buf);
-        if !failed.is_empty() {
-            if let Some(dd) = &data_dir {
-                let marker = dd.join(format!(".secwet-pending-wipe-{id}"));
-                let _ = std::fs::write(&marker, serde_json::to_vec(&failed).unwrap_or_default());
-            }
+        let marker = data_dir.as_ref().map(|dd| pending_wipe_marker(dd, id));
+        if let Some(marker) = &marker {
+            write_durably(marker, &serde_json::to_vec(&entries).unwrap_or_default());
+        }
+        // Delete keys first: once they are gone the database is unreadable
+        // even if file deletion is interrupted.
+        let failed: Vec<String> = entries.iter().filter(|e| keystore.delete(e).is_err()).cloned().collect();
+        if let Some(marker) = &marker {
+            write_durably(marker, &serde_json::to_vec(&failed).unwrap_or_default());
         }
 
         self.zeroize_all_keys();
@@ -1426,38 +1432,57 @@ impl Secwet {
                 overwrite_and_remove(&p);
             }
         }
+        let mut files_gone = true;
         if let Some(dir) = dir {
             if dir.file_name().map(|n| n == id.to_string().as_str()).unwrap_or(false) {
-                let _ = std::fs::remove_dir_all(&dir);
+                files_gone = std::fs::remove_dir_all(&dir).is_ok() || !dir.exists();
             }
         }
         crate::secwet::release_session(&id);
+        if failed.is_empty() && files_gone {
+            if let Some(marker) = &marker {
+                let _ = std::fs::remove_file(marker);
+            }
+        }
         if !failed.is_empty() {
             return Err(Error::KeyStore);
         }
         Ok(())
     }
 
-    /// Retries keystore deletions left by an interrupted crypto-shred.
+    /// Finishes a crypto-shred that was interrupted: retries the keystore
+    /// deletions and removes what is left of the workspace directory
+    /// (`<data_dir>/secwet/<id>`), so the next status reads Uninitialized.
     /// Call at startup, before unlocking. Returns how many markers were cleared.
     pub fn finish_pending_wipes(data_dir: &Path, keystore: &dyn KeyStore) -> Result<usize> {
         let mut cleared = 0;
         let Ok(entries) = std::fs::read_dir(data_dir) else { return Ok(0) };
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if !name.starts_with(".secwet-pending-wipe-") {
-                continue;
-            }
+            let Some(id) = name.strip_prefix(".secwet-pending-wipe-") else { continue };
             let list: Vec<String> = std::fs::read(e.path())
                 .ok()
                 .and_then(|b| serde_json::from_slice(&b).ok())
                 .unwrap_or_default();
             let remaining: Vec<String> = list.into_iter().filter(|k| keystore.delete(k).is_err()).collect();
-            if remaining.is_empty() {
+            // Only a real workspace id names a directory to remove.
+            let mut files_gone = true;
+            if let Ok(id) = Uuid::parse_str(id) {
+                let dir = data_dir.join("secwet").join(id.to_string());
+                if dir.exists() {
+                    for file in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                        if file.path().is_file() {
+                            overwrite_and_remove(&file.path());
+                        }
+                    }
+                    files_gone = std::fs::remove_dir_all(&dir).is_ok() || !dir.exists();
+                }
+            }
+            if remaining.is_empty() && files_gone {
                 let _ = std::fs::remove_file(e.path());
                 cleared += 1;
             } else {
-                let _ = std::fs::write(e.path(), serde_json::to_vec(&remaining).unwrap_or_default());
+                write_durably(&e.path(), &serde_json::to_vec(&remaining).unwrap_or_default());
             }
         }
         Ok(cleared)
@@ -3628,7 +3653,13 @@ impl Secwet {
         if self.unlinked_at()?.is_some() {
             return Err(Error::Revoked);
         }
+        // F13: Free never contacts the relay; a paused store only checks
+        // whether Pro was renewed.
+        self.ensure_relay_allowed(crate::plan::RelayOp::Entitlement)?;
         let result = async {
+            if self.refresh_plan(client).await?.state != crate::plan::PlanState::Pro {
+                return Err(Error::SyncPaused);
+            }
             if self.is_owner() && get_meta(&self.db, "self_certified")?.as_deref() != Some("1") {
                 let (id, sp, ep) = (self.device_id.clone(), self.device_sign_pub, self.device_enc_pub);
                 self.emit_device_certificate(&id, &sp, &ep, None)?;
@@ -3840,6 +3871,25 @@ impl sync::EventKeyResolver for SecwetResolver<'_> {
 
 /// Best-effort overwrite before unlinking, so freed blocks do not keep the
 /// ciphertext on file systems without copy-on-write. Keys are already gone.
+fn pending_wipe_marker(data_dir: &Path, id: Uuid) -> PathBuf {
+    data_dir.join(format!(".secwet-pending-wipe-{id}"))
+}
+
+/// Writes a small file and syncs it and its directory, so it survives a
+/// process kill or power loss right after.
+fn write_durably(path: &Path, bytes: &[u8]) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::File::create(path) {
+        let _ = f.write_all(bytes).and_then(|_| f.sync_all());
+    }
+    #[cfg(unix)]
+    if let Some(dir) = path.parent() {
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
+    }
+}
+
 fn overwrite_and_remove(path: &Path) {
     if let Ok(meta) = std::fs::metadata(path) {
         if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(path) {
@@ -3862,6 +3912,29 @@ fn overwrite_and_remove(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wipe_killed_after_key_deletion_finishes_on_next_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let ks = crate::MemoryStore::new();
+        let s = Secwet::create(dir.path(), "Phone", &ks).unwrap();
+        let id = s.secwet_id();
+        s.lock();
+        // The state crypto_shred leaves when the process dies right after its
+        // delete loop: marker written first, keys gone, database still there.
+        let entries = vec![format!("secwet/{id}/device-sign"), format!("secwet/{id}/device-enc")];
+        write_durably(&pending_wipe_marker(dir.path(), id), &serde_json::to_vec(&entries).unwrap());
+        for e in &entries {
+            ks.delete(e).unwrap();
+        }
+        assert!(matches!(Secwet::status(dir.path()).unwrap(), secwet_proto::SecwetStatus::Locked { .. }));
+
+        assert_eq!(Secwet::finish_pending_wipes(dir.path(), &ks).unwrap(), 1);
+        assert!(!pending_wipe_marker(dir.path(), id).exists());
+        assert!(!dir.path().join("secwet").join(id.to_string()).exists());
+        assert_eq!(Secwet::status(dir.path()).unwrap(), secwet_proto::SecwetStatus::Uninitialized);
+        Secwet::create(dir.path(), "Phone", &ks).expect("onboarding works again");
+    }
 
     #[test]
     fn invite_link_roundtrip() {

@@ -91,7 +91,6 @@
 .selected {
   color: var(--color-text-primary);
   border-bottom-color: color-mix(in srgb, var(--color-accent) 65%, transparent);
-  font-weight: var(--font-weight-medium);
 }
 
 .count {

@@ -226,9 +226,16 @@ pub async fn register_workspace_and_device(
 ) -> Result<RegisterSecwetResponse, RelayApiError> {
     let mut tx = pool.begin().await?;
 
-    // 1. Check if workspace already exists
+    // 1. A workspace exists once a device registered it. Registration is
+    //    self-signed and proves nothing about who owns the id, so it never
+    //    adopts an entitlement: grants need a registered workspace (see
+    //    grant_entitlement), and an orphaned entitlement row left by an older
+    //    relay also counts as taken until an operator ungrants it.
     let exists = query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM secwets WHERE id = $1)",
+        r#"
+        SELECT EXISTS(SELECT 1 FROM devices WHERE secwet_id = $1)
+            OR EXISTS(SELECT 1 FROM entitlements WHERE secwet_id = $1)
+        "#,
     )
     .bind(secwet_id)
     .fetch_one(&mut *tx)
@@ -238,11 +245,13 @@ pub async fn register_workspace_and_device(
         return Err(RelayApiError::Exists(secwet_id.to_string()));
     }
 
-    // 2. Insert workspace
+    // 2. Insert workspace (a bare row with no devices or entitlement holds
+    //    nothing worth protecting and is reused)
     let created_at = query_scalar::<_, DateTime<Utc>>(
         r#"
         INSERT INTO secwets (id, created_at, current_epoch)
         VALUES ($1, now(), 1)
+        ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
         RETURNING created_at
         "#,
     )
@@ -264,12 +273,11 @@ pub async fn register_workspace_and_device(
     .execute(&mut *tx)
     .await?;
 
-    // 4. Insert or preserve pre-granted entitlement
+    // 4. Insert the default entitlement (step 1 ruled out an existing one)
     query(
         r#"
         INSERT INTO entitlements (secwet_id, plan, device_limit)
         VALUES ($1, $2, $3)
-        ON CONFLICT (secwet_id) DO NOTHING
         "#,
     )
     .bind(secwet_id)
@@ -342,17 +350,80 @@ pub async fn get_entitlement(
     .await?;
 
     match row {
-        Some(r) => Ok(EntitlementResponse {
-            secwet_id: r.secwet_id,
-            plan: r.plan,
-            device_limit: r.device_limit.max(0) as u32,
-            expires_at: r.expires_at.map(|t| t.to_rfc3339()),
-        }),
+        Some(r) => Ok(r.into_response()),
         None => Err(RelayApiError::NotFound(format!(
             "No entitlement for workspace {}",
             secwet_id
         ))),
     }
+}
+
+impl EntitlementRow {
+    /// Pro whose end has not passed. Expiry is evaluated on every read, so an
+    /// entitlement ends on time without a background job.
+    pub fn is_active_pro(&self) -> bool {
+        self.plan == "pro" && self.expires_at.is_none_or(|end| end > Utc::now())
+    }
+
+    /// The entitlement as clients see it: an ended Pro reads as `free` and
+    /// keeps its `expires_at`, so the client can tell "Pro ended" from Free.
+    pub fn into_response(self) -> EntitlementResponse {
+        let plan = if self.plan == "pro" && !self.is_active_pro() {
+            "free".to_string()
+        } else {
+            self.plan.clone()
+        };
+        EntitlementResponse {
+            secwet_id: self.secwet_id,
+            plan,
+            device_limit: self.device_limit.max(0) as u32,
+            expires_at: self.expires_at.map(|t| t.to_rfc3339()),
+        }
+    }
+}
+
+/// Fails with `not_entitled` unless the workspace has an active Pro
+/// entitlement. Guards pairing, sync and collaboration (F13).
+pub async fn require_active_pro<'e, E>(executor: E, secwet_id: Uuid) -> Result<(), RelayApiError>
+where
+    E: Executor<'e, Database = crate::sqlx::Postgres>,
+{
+    let active = query_scalar::<_, bool>(
+        r#"
+        SELECT plan = 'pro' AND (expires_at IS NULL OR expires_at > now())
+        FROM entitlements
+        WHERE secwet_id = $1
+        "#,
+    )
+    .bind(secwet_id)
+    .fetch_optional(executor)
+    .await?
+    .unwrap_or(false);
+    if active {
+        Ok(())
+    } else {
+        Err(RelayApiError::NotEntitled("This needs an active Pro plan".into()))
+    }
+}
+
+/// Ends a workspace's entitlement now (admin `expire`). Sync pauses on every
+/// device at its next contact; nothing is deleted.
+pub async fn expire_entitlement(
+    pool: &PgPool,
+    secwet_id: Uuid,
+) -> Result<EntitlementResponse, RelayApiError> {
+    let row = query_as::<_, EntitlementRow>(
+        r#"
+        UPDATE entitlements SET expires_at = now()
+        WHERE secwet_id = $1
+        RETURNING secwet_id, plan, device_limit, expires_at
+        "#,
+    )
+    .bind(secwet_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| RelayApiError::NotFound(format!("No entitlement for workspace {}", secwet_id)))?;
+    Ok(row.into_response())
 }
 
 /// Grants or updates plan entitlements for a workspace (Admin operation).
@@ -363,6 +434,12 @@ pub async fn grant_entitlement(
     device_limit: u32,
     expires_at: Option<DateTime<Utc>>,
 ) -> Result<EntitlementResponse, RelayApiError> {
+    let mut tx = pool.begin().await?;
+    // Only a registered workspace can be granted. The id is shared with the
+    // operator to get paid, and registration is self-signed, so a grant made
+    // first would go to whichever device registered the id first. The owner
+    // registers with "Check for Pro" (Settings > Plan), then pays.
+    require_registered(&mut *tx, secwet_id).await?;
     let row = query_as::<_, EntitlementRow>(
         r#"
         INSERT INTO entitlements (secwet_id, plan, device_limit, expires_at)
@@ -378,15 +455,57 @@ pub async fn grant_entitlement(
     .bind(plan)
     .bind(device_limit as i32)
     .bind(expires_at)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
 
-    Ok(EntitlementResponse {
-        secwet_id: row.secwet_id,
-        plan: row.plan,
-        device_limit: row.device_limit.max(0) as u32,
-        expires_at: row.expires_at.map(|t| t.to_rfc3339()),
-    })
+    Ok(row.into_response())
+}
+
+async fn require_registered<'e, E>(executor: E, secwet_id: Uuid) -> Result<(), RelayApiError>
+where
+    E: Executor<'e, Database = crate::sqlx::Postgres>,
+{
+    let registered = query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM devices WHERE secwet_id = $1)")
+        .bind(secwet_id)
+        .fetch_one(executor)
+        .await?;
+    if registered {
+        Ok(())
+    } else {
+        Err(RelayApiError::NotFound(format!(
+            "Workspace {secwet_id} is not registered. The owner registers it with Check for Pro in Settings > Plan first."
+        )))
+    }
+}
+
+/// Moves a workspace to the Free plan (admin `ungrant`). For an id that never
+/// registered it removes the entitlement left by a pre-registration grant
+/// from an older relay, so the owner can register the id again.
+pub async fn ungrant_entitlement(
+    pool: &PgPool,
+    secwet_id: Uuid,
+) -> Result<EntitlementResponse, RelayApiError> {
+    let mut tx = pool.begin().await?;
+    let registered = query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM devices WHERE secwet_id = $1)")
+        .bind(secwet_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    if !registered {
+        query("DELETE FROM entitlements WHERE secwet_id = $1")
+            .bind(secwet_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        return Ok(EntitlementResponse {
+            secwet_id,
+            plan: "free".into(),
+            device_limit: 1,
+            expires_at: None,
+        });
+    }
+    tx.commit().await?;
+    grant_entitlement(pool, secwet_id, "free", 1, None).await
 }
 
 /// Revokes a device.
@@ -767,23 +886,8 @@ pub async fn append_events(
     let mut sign_pub_bytes = [0u8; 32];
     sign_pub_bytes.copy_from_slice(&device.sign_pub);
 
-    // 2. Enforce Pro entitlement
-    let plan = query_scalar::<_, String>(
-        r#"
-        SELECT plan FROM entitlements
-        WHERE secwet_id = $1
-        "#,
-    )
-    .bind(secwet_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .unwrap_or_else(|| "free".into());
-
-    if plan != "pro" {
-        return Err(RelayApiError::NotEntitled(
-            "Sync requires an active Pro plan".into(),
-        ));
-    }
+    // 2. Enforce an active (unexpired) Pro entitlement
+    require_active_pro(&mut *tx, secwet_id).await?;
 
     // 3. Epoch enforcement for every new event of the batch: unscoped events
     //    must use the current master key epoch, scoped events the current

@@ -4541,6 +4541,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "secwet-app"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "directories",
+ "secrecy",
+ "secwet-core",
+ "secwet-proto",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "subtle",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
 name = "secwet-cli"
 version = "0.1.0"
 dependencies = [
@@ -4605,18 +4625,14 @@ name = "secwet-desktop"
 version = "0.1.0"
 dependencies = [
  "cc",
- "chrono",
- "directories",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
- "secrecy",
+ "secwet-app",
  "secwet-core",
  "secwet-proto",
  "serde",
  "serde_json",
- "sha2 0.11.1",
- "subtle",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
@@ -4624,7 +4640,25 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
- "x25519-dalek",
+ "windows",
+ "windows-future",
+]
+
+[[package]]
+name = "secwet-ffi"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "cc",
+ "secwet-app",
+ "secwet-core",
+ "secwet-relay",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]

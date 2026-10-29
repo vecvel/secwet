@@ -257,6 +257,7 @@ pub async fn start_pairing(
         ));
     }
     require_owner_device(&device)?;
+    db::require_active_pro(&state.pool, device.secwet_id).await?;
 
     // Check device limit / entitlement
     let entitlement = db::get_entitlement(&state.pool, device.secwet_id).await?;
@@ -390,6 +391,7 @@ pub async fn approve_pairing(
         ));
     }
     require_owner_device(&device)?;
+    db::require_active_pro(&state.pool, device.secwet_id).await?;
 
     if session.expires_at < Utc::now() {
         return Err(RelayApiError::Expired("Pairing session has expired".into()));
@@ -513,6 +515,12 @@ pub struct EventsQuery {
 
 /// GET /v1/secwets/{id}/events
 /// Pull events after the specified cursor.
+///
+/// Pull, ack and snapshot download need only membership, so a paused
+/// workspace (Pro ended) can still catch up on what was pushed while it was
+/// Pro and receive revocations. Nothing new can land: push, snapshot upload
+/// and the live stream need an active Pro plan, so a workspace that never had
+/// Pro has nothing to pull.
 pub async fn get_events(
     State(state): State<Arc<AppState>>,
     Path(secwet_id): Path<Uuid>,
@@ -585,6 +593,8 @@ pub async fn upload_snapshot(
         ));
     }
     require_snapshot_access(&auth_device)?;
+    // Storing on the relay is Pro only (F13), like push.
+    db::require_active_pro(&state.pool, secwet_id).await?;
 
     db::save_snapshot(
         &state.pool,
@@ -633,6 +643,9 @@ pub async fn stream_events(
             "Device does not belong to this workspace".into(),
         ));
     }
+
+    // Live sync is Pro only (F13); a paused workspace pulls on demand.
+    db::require_active_pro(&state.pool, secwet_id).await?;
 
     // Subscribe before the final revocation check so a revocation landing in
     // between is still delivered to this stream.

@@ -15,6 +15,13 @@ pub enum AdminCommand {
     /// Check entitlement and device status for a workspace
     Status(AdminStatusArgs),
 
+    /// End a workspace's Pro entitlement now. Sync pauses on its devices;
+    /// nothing is deleted or locked
+    Expire(AdminTargetArgs),
+
+    /// Take a workspace back to the Free plan (no expiry, one device)
+    Ungrant(AdminTargetArgs),
+
     /// Revoke a device directly
     Revoke(AdminRevokeArgs),
 }
@@ -42,6 +49,31 @@ pub struct AdminGrantArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct AdminTargetArgs {
+    /// Workspace UUID
+    #[arg(short, long)]
+    pub secwet: Option<Uuid>,
+
+    /// Positional workspace UUID if --secwet flag is omitted
+    pub secwet_pos: Option<Uuid>,
+}
+
+impl AdminTargetArgs {
+    fn id(&self) -> Result<Uuid, &'static str> {
+        self.secwet
+            .or(self.secwet_pos)
+            .ok_or("Workspace UUID is required (use --secwet <UUID> or positional argument)")
+    }
+}
+
+fn print_entitlement(secwet_id: Uuid, ent: &secwet_proto::EntitlementResponse) {
+    println!("Workspace {}:", secwet_id);
+    println!("  Plan: {}", ent.plan);
+    println!("  Device limit: {}", ent.device_limit);
+    println!("  Expires at: {}", ent.expires_at.as_deref().unwrap_or("never"));
+}
+
+#[derive(Debug, Args)]
 pub struct AdminStatusArgs {
     /// Workspace UUID
     pub secwet_id: Uuid,
@@ -63,6 +95,12 @@ pub async fn run_admin_command(pool: &PgPool, cmd: AdminCommand) -> Result<(), B
                 .secwet
                 .or(args.secwet_pos)
                 .ok_or("Workspace UUID is required (use --secwet <UUID> or positional argument)")?;
+            if args.plan != "pro" && args.plan != "free" {
+                return Err(format!("Unknown plan '{}': use pro or free", args.plan).into());
+            }
+            if args.devices == 0 {
+                return Err("--devices must be at least 1".into());
+            }
 
             let expires_at = if let Some(until_str) = args.until {
                 let dt = DateTime::parse_from_rfc3339(&until_str)
@@ -90,6 +128,18 @@ pub async fn run_admin_command(pool: &PgPool, cmd: AdminCommand) -> Result<(), B
                 "  Expires at: {}",
                 res.expires_at.as_deref().unwrap_or("never")
             );
+        }
+        AdminCommand::Expire(args) => {
+            let secwet_id = args.id()?;
+            let res = db::expire_entitlement(pool, secwet_id).await?;
+            println!("Entitlement ended. Sync is paused on every device; local data is untouched.");
+            print_entitlement(secwet_id, &res);
+        }
+        AdminCommand::Ungrant(args) => {
+            let secwet_id = args.id()?;
+            let res = db::ungrant_entitlement(pool, secwet_id).await?;
+            println!("Workspace moved to the Free plan. Sync is paused on every device; local data is untouched.");
+            print_entitlement(secwet_id, &res);
         }
         AdminCommand::Status(args) => {
             match db::get_entitlement(pool, args.secwet_id).await {

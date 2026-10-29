@@ -169,6 +169,25 @@ export interface RelayStatusDto {
   pending_outbox_count: number;
 }
 
+/** Plan of this Secwet (F13). `paused` means Pro ended: sync is paused, local data is untouched. */
+export type PlanState = "free" | "pro" | "paused";
+
+export interface PlanStatusDto {
+  plan: PlanState;
+  device_limit: number;
+  active_devices: number;
+  /** RFC 3339 end of the Pro entitlement, if it has one. */
+  expires_at?: string | null;
+  /** Unix ms of the last entitlement check on the relay. */
+  checked_at?: number | null;
+  relay_configured: boolean;
+  /** Sync, pairing and sharing run only on an active Pro plan. */
+  sync_enabled: boolean;
+  /** Revocation and key rotation over the relay (Pro, and Pro that ended). */
+  relay_security: boolean;
+  secwet_id: string;
+}
+
 export interface RegisterSecwetResponse {
   secwet_id: string;
   device_id: string;
@@ -279,6 +298,28 @@ export interface SyncStatusEvent {
 export interface SyncReport {
   pushed: number;
   pulled: number;
+}
+
+/** The biometric the OS offers; "none" hides every biometric control. */
+export type BiometryKind =
+  | "none"
+  | "touch_id"
+  | "face_id"
+  | "optic_id"
+  | "windows_hello_face"
+  | "windows_hello_fingerprint"
+  | "windows_hello_iris"
+  | "fingerprint"
+  // Android only; listed so the shared app-layer enum maps one to one.
+  | "face"
+  | "iris"
+  | "multiple";
+
+export interface BiometricStatus {
+  available: boolean;
+  kind: BiometryKind;
+  /** Unlock requires the biometric check (enforced in Rust). */
+  enabled: boolean;
 }
 
 export interface CliInstallStatus {
@@ -476,6 +517,12 @@ export function getSecwetId(status: SecwetStatus | null | undefined): string | u
   return undefined;
 }
 
+/** True when the call failed because it needs an active Pro plan (or Pro ended). */
+export function isPlanError(err: unknown): boolean {
+  const code = String((err as { code?: string } | null)?.code ?? "").toLowerCase();
+  return code === "needs_pro" || code === "sync_paused" || code === "relay_not_entitled";
+}
+
 /** True when the call failed because this device has no sync relay set up. */
 export function isRelayNotConfigured(err: unknown): boolean {
   const code = String((err as { code?: string } | null)?.code ?? "").toLowerCase();
@@ -533,6 +580,11 @@ export function formatUiError(err: unknown, defaultMessage = "Something went wro
     case "relay_not_configured":
     case "relay_relay_not_configured":
       return "Sharing needs sync. Set it up in Settings > Sync.";
+    case "needs_pro":
+    case "relay_not_entitled":
+      return "This needs the Pro plan. Everything on this device keeps working on Free.";
+    case "sync_paused":
+      return "Sync is paused because Pro ended. Everything on this device stays available.";
     default:
       return uiErr.message || defaultMessage;
   }
@@ -862,6 +914,10 @@ export class BrowserMockBackend {
   }
 
   async secwetUnlock(): Promise<void> {
+    if (this.biometricEnabled && this.biometricKind !== "none") {
+      // Stands in for the OS prompt the Rust side shows.
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
     this.status = {
       status: "unlocked",
       secwet_id: "00000000-0000-0000-0000-000000000001",
@@ -1544,12 +1600,26 @@ export class BrowserMockBackend {
     return this.settings.device_name || "Desktop";
   }
 
-  async biometricStatus(): Promise<{ available: boolean; biometry_type: string }> {
-    return { available: true, biometry_type: "touch_id" };
+  // Browser preview: ?biometric=<kind> picks what the "OS" offers.
+  private biometricKind: BiometryKind =
+    typeof window !== "undefined"
+      ? ((new URLSearchParams(window.location.search).get("biometric") as BiometryKind | null) ?? "touch_id")
+      : "none";
+  private biometricEnabled = false;
+
+  async biometricStatus(): Promise<BiometricStatus> {
+    const available = this.biometricKind !== "none";
+    return { available, kind: this.biometricKind, enabled: available && this.biometricEnabled };
   }
 
-  async biometricAuthenticate(_reason?: string): Promise<boolean> {
-    return true;
+  async biometricSetEnabled(enabled: boolean): Promise<BiometricStatus> {
+    if (enabled && this.biometricKind === "none") {
+      throw { code: "biometric_unavailable", message: "Biometrics are not set up on this device." };
+    }
+    if (enabled) await new Promise((resolve) => setTimeout(resolve, 500));
+    this.biometricEnabled = enabled;
+    this.emit("secwet://changed", { scope: "settings" });
+    return this.biometricStatus();
   }
 
   async cliStatus(): Promise<CliInstallStatus> {
@@ -2029,6 +2099,21 @@ export class BrowserMockBackend {
   async relaySetUrl(_url: string): Promise<void> {
     // no-op in browser mock
   }
+
+  // Browser preview only: the plan always reads as Free here.
+  async planStatus(): Promise<PlanStatusDto> {
+    return {
+      plan: "free",
+      device_limit: 1,
+      active_devices: 1,
+      expires_at: null,
+      checked_at: null,
+      relay_configured: false,
+      sync_enabled: false,
+      relay_security: false,
+      secwet_id: "00000000-0000-0000-0000-000000000001",
+    };
+  }
 }
 
 export const mockBackend = new BrowserMockBackend();
@@ -2102,9 +2187,10 @@ export const api = {
     }
     return mockBackend.secwetCreate(deviceName);
   },
-  secwetUnlock: async (): Promise<void> => {
+  /** `recoveryKey` stands in for biometric unlock while the device can't check it. */
+  secwetUnlock: async (recoveryKey?: string): Promise<void> => {
     if (isTauri()) {
-      return invoke<void>("secwet_unlock");
+      return invoke<void>("secwet_unlock", { recoveryKey: recoveryKey ?? null });
     }
     return mockBackend.secwetUnlock();
   },
@@ -2559,21 +2645,29 @@ export const api = {
     return mockBackend.systemDeviceName();
   },
 
-  biometricStatus: async (): Promise<{ available: boolean; biometry_type: string }> => {
+  /** Never rejects: a failed check reads as "no biometrics", which keeps the default unlock. */
+  biometricStatus: async (): Promise<BiometricStatus> => {
     if (isTauri()) {
-      return invoke<{ available: boolean; biometry_type: string }>("biometric_status").catch(() => ({
-        available: false,
-        biometry_type: "none",
-      }));
+      return invoke<BiometricStatus>("biometric_status").catch(
+        (): BiometricStatus => ({ available: false, kind: "none", enabled: false }),
+      );
     }
     return mockBackend.biometricStatus();
   },
 
-  biometricAuthenticate: async (reason?: string): Promise<boolean> => {
+  /** Turning it on shows the OS prompt first; rejects when the check fails. */
+  biometricSetEnabled: async (enabled: boolean): Promise<BiometricStatus> => {
     if (isTauri()) {
-      return invoke<boolean>("biometric_authenticate", { reason });
+      return invoke<BiometricStatus>("biometric_set_enabled", { enabled });
     }
-    return mockBackend.biometricAuthenticate(reason);
+    return mockBackend.biometricSetEnabled(enabled);
+  },
+
+  /** Stops an app-drawn fingerprint prompt (Linux); a no-op elsewhere. */
+  biometricCancel: async (): Promise<void> => {
+    if (isTauri()) {
+      await invoke("biometric_cancel").catch(() => undefined);
+    }
   },
 
   cliStatus: async (): Promise<CliInstallStatus> => {
@@ -2825,6 +2919,9 @@ export const api = {
   },
 
   syncNow: async (): Promise<SyncReport> => {
+    if (isTauri()) {
+      return invoke<SyncReport>("sync_now");
+    }
     return mockBackend.syncNow();
   },
 
@@ -2905,5 +3002,30 @@ export const api = {
       return invoke<void>("relay_set_url", { url });
     }
     return mockBackend.relaySetUrl(url);
+  },
+
+  // 13b. Plans (F13)
+  /** Cached plan. Never contacts the relay. */
+  planStatus: async (): Promise<PlanStatusDto> => {
+    if (isTauri()) {
+      return invoke<PlanStatusDto>("plan_status");
+    }
+    return mockBackend.planStatus();
+  },
+
+  /** Re-reads the entitlement on Pro and paused plans; Free returns the cached plan offline. */
+  planRefresh: async (): Promise<PlanStatusDto> => {
+    if (isTauri()) {
+      return invoke<PlanStatusDto>("plan_refresh");
+    }
+    return mockBackend.planStatus();
+  },
+
+  /** "Check for Pro": the one relay call a Free Secwet makes, started by the user. */
+  planActivate: async (): Promise<PlanStatusDto> => {
+    if (isTauri()) {
+      return invoke<PlanStatusDto>("plan_activate");
+    }
+    return mockBackend.planStatus();
   },
 };

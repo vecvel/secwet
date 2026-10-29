@@ -677,38 +677,47 @@ async function runSuite() {
   // ===========================================================================
 
   suite.push(
-    test("7.1 IPC Event Emission Audit: commands.rs emits secwet://changed scope 'settings' on recovery key create/replace", () => {
-      const commandsPath = path.join(desktopRoot, "src-tauri/src/commands.rs");
+    test("7.1 IPC Event Emission Audit: app layer emits secwet://changed scope 'settings' on recovery key create/replace", () => {
+      // The command logic lives in the shared app layer (crates/secwet-app); the
+      // desktop forwards its events to the webview.
+      const commandsPath = path.resolve(desktopRoot, "../../crates/secwet-app/src/commands.rs");
       const content = fs.readFileSync(commandsPath, "utf-8");
 
-      // Verify recovery_key_create_impl emits secwet://changed { scope: "settings" }
-      const createMatch = content.match(/pub fn recovery_key_create_impl[\s\S]*?\{([\s\S]*?)\n\}/);
-      assert.ok(createMatch, "recovery_key_create_impl must exist");
+      // Verify recovery_key_create emits secwet://changed { scope: "settings" }
+      const createMatch = content.match(/pub fn recovery_key_create\(&self\)[\s\S]*?\{([\s\S]*?)\n    \}/);
+      assert.ok(createMatch, "recovery_key_create must exist");
       assert.ok(
-        createMatch[1].includes('app.emit("secwet://changed", serde_json::json!({ "scope": "settings" }))'),
-        "recovery_key_create_impl must emit secwet://changed with scope settings"
+        createMatch[1].includes('self.emit_changed("settings")'),
+        "recovery_key_create must emit secwet://changed with scope settings"
       );
 
-      // Verify recovery_key_replace_impl emits secwet://changed { scope: "settings" }
-      const replaceMatch = content.match(/pub fn recovery_key_replace_impl[\s\S]*?\{([\s\S]*?)\n\}/);
-      assert.ok(replaceMatch, "recovery_key_replace_impl must exist");
+      // Verify recovery_key_replace emits secwet://changed { scope: "settings" }
+      const replaceMatch = content.match(/pub fn recovery_key_replace\(&self\)[\s\S]*?\{([\s\S]*?)\n    \}/);
+      assert.ok(replaceMatch, "recovery_key_replace must exist");
       assert.ok(
-        replaceMatch[1].includes('app.emit("secwet://changed", serde_json::json!({ "scope": "settings" }))'),
-        "recovery_key_replace_impl must emit secwet://changed with scope settings"
+        replaceMatch[1].includes('self.emit_changed("settings")'),
+        "recovery_key_replace must emit secwet://changed with scope settings"
       );
     })
   );
 
   suite.push(
-    test("7.2 IPC Event Emission Audit: commands.rs emits secwet://changed scope 'all' on workspace restore", () => {
-      const commandsPath = path.join(desktopRoot, "src-tauri/src/commands.rs");
+    test("7.2 IPC Event Emission Audit: app layer emits secwet://changed scope 'all' on workspace restore", () => {
+      const commandsPath = path.resolve(desktopRoot, "../../crates/secwet-app/src/commands.rs");
       const content = fs.readFileSync(commandsPath, "utf-8");
 
-      const restoreMatch = content.match(/pub fn workspace_restore_impl[\s\S]*?\{([\s\S]*?)\n\}/);
-      assert.ok(restoreMatch, "workspace_restore_impl must exist");
+      const restoreMatch = content.match(/pub fn workspace_restore\([\s\S]*?\{([\s\S]*?)\n    \}/);
+      assert.ok(restoreMatch, "workspace_restore must exist");
       assert.ok(
-        restoreMatch[1].includes('app.emit("secwet://changed", serde_json::json!({ "scope": "all" }))'),
-        "workspace_restore_impl must emit secwet://changed with scope all"
+        restoreMatch[1].includes('self.emit_changed("all")'),
+        "workspace_restore must emit secwet://changed with scope all"
+      );
+
+      // The desktop forwards app-layer events to the webview under the same names.
+      const libContent = fs.readFileSync(path.join(desktopRoot, "src-tauri/src/lib.rs"), "utf-8");
+      assert.ok(
+        libContent.includes("self.0.emit(event.name(), event.payload())"),
+        "lib.rs must forward app-layer events to the webview"
       );
     })
   );

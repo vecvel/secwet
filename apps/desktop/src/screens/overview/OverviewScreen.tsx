@@ -17,6 +17,8 @@ interface Props {
   onCliCopied: () => void;
   onOpenDevices: () => void;
   onOpenRecovery: () => void;
+  /** Settings > Security, where key rotation lives. */
+  onOpenSecurity: () => void;
   onOpenCli?: () => void;
   onOpenItem?: (itemId: string, environmentId?: string) => void;
   onOpenGroup?: (groupId: string) => void;
@@ -107,7 +109,7 @@ export function OverviewScreen(props: Props) {
             detail: `${pendingRotation} Rotating stops revoked devices reading changes made from now on.`,
             done: false,
             action: (
-              <Button variant="primary" onClick={props.onOpenRecovery}>
+              <Button variant="primary" onClick={props.onOpenSecurity}>
                 Rotate
               </Button>
             ),

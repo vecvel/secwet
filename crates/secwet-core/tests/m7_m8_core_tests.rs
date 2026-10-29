@@ -158,6 +158,7 @@ fn revoke_with_remote_wipe_crypto_shreds_keys_and_db() {
         assert!(b.ks.get(&format!("secwet/{id}/{entry}")).unwrap().is_none(), "{entry} shredded");
     }
     assert!(!b.dir.path().join("secwet").join(id.to_string()).exists(), "workspace directory deleted");
+    assert!(!b.dir.path().join(format!(".secwet-pending-wipe-{id}")).exists(), "wipe marker removed once done");
     let Dev { s, dir, .. } = b;
     drop(s);
     assert_eq!(Secwet::status(dir.path()).unwrap(), SecwetStatus::Uninitialized);

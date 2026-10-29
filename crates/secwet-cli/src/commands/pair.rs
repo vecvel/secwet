@@ -46,6 +46,8 @@ pub async fn handle_pair(
     match args.command {
         PairSubcommand::Start => {
             let secwet = secwet.ok_or(Error::NotInitialized)?;
+            // F13: pairing needs an active Pro plan; Free never calls the relay.
+            secwet.ensure_relay_allowed(secwet_core::RelayOp::Sync)?;
             let secwet_id = secwet.secwet_id();
             let relay_url = secwet.relay_url()?;
             let device_id = secwet.device_id().0;

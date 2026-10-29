@@ -978,12 +978,11 @@ class AppStore {
     return updated;
   }
 
-  public async unlock(): Promise<void> {
-    const biometricEnabled = typeof window !== "undefined" && window.localStorage.getItem("secwet:biometric_unlock") !== "false";
-    if (biometricEnabled) {
-      await api.biometricAuthenticate("Unlock Secwet");
-    }
-    await api.secwetUnlock();
+  public async unlock(recoveryKey?: string): Promise<void> {
+    // When biometric unlock is on, the Rust side shows the OS prompt and
+    // refuses to open the store until it passes (or the recovery key
+    // matches, while the device can't run the check).
+    await api.secwetUnlock(recoveryKey);
     this.setState({ status: { status: "unlocked" } });
     await this.reloadAll();
   }

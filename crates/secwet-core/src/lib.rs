@@ -7,18 +7,23 @@ pub mod collab;
 pub mod crypto;
 pub mod keys;
 pub mod model;
+pub mod pairing_join;
+pub mod plan;
 pub mod records;
 pub mod relay_client;
 pub mod secwet;
 pub mod sessions;
 pub mod sync;
 
+pub use plan::{PlanInfo, PlanState, RelayOp};
 pub use relay_client::RelayClient;
 
 pub use crypto::CryptoError;
 #[cfg(any(test, feature = "test-util"))]
 pub use keys::MemoryStore;
-pub use keys::{KeyStore, KeyringStore, SecretVec};
+#[cfg(feature = "os-keyring")]
+pub use keys::KeyringStore;
+pub use keys::{KeyStore, SecretVec};
 pub use model::{
     ActiveSession, ChecklistState, DashboardConfig, DeviceId, Environment, EnvironmentView,
     ExportAad, ExportSummary, FileMetaView, ItemView, LabelView, NoteMetaView, NoteView, Overview,
@@ -70,6 +75,9 @@ pub enum Error {
     LastEnvironment,
     #[error("needs the Pro plan")]
     NeedsPro,
+    /// Pro ended: sync is paused until the plan is renewed. Local data stays usable.
+    #[error("sync is paused because Pro ended")]
+    SyncPaused,
     #[error("device limit reached")]
     DeviceLimit,
     #[error("this device was revoked")]

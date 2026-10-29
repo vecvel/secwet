@@ -75,11 +75,10 @@ ThemeData buildSecwetTheme(Brightness brightness) {
       focusedErrorBorder: border.copyWith(borderSide: BorderSide(color: p.danger)),
       hintStyle: TextStyle(color: p.textTertiary),
     ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: p.bg,
-      indicatorColor: p.accentTint,
-      overlayColor: transparent,
-      surfaceTintColor: Colors.transparent,
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: p.accent,
+      selectionColor: p.accentTint,
+      selectionHandleColor: p.accent,
     ),
   );
 }

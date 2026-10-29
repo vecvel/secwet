@@ -290,8 +290,8 @@ fn cli_status_displays_details() {
         .success()
         .stdout(predicate::str::contains(&secwet_id))
         .stdout(predicate::str::contains("test-device-1"))
-        .stdout(predicate::str::contains("free"))
-        .stdout(predicate::str::contains("offline"));
+        .stdout(predicate::str::contains("Free"))
+        .stdout(predicate::str::contains("Local only"));
 
     let mut cmd_json = Command::cargo_bin("secwet").unwrap();
     cmd_json

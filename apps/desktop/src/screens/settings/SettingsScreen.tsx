@@ -8,8 +8,9 @@ import { PageHeader, Section } from "../../components/PageHeader";
 import { SegmentedTabs, type TabItem } from "../../components/SegmentedTabs";
 import type { Device, Plan } from "../../data/mock";
 import { initialDevices, thisDevice } from "../../data/mock";
-import { canPairDevices, canRotateMasterKey, isReadOnly } from "../../lib/access";
-import { api, type CliInstallStatus, type RelayStatusDto } from "../../lib/api";
+import { canPairDevices, canRotateMasterKey, isReadOnly, planEndDate } from "../../lib/access";
+import { api, formatUiError, type CliInstallStatus, type RelayStatusDto } from "../../lib/api";
+import { reloadPlan, setPlanStatus, usePlanStatus } from "../../lib/usePlan";
 import { formatAgo, formatDate } from "../../lib/format";
 import { useStore } from "../../lib/store";
 import { PairDeviceDialog } from "../devices/PairDeviceDialog";
@@ -18,6 +19,7 @@ import { PlanDialog } from "../PlanDialog";
 import { CreateRecoveryKeyDialog } from "../recovery/CreateRecoveryKeyDialog";
 import { ExportDialog } from "../recovery/ExportDialog";
 import { RotateKeyDialog } from "../recovery/RotateKeyDialog";
+import { BiometricSection } from "./BiometricSection";
 import styles from "./SettingsScreen.module.css";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -62,10 +64,12 @@ const SETTINGS_TABS: TabItem[] = [
   { id: "subscription", label: "Plan" },
 ];
 
-function deviceMeta(d: Device, _plan?: Plan) {
+function deviceMeta(d: Device, plan?: Plan | "paused") {
   if (d.revokedAt) return `${d.platform}, revoked ${formatDate(d.revokedAt)}.`;
   if (d.current) return `${d.platform}, added ${formatDate(d.addedAt)}, key ${d.fingerprint}`;
-  return `${d.platform}, ${d.lastSyncAt ? `last synced ${formatAgo(d.lastSyncAt)}` : "active"}, key ${d.fingerprint}`;
+  const sync = d.lastSyncAt ? `last synced ${formatAgo(d.lastSyncAt)}` : "active";
+  // When Pro ends, the other devices stop syncing (F13).
+  return `${d.platform}, ${plan === "paused" ? `sync paused, ${sync}` : sync}, key ${d.fingerprint}`;
 }
 
 export function SettingsScreen(props: Props) {
@@ -129,53 +133,92 @@ export function SettingsScreen(props: Props) {
     props.deviceName ?? appState.settings.device_name ?? thisDevice.name
   );
 
-  // Biometric unlock preference state
-  const [biometricUnlock, setBiometricUnlock] = useState(() => {
-    return typeof window !== "undefined" && window.localStorage.getItem("secwet:biometric_unlock") !== "false";
-  });
-
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
 
+  // Plan (F13): the real plan from the relay entitlement, cached in the core.
+  const planStatus = usePlanStatus();
+  const realPlan = planStatus?.plan ?? "free";
+  const planEnd = planEndDate(planStatus?.expires_at);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planMessage, setPlanMessage] = useState<{ tone: "success" | "warning"; text: string } | null>(null);
+
   // Relay status state
   const [relayStatus, setRelayStatus] = useState<RelayStatusDto | null>(null);
   const [relayLoading, setRelayLoading] = useState(false);
-  const [relayRegistering, setRelayRegistering] = useState(false);
   const [relayError, setRelayError] = useState<string | null>(null);
-  const [relaySuccess, setRelaySuccess] = useState<string | null>(null);
+  const [relayUrlInput, setRelayUrlInput] = useState("");
+  const [relayUrlSaved, setRelayUrlSaved] = useState("");
 
   const fetchRelayStatus = async () => {
     setRelayLoading(true);
     setRelayError(null);
     try {
+      // Free reports the cached plan without contacting the relay.
       const status = await api.relayStatus();
       setRelayStatus(status);
-    } catch (err: any) {
-      setRelayError(err?.message || "Failed to query relay status");
+      setRelayUrlSaved(status.relay_url);
+      setRelayUrlInput((prev) => prev || status.relay_url);
+      reloadPlan();
+    } catch (err) {
+      setRelayError(formatUiError(err, "Couldn't read the sync status."));
     } finally {
       setRelayLoading(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === "sync") {
+    if (activeTab === "sync" || activeTab === "subscription") {
       fetchRelayStatus();
     }
   }, [activeTab]);
 
-  async function handleRegisterWithRelay() {
-    setRelayRegistering(true);
-    setRelayError(null);
-    setRelaySuccess(null);
+  async function saveRelayUrl() {
+    const url = relayUrlInput.trim();
+    if (url === relayUrlSaved) return;
+    if (url && !/^https?:\/\/[^\s/]+/i.test(url)) {
+      setRelayError("Enter the relay address, for example https://relay.example.com.");
+      return;
+    }
     try {
-      const res = await api.relayRegister();
-      setRelaySuccess(`Registered workspace with relay (epoch ${res.current_epoch})`);
+      await api.relaySetUrl(url);
+      setRelayUrlSaved(url);
+      setRelayError(null);
       await fetchRelayStatus();
-    } catch (err: any) {
-      setRelayError(err?.message || "Failed to register with relay");
+    } catch (err) {
+      setRelayError(formatUiError(err, "Couldn't save the relay address."));
+    }
+  }
+
+  /** Free: "Check for Pro" asks the relay once. Pro and paused: re-read the entitlement. */
+  async function handleCheckPlan() {
+    setPlanBusy(true);
+    setPlanMessage(null);
+    try {
+      const next = realPlan === "free" ? await api.planActivate() : await api.planRefresh();
+      setPlanStatus(next);
+      setPlanMessage(
+        next.plan === "pro"
+          ? { tone: "success", text: "Pro is active. Sync, pairing and sharing are on." }
+          : next.plan === "paused"
+            ? { tone: "warning", text: "Pro has ended for this Secwet. Sync stays paused; everything here keeps working." }
+            : { tone: "warning", text: "This Secwet doesn't have Pro yet. Everything keeps working on this device." }
+      );
+    } catch (err) {
+      setPlanMessage({ tone: "warning", text: formatUiError(err, "Couldn't reach the relay. Try again.") });
     } finally {
-      setRelayRegistering(false);
+      setPlanBusy(false);
+    }
+  }
+
+  async function copySecwetId() {
+    if (!planStatus) return;
+    try {
+      await api.clipboardCopyText(planStatus.secwet_id);
+      setPlanMessage({ tone: "success", text: "Secwet ID copied." });
+    } catch (err) {
+      setPlanMessage({ tone: "warning", text: formatUiError(err, "Couldn't copy the Secwet ID.") });
     }
   }
 
@@ -296,13 +339,13 @@ export function SettingsScreen(props: Props) {
     setIsSyncing(true);
     try {
       const report = await api.syncNow();
-      setLastSyncResult(
-        `Synced just now (pushed: ${report.pushed}, pulled: ${report.pulled})`
-      );
-    } catch {
-      setLastSyncResult("Sync failed. Check relay connection.");
+      setLastSyncResult(`Synced just now. Sent ${report.pushed}, received ${report.pulled}.`);
+    } catch (err) {
+      setLastSyncResult(formatUiError(err, "Sync failed. Check the relay connection."));
     } finally {
       setIsSyncing(false);
+      // Every sync re-reads the entitlement, so the plan may have changed.
+      reloadPlan();
     }
   }
 
@@ -831,32 +874,7 @@ env = "development"`}
             </List>
           </Section>
 
-          <Section title="Authentication & Presence">
-            <List>
-              <ListRow
-                title="Biometric presence (Touch ID)"
-                meta="Prompt for Touch ID or system authentication when unlocking Secwet."
-                trailing={
-                  <div className={styles.select}>
-                    <SelectControl
-                      aria-label="Biometric presence"
-                      value={biometricUnlock ? "enabled" : "disabled"}
-                      onChange={(e) => {
-                        const enabled = e.target.value === "enabled";
-                        setBiometricUnlock(enabled);
-                        if (typeof window !== "undefined") {
-                          window.localStorage.setItem("secwet:biometric_unlock", enabled ? "true" : "false");
-                        }
-                      }}
-                    >
-                      <option value="enabled">Required</option>
-                      <option value="disabled">Disabled</option>
-                    </SelectControl>
-                  </div>
-                }
-              />
-            </List>
-          </Section>
+          <BiometricSection />
 
           <Section title="Zeroization & Memory Protection">
             <List>
@@ -924,9 +942,10 @@ env = "development"`}
                     <>
                       {d.name}
                       {d.current && <Badge>This device</Badge>}
+                      {!d.current && realPlan === "paused" && <Badge tone="warning">Paused</Badge>}
                     </>
                   }
-                  meta={deviceMeta(d, plan)}
+                  meta={deviceMeta(d, realPlan === "paused" ? "paused" : plan)}
                   trailing={
                     d.current ? (
                       <Badge tone="success">Active</Badge>
@@ -1033,121 +1052,168 @@ env = "development"`}
       {/* 5. SYNCHRONIZATION TAB */}
       {activeTab === "sync" && (
         <>
-          <Section title="Relay & Sync Engine">
+          {realPlan === "free" && (
+            <Notice
+              tone="accent"
+              label="Free"
+              action={
+                <Button variant="tertiary" onClick={() => setActiveTab("subscription")}>
+                  See plan
+                </Button>
+              }
+            >
+              Sync comes with Pro. On Free, everything stays on this device and Secwet never contacts the relay.
+            </Notice>
+          )}
+          {realPlan === "paused" && (
+            <Notice tone="warning" label="Sync paused">
+              Pro ended{planEnd ? ` on ${planEnd}` : ""}, so sync is paused on every device. Everything here stays usable
+              and exportable. Changes you make now are kept and sent once Pro is renewed.
+            </Notice>
+          )}
+          <Section title="Sync">
             {relayError && (
-              <div style={{ marginBottom: "1rem" }}>
-                <Notice tone="warning" label="Relay Notice">{relayError}</Notice>
-              </div>
-            )}
-            {relaySuccess && (
-              <div style={{ marginBottom: "1rem" }}>
-                <Notice tone="success" label="Success">{relaySuccess}</Notice>
+              <div className={styles.noticeGap}>
+                <Notice tone="warning" label="Sync">
+                  {relayError}
+                </Notice>
               </div>
             )}
             <List>
               <ListRow
+                title="Relay address"
+                meta="The sync relay this Secwet uses. It only stores encrypted data."
+                trailing={
+                  <input
+                    type="url"
+                    aria-label="Relay address"
+                    className={styles.input}
+                    placeholder="https://relay.example.com"
+                    spellCheck={false}
+                    autoComplete="off"
+                    disabled={readOnly}
+                    value={relayUrlInput}
+                    onChange={(e) => setRelayUrlInput(e.target.value)}
+                    onBlur={saveRelayUrl}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveRelayUrl();
+                    }}
+                  />
+                }
+              />
+              <ListRow
                 title="Relay connection"
                 meta={
-                  relayStatus
-                    ? `Endpoint: ${relayStatus.relay_url}`
-                    : "End-to-end encrypted connection to sync relay."
+                  realPlan === "free"
+                    ? "Not used on Free."
+                    : relayUrlSaved
+                      ? relayUrlSaved
+                      : "Add the relay address to sync."
                 }
                 trailing={
-                  relayStatus?.connected ? (
+                  realPlan === "free" ? (
+                    <Badge tone="neutral">Off</Badge>
+                  ) : relayStatus?.connected ? (
                     <Badge tone="success">Connected</Badge>
                   ) : (
-                    <Badge tone="neutral">{relayLoading ? "Checking..." : "Offline"}</Badge>
+                    <Badge tone="neutral">{relayLoading ? "Checking…" : "Offline"}</Badge>
                   )
                 }
               />
               <ListRow
-                title="Device slots"
-                meta={`${relayStatus?.active_devices ?? 1} of ${relayStatus?.device_limit ?? 1} devices registered.`}
+                title="Devices"
+                meta={`${planStatus?.active_devices ?? 1} of ${planStatus?.device_limit ?? 1} devices on this plan.`}
                 trailing={
                   <Badge
-                    tone={
-                      (relayStatus?.active_devices ?? 1) >= (relayStatus?.device_limit ?? 1)
-                        ? "warning"
-                        : "neutral"
-                    }
+                    tone={(planStatus?.active_devices ?? 1) >= (planStatus?.device_limit ?? 1) ? "warning" : "neutral"}
                   >
-                    {relayStatus ? `${relayStatus.active_devices} / ${relayStatus.device_limit}` : "1 / 1"}
+                    {`${planStatus?.active_devices ?? 1} / ${planStatus?.device_limit ?? 1}`}
                   </Badge>
                 }
               />
+              {realPlan !== "free" && (
+                <ListRow
+                  title="Waiting to sync"
+                  meta={
+                    realPlan === "paused"
+                      ? "Changes made while sync is paused. They are sent once Pro is renewed."
+                      : "Local changes not sent yet. Everything is encrypted before it leaves this device."
+                  }
+                  trailing={<Badge tone="neutral">{`${relayStatus?.pending_outbox_count ?? 0} changes`}</Badge>}
+                />
+              )}
               <ListRow
-                title="Outbox queue"
-                meta="Local changes awaiting sync. All changes are encrypted before transmission."
-                trailing={<Badge tone="neutral">{relayStatus?.pending_outbox_count ?? 0} pending</Badge>}
-              />
-              <ListRow
-                title="Register with Relay"
-                meta="Register this workspace and device public key on the zero-knowledge relay."
-                trailing={
-                  <Button
-                    variant="secondary"
-                    disabled={relayRegistering || readOnly}
-                    onClick={handleRegisterWithRelay}
-                  >
-                    {relayRegistering ? "Registering..." : "Register store"}
-                  </Button>
-                }
-              />
-              <ListRow
-                title="Manual sync"
+                title="Sync now"
                 meta={
                   readOnly
                     ? "This device was unlinked from Secwet. Sync is disabled."
-                    : lastSyncResult || "Trigger an immediate exchange with the sync relay."
+                    : realPlan === "free"
+                      ? "Needs Pro."
+                      : realPlan === "paused"
+                        ? lastSyncResult || "Checks whether Pro was renewed, then syncs."
+                        : lastSyncResult || "Send and receive changes now."
                 }
                 trailing={
                   <Button
                     variant="secondary"
-                    disabled={isSyncing || readOnly}
+                    disabled={isSyncing || readOnly || realPlan === "free" || !relayUrlSaved}
                     onClick={async () => {
                       await handleManualSync();
                       await fetchRelayStatus();
                     }}
                   >
-                    {isSyncing ? "Syncing..." : "Sync now"}
+                    {isSyncing ? "Syncing…" : "Sync now"}
                   </Button>
                 }
               />
             </List>
           </Section>
 
-          <Section title="Zero-Knowledge Invariants">
+          <Section title="What the relay sees">
             <ul className={styles.limits}>
-              <li>
-                The sync relay never sees, processes, or stores your master key, secret values, or decrypted metadata.
-              </li>
-              <li>
-                All requests are cryptographically authenticated with your device's Ed25519 signing key and protected against replay attacks.
-              </li>
-              <li>
-                Database records on the relay store only opaque ciphertext payloads and non-identifying IDs.
-              </li>
+              <li>The relay never sees your master key, secret values, names or notes.</li>
+              <li>Every request is signed with this device's own key and protected against replay.</li>
+              <li>The relay stores only encrypted data and random IDs.</li>
             </ul>
           </Section>
         </>
       )}
 
-      {/* 6. SUBSCRIPTION & ENTITLEMENTS TAB */}
+      {/* 6. PLAN TAB */}
       {activeTab === "subscription" && (
         <>
-          <Section title="Subscription Plan">
+          {planMessage && (
+            <Notice
+              tone={planMessage.tone}
+              label="Plan"
+              action={
+                <Button variant="tertiary" arrow={false} onClick={() => setPlanMessage(null)}>
+                  Dismiss
+                </Button>
+              }
+            >
+              {planMessage.text}
+            </Notice>
+          )}
+          <Section title="Plan">
             <List>
               <ListRow
                 title={
                   <>
-                    {plan === "pro" ? "Pro Plan" : "Free Plan"}
-                    <Badge tone="accent">Current plan</Badge>
+                    {realPlan === "free" ? "Free" : "Pro"}
+                    {realPlan === "paused" ? (
+                      <Badge tone="warning">Paused</Badge>
+                    ) : (
+                      <Badge tone="accent">Current plan</Badge>
+                    )}
                   </>
                 }
                 meta={
-                  plan === "pro"
-                    ? "Real-time encrypted synchronization across all approved devices."
-                    : "Local-only. Move to Pro to sync seamlessly with mobile and secondary devices."
+                  realPlan === "pro"
+                    ? `${planStatus?.device_limit ?? 5} devices${planEnd ? `, until ${planEnd}` : ""}. Sync, pairing and sharing are on.`
+                    : realPlan === "paused"
+                      ? `Pro ended${planEnd ? ` on ${planEnd}` : ""}. Sync is paused. Nothing is deleted or locked, and you can still export.`
+                      : "One device, everything local. Secwet never contacts the relay on Free."
                 }
                 trailing={
                   <Button variant="tertiary" onClick={() => setComparing(true)}>
@@ -1155,15 +1221,45 @@ env = "development"`}
                   </Button>
                 }
               />
+              <ListRow
+                title="Secwet ID"
+                meta={planStatus?.secwet_id ?? "Unlock Secwet to see its ID."}
+                trailing={
+                  <Button variant="tertiary" arrow={false} disabled={!planStatus} onClick={copySecwetId}>
+                    Copy
+                  </Button>
+                }
+              />
+              <ListRow
+                title={realPlan === "free" ? "Check for Pro" : "Check plan"}
+                meta={
+                  !relayUrlSaved
+                    ? "Add the relay address in Settings > Sync first."
+                    : realPlan === "free"
+                      ? "Check once so the relay knows this Secwet ID, then again after Pro is granted to it. This is the only time a Free device contacts the relay."
+                      : planStatus?.checked_at
+                        ? `Checked ${formatAgo(planStatus.checked_at).toLowerCase()}. The plan is also checked on every sync.`
+                        : "The plan is checked on every sync."
+                }
+                trailing={
+                  <Button
+                    variant="secondary"
+                    disabled={planBusy || readOnly || !relayUrlSaved}
+                    onClick={handleCheckPlan}
+                  >
+                    {planBusy ? "Checking…" : realPlan === "free" ? "Check for Pro" : "Check now"}
+                  </Button>
+                }
+              />
             </List>
           </Section>
 
           {import.meta.env.DEV && (
-            <Section title="Simulate Plan (Development)">
+            <Section title="Simulate plan (development)">
               <List>
                 <ListRow
-                  title="Active Tier"
-                  meta="Simulate Free vs Pro in development builds to test feature gating."
+                  title="Interface plan"
+                  meta="Development builds only. Changes how the interface gates features; the real plan above stays the same."
                   trailing={
                     <div className={styles.select}>
                       <SelectControl
@@ -1181,24 +1277,18 @@ env = "development"`}
             </Section>
           )}
 
-          <Section title="Entitlements & Policy">
+          <Section title="If Pro ends">
             <ul className={styles.limits}>
-              <li>
-                <strong>Zero Lock-in:</strong> Ending a Pro subscription never deletes, locks, or revokes your local data.
-              </li>
-              <li>
-                <strong>Backups & Exports:</strong> Recovery keys, local encrypted backups, and data exports remain accessible on every plan.
-              </li>
-              <li>
-                <strong>Multi-device Sync:</strong> Pro activates encrypted relay sync across all paired desktop and mobile devices.
-              </li>
+              <li>Nothing is deleted or locked. Everything on this device stays usable.</li>
+              <li>Recovery keys, backups and export work on every plan.</li>
+              <li>Sync pauses on every device and resumes when Pro is renewed.</li>
             </ul>
           </Section>
         </>
       )}
 
       {/* Dialogs */}
-      {comparing && <PlanDialog plan={plan} onClose={() => setComparing(false)} />}
+      {comparing && <PlanDialog plan={realPlan === "paused" ? "paused" : plan} onClose={() => setComparing(false)} />}
 
       {pairing &&
         (plan === "pro" ? (

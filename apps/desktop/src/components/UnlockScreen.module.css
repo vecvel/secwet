@@ -40,6 +40,13 @@
   max-width: 400px;
 }
 
+.recovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+}
+
 .toastContainer {
   position: fixed;
   bottom: var(--space-6);

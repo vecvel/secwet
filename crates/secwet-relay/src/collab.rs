@@ -475,6 +475,7 @@ pub async fn create_invitation(
     Json(req): Json<InviteCollaboratorRequest>,
 ) -> Result<Json<InvitationDto>, RelayApiError> {
     require_workspace(&caller, secwet_id)?;
+    crate::db::require_active_pro(&state.pool, secwet_id).await?;
     check_grant_set(&req.grants, &caller, secwet_id, req.member_id)?;
 
     let now_ms = Utc::now().timestamp_millis();

@@ -5,6 +5,7 @@ import { Icon } from "./components/Icon";
 import { Notice } from "./components/Notice";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { type Device, type Plan } from "./data/mock";
+import { usePlanStatus } from "./lib/usePlan";
 import { useIdleTimer } from "./hooks/useIdleTimer";
 import { BottomTabs } from "./layout/BottomTabs";
 import { Sidebar } from "./layout/Sidebar";
@@ -81,7 +82,11 @@ export function App() {
     }
     setCliConnected(true);
   }
-  const [plan, setPlan] = useState<Plan>("free");
+  // The real plan comes from the relay entitlement (F13). The "Simulate plan"
+  // switch in Settings overrides it in development builds only.
+  const planStatus = usePlanStatus();
+  const [simulatedPlan, setPlan] = useState<Plan | null>(null);
+  const plan: Plan = (import.meta.env.DEV && simulatedPlan) || (planStatus?.plan === "pro" ? "pro" : "free");
   const [devices, setDevices] = useState<Device[]>([]);
   const [membersSpace, setMembersSpace] = useState<SpaceView | null>(null);
   const [sharing, setSharing] = useState<{ spaceId: string; focus?: { kind: TreeNodeKind; id: string } } | null>(
@@ -288,7 +293,7 @@ export function App() {
     return (
       <div className={styles.shell}>
         <UnlockScreen
-          onUnlock={() => store.unlock()}
+          onUnlock={(recoveryKey) => store.unlock(recoveryKey)}
           deviceName={effectiveDeviceName}
           onRestore={() => setRestoringBackup(true)}
         />
@@ -501,6 +506,10 @@ export function App() {
               }}
               onOpenRecovery={() => {
                 setSettingsTab("recovery");
+                setRoute("settings");
+              }}
+              onOpenSecurity={() => {
+                setSettingsTab("security");
                 setRoute("settings");
               }}
               onOpenCli={() => {

@@ -1,4 +1,5 @@
-//! Desktop host. Connects the UI to `secwet-core` via Tauri 2 commands.
+//! Desktop host. Connects the UI to the shared app layer (`secwet-app`) via
+//! Tauri 2 commands.
 
 pub mod biometric;
 pub mod cli_manager;
@@ -6,13 +7,23 @@ pub mod clipboard;
 pub mod collab_commands;
 pub mod commands;
 mod dock_icon;
-pub mod error;
-pub mod state;
 
-use tauri::{Manager, RunEvent, WindowEvent};
+use std::sync::Arc;
 
-pub use error::UiError;
+use secwet_app::{AppEvent, EventSink};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+
+pub use secwet_app::{error, state, UiError};
 pub use state::AppState;
+
+/// Forwards app-layer notifications to the webview as Tauri events.
+struct TauriEvents(AppHandle);
+
+impl EventSink for TauriEvents {
+    fn emit(&self, event: AppEvent) {
+        let _ = self.0.emit(event.name(), event.payload());
+    }
+}
 
 #[tauri::command]
 fn core_version() -> &'static str {
@@ -21,12 +32,25 @@ fn core_version() -> &'static str {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Background work in the app layer (clipboard auto-clear) shares Tauri's runtime.
+    secwet_app::runtime::install(tauri::async_runtime::handle().inner().clone());
     let app_state = AppState::default_state();
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(app_state)
+        .setup(|app| {
+            let sink = Arc::new(TauriEvents(app.handle().clone()));
+            app.state::<AppState>().set_event_sink(sink);
+            let verifier = Arc::new(biometric::NativeVerifier::new());
+            #[cfg(target_os = "windows")]
+            if let Some(hwnd) = app.get_webview_window("main").and_then(|w| w.hwnd().ok()) {
+                verifier.set_owner_window(hwnd.0 as isize);
+            }
+            app.state::<AppState>().set_presence_verifier(verifier);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             core_version,
             // 1. Lifecycle
@@ -97,8 +121,9 @@ pub fn run() {
             commands::settings_get,
             commands::settings_set,
             commands::system_device_name,
-            commands::biometric_status,
-            commands::biometric_authenticate,
+            biometric::biometric_status,
+            biometric::biometric_set_enabled,
+            biometric::biometric_cancel,
             commands::cli_status,
             commands::cli_install,
             commands::cli_uninstall,
@@ -120,6 +145,10 @@ pub fn run() {
             commands::relay_status,
             commands::relay_register,
             commands::relay_set_url,
+            // Plans (F13)
+            commands::plan_status,
+            commands::plan_refresh,
+            commands::plan_activate,
             // 14. Devices & Pairing
             commands::devices_list,
             collab_commands::device_revoke,

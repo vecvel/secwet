@@ -81,7 +81,8 @@ The UI already shows every flow described below (create, edit, delete, reveal, c
 - **secwet-core** owns all logic: keys, encryption, the local database, the record model, sync and conflict resolution. Apps are thin layers that call it.
 - **Desktop** calls core through Tauri commands (section 9). The webview never sees keys and only sees a secret value when the user reveals it.
 - **CLI** links secwet-core directly and opens the same local Secwet store as the desktop app on that machine.
-- **Mobile** calls core through `flutter_rust_bridge` bindings in a new crate `crates/secwet-ffi`.
+- **Shared app layer** `crates/secwet-app` holds every UI command (state, DTOs, `UiError`, clipboard auto-clear, plans, biometric policy, events). The desktop's Tauri commands and the phone's FFI are thin wrappers over it (`docs/app-layer.md`).
+- **Mobile** calls the app layer through our own small C ABI in `crates/secwet-ffi` (JSON commands with the desktop's command names; no binding generator), see F18 and `docs/mobile-ffi.md`.
 - **Relay** is only used on the Pro plan. Free plans never contact it.
 
 Trust boundaries: the device is trusted while unlocked. The relay is untrusted for confidentiality and integrity: it can delay, drop or reorder events, but it cannot read or forge them. The network is untrusted.
@@ -92,7 +93,8 @@ Trust boundaries: the device is trusted while unlocked. The relay is untrusted f
 |---|---|
 | `crates/secwet-core` (exists) | Library: `crypto`, `keys`, `store`, `secwet`, `records`, `sync`, `pairing`, `recovery`, `export`, `relay_client` modules |
 | `crates/secwet-proto` (new) | Shared wire types used by core and relay: request and response bodies, event envelope, error codes. No crypto, no IO |
-| `crates/secwet-ffi` (new, M9) | `flutter_rust_bridge` API for mobile |
+| `crates/secwet-app` (M10) | Shared app layer for desktop and mobile: commands as `AppState` methods, platform traits (`ClipboardPort`, `EventSink`, `PresenceVerifier`) |
+| `crates/secwet-ffi` (M10) | Own C ABI for the mobile apps (four functions, JSON commands), native platform callbacks |
 | `crates/secwet-relay` (exists) | Server |
 | `crates/secwet-cli` (exists) | CLI |
 
@@ -615,8 +617,9 @@ Tests: `device_id_is_stable_hash_of_public_key`, `fingerprint_format`.
 | Pro | Pairing, sync, revocation, key rotation over the relay, relay-stored encrypted snapshot for recovery, device limit from the entitlement (default 5) |
 
 - Entitlements live on the relay (section 8.3). The client caches `plan` in `meta` and refreshes it on each sync.
-- Payment integration is out of scope for this guide. Until a provider is chosen, grant Pro with the relay admin command `secwet-relay admin grant --secwet <id> --devices 5 --until 2027-01-01`.
+- Payment integration is out of scope for this guide. Until a provider is chosen, grant Pro with the relay admin command `secwet-relay admin grant --secwet <id> --devices 5 --until 2027-01-01`. The relay grants only a registered workspace: the owner first registers the id with "Check for Pro" in Settings > Plan (registration is self-signed, so a grant made before it would go to whichever device registered the id first).
 - When Pro ends: sync stops, other devices show "Paused" (UI exists), local data stays fully usable and exportable. Never delete or lock anything.
+- The relay enforces this too: push, snapshot upload, the live stream, pairing and collaboration need an active Pro plan. A paused workspace may still pull, ack and download its snapshot, to catch up on what was pushed while it was Pro and to receive revocations; nothing new can be stored.
 - The dev-only "Simulate plan" switch in Settings stays dev-only.
 
 Tests: `free_plan_never_calls_relay` (a relay client mock that fails the test if called), `expired_plan_pauses_sync_keeps_local_access`.
@@ -735,14 +738,27 @@ Tests: `settings_persist_across_restart`, `settings_consolidated_navigation`, Pl
 
 ### F18. Mobile app
 
-Build in this order after M8, reusing secwet-core through `crates/secwet-ffi` (`flutter_rust_bridge` v2):
+Built in `apps/mobile` (Flutter) on the same Rust code as the desktop, with full desktop feature parity including M7 (revocation, remote wipe, key rotation), M8 (members, tree-wise roles, invitations) and M9 (plans).
 
-1. Bindings for the `Secwet` API in section 6. Key storage: implement `KeyStore` in Dart with `flutter_secure_storage` (Keychain on iOS, Keystore-backed on Android) and pass it through the bridge as callbacks.
-2. Screens in the same order and with the same copy as desktop: Overview, Secrets (project picker at the top), Devices, Recovery, Settings, using `apps/mobile/lib/theme/app_theme.dart` (tokens already generated).
-3. Pairing on mobile: scan the QR with `mobile_scanner`. A phone can also be the approving device (shows its own QR).
-4. Copy on mobile clears the clipboard after 30 seconds where the OS allows; on iOS mark the item as local-only and expiring.
+**Layers**
+1. `crates/secwet-app`: the shared app layer. Every desktop command is a method on `AppState` returning `Result<T, UiError>`; desktop and mobile call the same code (`docs/app-layer.md`).
+2. `crates/secwet-ffi`: our own C ABI, no `flutter_rust_bridge`. Four functions in `include/secwet_ffi.h` (register platform, call, free, set event callback). `secwet_ffi_call` takes JSON `{cmd, args}` with the desktop's command names, so both hosts share one contract (`src/dispatch.rs`). Response buffers are zeroized on free, secret strings are scrubbed from requests and responses, panics are caught, nothing is logged. Android adds a small JNI bridge in C (`android/jni_bridge.c`).
+3. Native platform services, registered as C callbacks before Dart starts: key storage, clipboard, the unlock prompt and the screen-lock state. They are Swift (`ios/Runner/SecwetPlatform.swift`) and Kotlin (`SecwetNative.kt`), not Dart: Rust's `KeyStore` calls are synchronous from any thread, Dart platform channels are asynchronous, and Dart memory cannot be zeroized. Keys move only between Rust and the OS secure storage and never reach Dart. Other native features go through our own platform channels: `app.secwet/platform` (document picker, save dialog, temp folder, PDF pages), `app.secwet/links` (`secwet://pair`, `secwet://invite`), `app.secwet/scanner` (QR scan: AVFoundation on iOS, the Google code scanner `play-services-code-scanner` on Android, in `SecwetLinksAndScanner.kt`).
+4. Dart: `lib/core` (dart:ffi bindings, one background isolate per call, typed models, `SecwetApi`, `SessionController`), `lib/app` (gate, shell, auto-lock), `lib/screens`, `lib/widgets`. No third-party Dart packages beyond Flutter.
 
-Tests: Dart unit tests for view models, `flutter test` widget tests per screen, and `integration_test` for create, reveal and delete of a secret.
+**Navigation and look.** Three bottom tabs: Groups, Overview (center, opens on launch) and Settings. Devices, Recovery, Sync, Plan, Security, General and Members live in Settings tabs; feature screens push onto the tab's own navigator. The widgets reuse the desktop components exactly (outlined pills, underline tabs with count pills, deep moss buttons, cards, notices, the bottom-bar fade), 44px touch targets, light and dark from the OS, system font, icons and the logo generated from the desktop sources (`packages/brand/flutter.mjs`). Headers show the screen's title with its actions on the same row, never the logo or wordmark (`docs/design-decisions.md`, "Mobile app").
+
+**Unlock and privacy.** Onboarding (create, restore from an export, join with an invite) runs once. After that there is no unlock button: every launch, and every return after the auto-lock time, shows a blank lock screen and the system prompt opens by itself (iOS `LAPolicy.deviceOwnerAuthentication`: Face ID, Touch ID or Optic ID with the passcode as fallback; Android `BiometricPrompt` with `BIOMETRIC_STRONG | DEVICE_CREDENTIAL`). A cancelled prompt comes back when the user taps the screen or returns to the app. The keys are bound to that prompt: iOS Keychain items use `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly` with `.userPresence`, and the prompt's evaluated `LAContext` authorizes reads for one session; on Android the entries are sealed under a data key that only an authentication-bound Android Keystore key pair can unwrap. Rust runs the prompt inside `secwet_unlock`, so the Dart UI cannot open the store without it, and locking ends the key session. A phone with no screen lock at all cannot protect the keys this way, so onboarding and unlock stop at one screen, "Set a screen lock to use Secwet", whose button opens the phone's security settings; the app continues once a lock is set. The recovery key is never asked for to unlock. The app-switcher snapshot shows the blank lock screen (iOS cover view, Android `FLAG_SECURE`), and data lives in app-private, non-backed-up storage.
+
+**Phone-specific rules.** Copy clears after 30 s: on iOS the pasteboard item is local-only and expires on its own (the app cannot run a timer while suspended) and only the app's own item is read back, so iOS shows no paste notice; Android marks the clip sensitive and clears it. Sync runs when the shell opens and when the app returns to the foreground, only for Pro with a relay set; reads that meet a sync in progress wait for it (`readWhenIdle`) instead of failing. Free never contacts the relay, the same as desktop. The device name is the phone's own (`UIDevice.name`, `Settings.Global.DEVICE_NAME`), and the platform shows as iOS or Android.
+
+**Builds.** iOS: `apps/mobile/scripts/build_rust_ios.sh` builds `SecwetFFI.xcframework` (device, simulator arm64 and x86_64) from a Runner build phase. Android: a Gradle task runs `cargo ndk` for arm64-v8a, armeabi-v7a and x86_64.
+
+Tests: Rust `crates/secwet-ffi/tests` (JSON contract, C ABI round trip, unlock policy with and without a screen lock, Free never contacts the relay, and two- and three-phone pairing, revoke, wipe and invite flows against the real relay and Postgres); `flutter test` widget tests per screen and for the lock screen, auto-lock and shell; `integration_test/secret_flow_test.dart` creates, reveals, copies and deletes a secret against the real Rust core on a simulator.
+
+### Biometric unlock (desktop and mobile)
+
+Secwet uses the system's own biometric prompt and never shows biometric wording or controls where none is usable (no sensor, nothing enrolled): the status reports `available: false`, kind `none`, and the UI hides it. The check runs in Rust (`crates/secwet-app/src/biometric.rs`, `PresenceVerifier`), so a UI that skips it cannot open the store. Desktop: opt-in in Settings > Security (Touch ID through LocalAuthentication, Windows Hello, fprintd on Linux); turning it on needs one successful check, turning it off always works, and a removed enrolment falls back to the default unlock. Mobile: not optional; with a screen lock the system prompt guards every unlock and the keys are bound to it, as above. Details: `docs/biometric-unlock.md`, `docs/mobile-ffi.md`.
 
 ### F19. Workspace Collaboration, Tree-Wise Permissions & Zero-Knowledge RBAC
 
@@ -1078,10 +1094,19 @@ Do them in order. Each ends with all its tests passing and every item checked.
 - Design, hardening rules and known limits: `docs/m7-m8-architecture.md`.
 
 ### M9. Plans in the product
-- [ ] F13: plan from relay, paused state, never locks local data; Settings and Devices reflect the real plan.
+- [x] F13: plan from relay, paused state, never locks local data; Settings and Devices reflect the real plan.
+- Plan cache and gating: `crates/secwet-core/src/plan.rs`, `crates/secwet-app/src/plan.rs`. Relay: expiry evaluated on every read, admin `grant|expire|ungrant|status`, grants may precede registration. Tests: `secwet-app/tests/plan_tests.rs` (`free_plan_never_calls_relay`), `secwet-relay/tests/plan_tests.rs` (`expired_plan_pauses_sync_keeps_local_access`).
 
 ### M10. Mobile
-- [ ] F18 in the listed order with its tests.
+- [x] Shared app layer `crates/secwet-app`; the desktop runs on it unchanged.
+- [x] Own C ABI `crates/secwet-ffi` with native Keychain / Keystore, clipboard and unlock prompt; Rust FFI tests pass.
+- [x] Three-tab app (Groups, Overview, Settings) with desktop parity: groups, entries, secrets, assets, notes, devices and pairing, recovery and export, sync, plans (Free, Pro, Paused), revocation and remote wipe, key rotation, members and invitations.
+- [x] Mobile unlock: blank lock screen, system prompt on every launch and after the auto-lock time, keys bound to the screen lock; headers without the logo.
+- [x] Require a screen lock on phones: with no PIN, passcode, pattern or biometrics, onboarding and unlock stop at "Set a screen lock to use Secwet" with a button to the phone's security settings, then continue once a lock is set. Remove the recovery-key unlock fallback; the recovery key is only for recovery (see docs/design-decisions.md).
+- [x] `flutter analyze`, `flutter test`, `flutter build ios --simulator`, `flutter build apk` pass; create, relaunch and unlock with Face ID checked on the iOS simulator.
+- [ ] Android run on an emulator or device (Keystore session, BiometricPrompt, clipboard, scanner, document picker): built and packaged only.
+- [ ] Real-device checks: Face ID / Touch ID on an iPhone, QR pairing with the camera, deep links opened from outside the app.
+- [ ] `integration_test/secret_flow_test.dart` on the iOS 26 simulator (passes on iOS 18.2; the iOS 26.5 runtime never attaches the test runner).
 
 ### M11. Hardening and release
 - [ ] Fuzz targets run for at least one hour each with no crash.

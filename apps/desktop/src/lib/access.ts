@@ -10,6 +10,7 @@ import type {
   GroupView,
   ItemView,
   LinkStatusDto,
+  PlanStatusDto,
   ScopeNodeView,
   SpaceView,
   TreeNodeKind,
@@ -276,4 +277,53 @@ export function spaceOfGrant(
     return grant.id ? pathForItem(grant.id, items, groups).spaceId ?? null : null;
   }
   return null;
+}
+
+// ============================================================================
+// Plans (F13)
+// ============================================================================
+
+/** Why sharing is unavailable on this device, or null when it is available. */
+export type SharingBlock = "needs_pro" | "paused" | "needs_sync";
+
+/**
+ * Sharing goes through the sync relay, which comes with Pro. Free and paused
+ * plans explain this instead of failing; local data keeps working either way.
+ */
+export function sharingBlock(plan: Pick<PlanStatusDto, "plan" | "relay_configured"> | null | undefined): SharingBlock | null {
+  if (!plan) return null;
+  if (plan.plan === "free") return "needs_pro";
+  if (plan.plan === "paused") return "paused";
+  if (!plan.relay_configured) return "needs_sync";
+  return null;
+}
+
+export const SHARING_BLOCK_COPY: Record<SharingBlock, { title: string; body: string }> = {
+  needs_pro: {
+    title: "Sharing needs Pro and sync",
+    body: "People get their own key through the sync relay, which comes with Pro. Everything here keeps working on this device.",
+  },
+  paused: {
+    title: "Sync is paused",
+    body: "Pro ended, so sharing and sync are paused. Everything stays on this device and you can still export it. Renew Pro to invite people again.",
+  },
+  needs_sync: {
+    title: "Set up sync to share",
+    body: "Members get access through the sync relay. Set it up in Settings > Sync, then invite people here.",
+  },
+};
+
+/** Short plan name for badges and settings rows. */
+export function planLabel(plan: PlanStatusDto["plan"] | null | undefined): string {
+  if (plan === "pro") return "Pro";
+  if (plan === "paused") return "Paused";
+  return "Free";
+}
+
+/** Formats an RFC 3339 entitlement end as a date, or null when there is none. */
+export function planEndDate(expiresAt: string | null | undefined): string | null {
+  if (!expiresAt) return null;
+  const t = Date.parse(expiresAt);
+  if (Number.isNaN(t)) return null;
+  return new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }

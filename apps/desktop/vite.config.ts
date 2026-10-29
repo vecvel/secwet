@@ -11,7 +11,7 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         // Keep React in its own chunk so the app chunk stays under the 500 kB advisory limit.
-        advancedChunks: { groups: [{ name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }] },
+        codeSplitting: { groups: [{ name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }] },
       },
     },
   },

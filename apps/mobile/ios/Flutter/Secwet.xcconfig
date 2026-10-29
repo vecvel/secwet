@@ -1,0 +1,16 @@
+// Links the Rust app layer (crates/secwet-ffi) into the Runner. The
+// "Build Rust" phase runs apps/mobile/scripts/build_rust_ios.sh first, which
+// writes ios/Frameworks/SecwetFFI.xcframework.
+//
+// -force_load keeps every exported secwet_ffi_* symbol: Dart looks them up at
+// run time (DynamicLibrary.process), so the linker sees no static use of most.
+//
+// SECWET_FFI_LIB is also the "Build Rust" phase's declared output, so Xcode
+// orders the link after it on a clean checkout.
+SECWET_FFI_XCFRAMEWORK = $(PROJECT_DIR)/Frameworks/SecwetFFI.xcframework
+SECWET_FFI_LIB[sdk=iphoneos*] = $(SECWET_FFI_XCFRAMEWORK)/ios-arm64/libsecwet_ffi.a
+SECWET_FFI_LIB[sdk=iphonesimulator*] = $(SECWET_FFI_XCFRAMEWORK)/ios-arm64_x86_64-simulator/libsecwet_ffi.a
+OTHER_LDFLAGS = $(inherited) -force_load "$(SECWET_FFI_LIB)" -framework Security -framework LocalAuthentication -framework CoreFoundation -liconv
+HEADER_SEARCH_PATHS = $(inherited) "$(PROJECT_DIR)/../../../crates/secwet-ffi/include"
+// Keep global symbols for dlsym in stripped release builds.
+STRIP_STYLE = non-global

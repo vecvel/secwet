@@ -128,6 +128,43 @@ pub(crate) fn deserialize_label_body_pub(bytes: &[u8]) -> Result<LabelBody> {
     deserialize_label_body(bytes)
 }
 
+/// Platform shown for a device whose stored name carries none: the local
+/// device on the host this code runs on.
+fn local_platform_label() -> &'static str {
+    if cfg!(target_os = "ios") {
+        "iOS"
+    } else if cfg!(target_os = "android") {
+        "Android"
+    } else {
+        "Desktop"
+    }
+}
+
+/// Checks `input` against the stored `recovery_check` seal. `Ok(false)` for
+/// a wrong, malformed or missing key; never says which.
+fn check_recovery_key(conn: &Connection, secwet_id: &Uuid, input: &str) -> Result<bool> {
+    let k_r = match crypto::derive_recovery_key_from_str(input, secwet_id) {
+        Ok(k) => k,
+        Err(_) => return Ok(false),
+    };
+    let check_b64 = match records::get_meta(conn, "recovery_check")? {
+        Some(s) => s,
+        None => return Ok(false),
+    };
+    let blob = match data_encoding::BASE64.decode(check_b64.as_bytes()) {
+        Ok(b) => b,
+        Err(_) => return Ok(false),
+    };
+    let check_aad = match postcard::to_stdvec(&("secwet-recovery-check", *secwet_id)) {
+        Ok(a) => a,
+        Err(_) => return Ok(false),
+    };
+    match crypto::open_raw(&k_r, &check_aad, &blob) {
+        Ok(pt) => Ok(pt == b"secwet-recovery-check"),
+        Err(_) => Ok(false),
+    }
+}
+
 fn find_secwet_db(data_dir: &Path) -> Option<(PathBuf, Uuid)> {
     let direct_db = data_dir.join("secwet.sqlite3");
     if direct_db.is_file() {
@@ -688,7 +725,7 @@ impl Secwet {
         let plan_now = get_meta(&conn, "plan")?.unwrap_or_else(|| "free".into());
         for (entry, gen) in [("device-sign", 0u8), ("device-enc", 1u8)] {
             let name = format!("secwet/{secwet_id}/{entry}");
-            if keystore.get(&name)?.is_none() && plan_now != "pro" {
+            if keystore.get(&name)?.is_none() && plan_now != "pro" && plan_now != "paused" {
                 let fresh: [u8; 32] = if gen == 0 {
                     ed25519_dalek::SigningKey::generate(&mut OsRng).to_bytes()
                 } else {
@@ -4058,30 +4095,31 @@ impl Secwet {
     /// Returns `Ok(true)` if valid, `Ok(false)` if invalid or uninitialized.
     /// Invariant: Never leaks detailed failure reasons or timing discrepancies.
     pub fn verify_recovery_key(&self, input: &str) -> Result<bool> {
-        let k_r = match crypto::derive_recovery_key_from_str(input, &self.secwet_id) {
-            Ok(k) => k,
-            Err(_) => return Ok(false),
-        };
+        check_recovery_key(&self.db, &self.secwet_id, input)
+    }
 
-        let check_b64 = match records::get_meta(&self.db, "recovery_check")? {
-            Some(s) => s,
-            None => return Ok(false),
+    /// [`Secwet::verify_recovery_key`] for a store that is not open: reads
+    /// only the `recovery_check` seal, never the keys. `Ok(None)` when no
+    /// store exists or no recovery key was created. Phones without a screen
+    /// lock ask for the recovery key here before unlocking.
+    pub fn verify_recovery_key_closed(data_dir: &Path, input: &str) -> Result<Option<bool>> {
+        let Some((db_path, secwet_id)) = find_secwet_db(data_dir) else {
+            return Ok(None);
         };
-
-        let blob = match data_encoding::BASE64.decode(check_b64.as_bytes()) {
-            Ok(b) => b,
-            Err(_) => return Ok(false),
-        };
-
-        let check_aad = match postcard::to_stdvec(&("secwet-recovery-check", self.secwet_id)) {
-            Ok(a) => a,
-            Err(_) => return Ok(false),
-        };
-
-        match crypto::open_raw(&k_r, &check_aad, &blob) {
-            Ok(pt) => Ok(pt == b"secwet-recovery-check"),
-            Err(_) => Ok(false),
+        let conn = open_connection(&db_path)?;
+        if records::get_meta(&conn, "recovery_check")?.is_none() {
+            return Ok(None);
         }
+        check_recovery_key(&conn, &secwet_id, input).map(Some)
+    }
+
+    /// Whether the store in `data_dir` has a recovery key, without opening it.
+    pub fn recovery_key_exists_closed(data_dir: &Path) -> Result<bool> {
+        let Some((db_path, _)) = find_secwet_db(data_dir) else {
+            return Ok(false);
+        };
+        let conn = open_connection(&db_path)?;
+        Ok(records::get_meta(&conn, "recovery_check")?.is_some())
     }
 
     /// Returns the current recovery key creation status and timestamp.
@@ -4985,16 +5023,6 @@ impl Secwet {
         Ok(())
     }
 
-    pub fn plan(&self) -> Result<String> {
-        let p = records::get_meta(&self.db, "plan")?.unwrap_or_else(|| "free".into());
-        Ok(p)
-    }
-
-    pub fn set_plan(&mut self, plan: &str) -> Result<()> {
-        records::set_meta(&self.db, "plan", plan)?;
-        Ok(())
-    }
-
     pub fn device_sign_key(&self) -> &ed25519_dalek::SigningKey {
         &self.device_sign_key
     }
@@ -5019,15 +5047,12 @@ impl Secwet {
         Ok(res)
     }
 
-/// Synchronizes entitlement from the relay into local store.
-    pub async fn sync_entitlement_from_relay(&mut self) -> Result<secwet_proto::EntitlementResponse> {
+    /// Synchronizes the entitlement from the relay into the local store
+    /// (see `plan.rs`). A Free store never contacts the relay.
+    pub async fn sync_entitlement_from_relay(&mut self) -> Result<crate::plan::PlanInfo> {
         let relay_url = self.relay_url()?;
         let client = crate::relay_client::RelayClient::new(&relay_url, &self.device_id);
-        let res = client
-            .get_entitlement(self.secwet_id, &self.device_sign_key)
-            .await?;
-        self.set_plan(&res.plan)?;
-        Ok(res)
+        self.refresh_plan(&client).await
     }
 
     // ========================================================================
@@ -5071,10 +5096,10 @@ impl Secwet {
                     let p = raw_name[idx + 2..raw_name.len() - 1].trim().to_string();
                     (n, p)
                 } else {
-                    (raw_name, "Desktop".to_string())
+                    (raw_name, local_platform_label().to_string())
                 }
             } else {
-                (raw_name, "Desktop".to_string())
+                (raw_name, local_platform_label().to_string())
             };
 
             let mut sign_arr = [0u8; 32];
@@ -5200,8 +5225,9 @@ impl Secwet {
         lamport: u64,
         payload: Option<&RecordPayload>,
     ) -> Result<()> {
-        let plan = self.plan().unwrap_or_else(|_| "free".into());
-        if plan != "pro" {
+        // Free stores never sync. A paused store keeps queueing so the changes
+        // made meanwhile go out once Pro is renewed.
+        if self.plan_state().unwrap_or(crate::plan::PlanState::Free) == crate::plan::PlanState::Free {
             return Ok(());
         }
 
@@ -5285,6 +5311,7 @@ impl Secwet {
         if self.unlinked_at()?.is_some() {
             return Err(Error::Revoked);
         }
+        self.ensure_relay_allowed(crate::plan::RelayOp::Sync)?;
         let events = sync::peek_outbox(&self.db, 500)?;
         if events.is_empty() {
             return Ok(0);
@@ -5323,6 +5350,7 @@ impl Secwet {
         if self.unlinked_at()?.is_some() {
             return Err(Error::Revoked);
         }
+        self.ensure_relay_allowed(crate::plan::RelayOp::Sync)?;
         let mut restored_snapshot = false;
 
         loop {

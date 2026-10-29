@@ -73,7 +73,8 @@ pub fn handle_device(secwet: &mut Secwet, args: DeviceArgs) -> Result<(), Error>
             Ok(())
         }
         DeviceSubcommand::Revoke { device_id, wipe, .. } => {
-            let pro = secwet.plan()? == "pro" && secwet.relay_url().is_ok();
+            // Pro, and Pro that ended: revocation is never locked behind a plan.
+            let pro = secwet.plan_state()? != secwet_core::PlanState::Free && secwet.relay_url().is_ok();
             if pro {
                 let client = secwet_core::RelayClient::new(secwet.relay_url()?, secwet.device_id().to_string());
                 let rt = tokio::runtime::Builder::new_current_thread()

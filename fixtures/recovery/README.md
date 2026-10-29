@@ -11,3 +11,6 @@ This directory contains authoritative reference `.secwet` export fixtures for Mi
 
 ## Fixture Inventory
 See `manifest.json` for SHA-256 digests and validation expectations.
+
+## Regenerating
+`test_generate_and_verify_reference_fixtures` (crates/secwet-core/tests/recovery_e2e_suite.rs) builds and verifies these archives in a temporary directory on every run. To rewrite the committed files, run it with `SECWET_REGENERATE_FIXTURES=1`; the archives use random nonces, so every regeneration changes their bytes and digests.

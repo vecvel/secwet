@@ -358,6 +358,11 @@ async fn test_pairing_expires_after_5_minutes() {
         .await
         .expect("Device A register");
 
+    // Pairing needs an active Pro entitlement (F13).
+    secwet_relay::db::grant_entitlement(&pool, secwet_id, "pro", 5, None)
+        .await
+        .expect("Grant pro");
+
     let (_, a_eph_pub) = generate_ephemeral_x25519();
     let session_resp = client_a
         .create_pairing_session(secwet_id, a_eph_pub, &a_sign_key)
@@ -414,7 +419,7 @@ async fn test_pairing_expires_after_5_minutes() {
 /// 5. Workspace device limit is strictly enforced when pairing new devices.
 #[tokio::test]
 async fn test_pairing_respects_device_limit() {
-    let (base_url, _pool) = setup_test_server(2).await; // Device limit = 2
+    let (base_url, pool) = setup_test_server(2).await; // Device limit = 2
     let secwet_id = Uuid::new_v4();
 
     let (a_sign_key, a_sign_pub, _, a_enc_pub, a_device_id) = generate_device_keys();
@@ -425,6 +430,11 @@ async fn test_pairing_respects_device_limit() {
         .register(secwet_id, a_sign_pub, a_enc_pub, &a_sign_key)
         .await
         .expect("Device A register");
+
+    // Pairing needs an active Pro entitlement (F13).
+    secwet_relay::db::grant_entitlement(&pool, secwet_id, "pro", 2, None)
+        .await
+        .expect("Grant pro");
 
     // Device A starts pairing for Device 2 (allowed since 1 < 2)
     let (_a_eph_secret, a_eph_pub) = generate_ephemeral_x25519();

@@ -8,11 +8,28 @@ import { List, ListRow } from "../../components/List";
 import { MoreMenu, type MenuItem } from "../../components/Menu";
 import { Notice } from "../../components/Notice";
 import { Dialog } from "../../components/Dialog";
-import { isShareableSpace, permissionsFor, spaceOfGrant, summarizeGrants } from "../../lib/access";
-import { api, formatUiError, isRelayNotConfigured, type MemberStatus, type MemberView, type SpaceView } from "../../lib/api";
+import {
+  SHARING_BLOCK_COPY,
+  isShareableSpace,
+  permissionsFor,
+  sharingBlock,
+  spaceOfGrant,
+  summarizeGrants,
+} from "../../lib/access";
+import {
+  api,
+  formatUiError,
+  isPlanError,
+  isRelayNotConfigured,
+  type MemberStatus,
+  type MemberView,
+  type SpaceView,
+} from "../../lib/api";
 import { formatAgo, plural } from "../../lib/format";
 import { useStore } from "../../lib/store";
 import { useReadOnly } from "../../lib/useAccess";
+import { usePlanStatus } from "../../lib/usePlan";
+import { PlanDialog } from "../PlanDialog";
 import { ShareDialog } from "../sharing/ShareDialog";
 import styles from "../settings/SettingsScreen.module.css";
 
@@ -53,6 +70,11 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [revokingInvite, setRevokingInvite] = useState<MemberView | null>(null);
+  const [comparingPlans, setComparingPlans] = useState(false);
+  const planStatus = usePlanStatus();
+  // Sharing runs through the sync relay (Pro). Free and paused plans explain
+  // this instead of failing; a paused plan still lists who has access.
+  const block = sharingBlock(planStatus) ?? (needsSync ? "needs_sync" : null);
 
   const canShareSpace = useCallback(
     (space: SpaceView) => isShareableSpace(space) && permissionsFor(state.access, readOnly, { spaceId: space.id }).canShare,
@@ -67,6 +89,12 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
     } catch (err) {
       if (isRelayNotConfigured(err)) {
         setNeedsSync(true);
+        setError(null);
+        setMembers((prev) => prev ?? []);
+        return;
+      }
+      if (isPlanError(err)) {
+        // The plan state explains this; no error on top.
         setError(null);
         setMembers((prev) => prev ?? []);
         return;
@@ -175,7 +203,7 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
       m.grants.some((g) => g.kind === "workspace" || spaceOfGrant(g, state.groups, state.items) === space.id)
   );
 
-  const childOpen = Boolean(inviting || editing || removing || revokingInvite);
+  const childOpen = Boolean(inviting || editing || removing || revokingInvite || comparingPlans);
 
   return (
     <>
@@ -189,7 +217,7 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
             <Button variant="secondary" onClick={onClose}>
               Close
             </Button>
-            <Button variant="primary" icon="plus" disabled={readOnly || needsSync} onClick={() => setInviting(true)}>
+            <Button variant="primary" icon="plus" disabled={readOnly || block !== null} onClick={() => setInviting(true)}>
               Invite
             </Button>
           </>
@@ -217,11 +245,25 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
             </Notice>
           </div>
         )}
-        {needsSync ? (
+        {block === "paused" && (
+          <div className={styles.noticeGap}>
+            <Notice tone="warning" label="Sync paused">
+              {SHARING_BLOCK_COPY.paused.body}
+            </Notice>
+          </div>
+        )}
+        {block === "needs_pro" || block === "needs_sync" ? (
           <EmptyState
             icon="user"
-            title="Set up sync to share"
-            body="Members get access through the sync relay. Set it up in Settings > Sync, then invite people here."
+            title={SHARING_BLOCK_COPY[block].title}
+            body={SHARING_BLOCK_COPY[block].body}
+            action={
+              block === "needs_pro" ? (
+                <Button variant="secondary" onClick={() => setComparingPlans(true)}>
+                  Compare plans
+                </Button>
+              ) : undefined
+            }
           />
         ) : members === null ? (
           <p className={styles.sectionDesc}>Loading members…</p>
@@ -250,6 +292,14 @@ export function MembersDialog({ space, onClose }: { space: SpaceView; onClose: (
           </List>
         )}
       </Dialog>
+      )}
+
+      {comparingPlans && (
+        <PlanDialog
+          plan={planStatus?.plan ?? "free"}
+          reason="Sharing a space needs Pro and sync. Everything in this space keeps working on this device."
+          onClose={() => setComparingPlans(false)}
+        />
       )}
 
       {inviting && (

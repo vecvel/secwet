@@ -7,6 +7,7 @@ import { Notice } from "../../components/Notice";
 import {
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
+  SHARING_BLOCK_COPY,
   draftToGrants,
   grantsOutside,
   grantsToDraft,
@@ -15,6 +16,7 @@ import {
   isShareableSpace,
   isValidEmail,
   nodeKey,
+  sharingBlock,
   type GrantDraft,
 } from "../../lib/access";
 import {
@@ -29,6 +31,7 @@ import {
   type TreeRole,
 } from "../../lib/api";
 import { appStore } from "../../lib/store";
+import { usePlanStatus } from "../../lib/usePlan";
 import styles from "./ShareDialog.module.css";
 
 const ROLES: TreeRole[] = ["admin", "editor", "viewer", "no_access"];
@@ -130,6 +133,9 @@ export function ShareDialog({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<InviteResultDto | null>(null);
   const [copied, setCopied] = useState(false);
+  // Invites and access changes travel through the sync relay (Pro). Explain
+  // instead of failing when the plan or sync does not allow it.
+  const planBlock = sharingBlock(usePlanStatus());
 
   const nodes = nodesBySpace[spaceId] ?? [];
   const tree = useMemo(() => groupTree(nodes), [nodes]);
@@ -238,7 +244,7 @@ export function ShareDialog({
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (spaceBlocked || busy) return;
+    if (spaceBlocked || busy || planBlock) return;
     let ok = true;
     if (!editing && !isValidEmail(email)) {
       setEmailError("Enter a valid email address.");
@@ -348,13 +354,22 @@ export function ShareDialog({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => submit()} disabled={busy || spaceBlocked || loadingNodes}>
+          <Button
+            variant="primary"
+            onClick={() => submit()}
+            disabled={busy || spaceBlocked || loadingNodes || planBlock !== null}
+          >
             {busy ? (editing ? "Saving…" : "Creating invite…") : editing ? "Save access" : "Create invite"}
           </Button>
         </>
       }
     >
       <form className={styles.form} onSubmit={submit} noValidate>
+        {planBlock && (
+          <Notice tone="warning" label={SHARING_BLOCK_COPY[planBlock].title}>
+            {SHARING_BLOCK_COPY[planBlock].body}
+          </Notice>
+        )}
         {!editing && (
           <TextField
             label="Email"

@@ -17,15 +17,10 @@ cc = "1.0"
 tauri.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+secwet-app = { workspace = true, features = ["os-keyring"] }
 secwet-core = { workspace = true, features = ["test-util"] }
 secwet-proto.workspace = true
-chrono.workspace = true
-x25519-dalek.workspace = true
 uuid.workspace = true
-directories.workspace = true
-secrecy.workspace = true
-subtle.workspace = true
-sha2.workspace = true
 tokio = { workspace = true, features = ["time"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
@@ -38,3 +33,14 @@ tempfile.workspace = true
 objc2 = "0.6.5"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData"] }
+
+# Windows Hello for biometric unlock (src/biometric/windows.rs).
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Foundation",
+    "Security_Credentials_UI",
+    "Win32_Devices_BiometricFramework",
+    "Win32_Foundation",
+    "Win32_System_WinRT",
+] }
+windows-future = "0.3.2"

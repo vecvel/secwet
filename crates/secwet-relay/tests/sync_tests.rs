@@ -573,7 +573,7 @@ async fn test_sync_cursor_expired_returns_410() {
 /// 8. Encrypted snapshot upload, retrieval, and replacement.
 #[tokio::test]
 async fn test_sync_snapshot_upload_and_download() {
-    let (base_url, _port, _pool) = setup_test_server(5).await;
+    let (base_url, _port, pool) = setup_test_server(5).await;
     let secwet_id = Uuid::new_v4();
 
     let (sign_key, sign_pub, enc_pub, device_id) = generate_device_keys();
@@ -583,6 +583,11 @@ async fn test_sync_snapshot_upload_and_download() {
         .register(secwet_id, sign_pub, enc_pub, &sign_key)
         .await
         .expect("Register workspace");
+
+    // Relay-stored snapshots are Pro only (F13).
+    secwet_relay::db::grant_entitlement(&pool, secwet_id, "pro", 5, None)
+        .await
+        .expect("Grant pro");
 
     // Initially no snapshot exists -> 404 None
     let none_snap = client

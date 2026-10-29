@@ -9,13 +9,23 @@ apps/desktop/src-tauri/gen/
 *.sqlite3-wal
 *.sqlite3-shm
 
-# Documentation & notes
-docs/
+# Documentation & notes (the shipped docs are listed explicitly; a bare
+# `docs/` would hide every file below it from negation)
+docs/*
+!docs/IMPLEMENTATION.md
+!docs/design-decisions.md
+!docs/ui-rules.md
+!docs/mobile-ffi.md
+!docs/app-layer.md
+!docs/biometric-unlock.md
+!docs/m7-m8-architecture.md
 *.log
 
 # Scripts & temporary verification scripts
 scripts/
 **/scripts/
+# The iOS Runner's "Build Rust" phase runs this one.
+!apps/mobile/scripts/
 scratch/
 
 # Python artifacts

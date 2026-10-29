@@ -2614,8 +2614,16 @@ fn fixture_sha256(data: &[u8]) -> String {
 fn test_generate_and_verify_reference_fixtures() {
     use std::path::PathBuf;
 
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let fixture_dir = manifest_dir.join("../../fixtures/recovery");
+    // Archives use random nonces, so every run produces new bytes. The
+    // committed fixtures are only rewritten on request
+    // (SECWET_REGENERATE_FIXTURES=1); a normal run generates and verifies
+    // them in a temporary directory and leaves the checkout clean.
+    let scratch = tempfile::tempdir().expect("temp fixtures directory");
+    let fixture_dir = if std::env::var_os("SECWET_REGENERATE_FIXTURES").is_some() {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/recovery")
+    } else {
+        scratch.path().to_path_buf()
+    };
     fs::create_dir_all(&fixture_dir).expect("create fixtures/recovery directory");
 
     let secwet_id = Uuid::from_u128(0x0192e200000070008000000000000001);
