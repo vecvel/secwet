@@ -33,10 +33,10 @@ use x25519_dalek::StaticSecret;
 #[test]
 fn challenge_tampered_blob_exhaustive_bit_flipping_and_offsets() {
     let k_rec = [0x42u8; 32];
-    let vault_id = Uuid::new_v4();
+    let secwet_id = Uuid::new_v4();
     let record_id = Uuid::now_v7();
     let aad = RecordAad::new(
-        vault_id.as_bytes(),
+        secwet_id.as_bytes(),
         record_id.as_bytes(),
         RecordType::Secret,
         1,
@@ -142,10 +142,10 @@ fn challenge_tampered_blob_exhaustive_bit_flipping_and_offsets() {
 #[test]
 fn challenge_sealed_record_minimal_and_boundary_lengths() {
     let k_rec = [0x99u8; 32];
-    let vault_id = Uuid::new_v4();
+    let secwet_id = Uuid::new_v4();
     let record_id = Uuid::now_v7();
     let aad = RecordAad::new(
-        vault_id.as_bytes(),
+        secwet_id.as_bytes(),
         record_id.as_bytes(),
         RecordType::Secret,
         1,
@@ -168,17 +168,17 @@ fn challenge_sealed_record_minimal_and_boundary_lengths() {
 }
 
 // ============================================================================
-// 2. Exhaustive AAD Mutation & Cross-Record / Cross-Vault Replay
+// 2. Exhaustive AAD Mutation & Cross-Record / Cross-Secwet Replay
 // ============================================================================
 
 #[test]
 fn challenge_blob_moved_exhaustive_aad_mutation() {
     let k_rec = [0x37u8; 32];
-    let vault_id_1 = Uuid::new_v4();
+    let secwet_id_1 = Uuid::new_v4();
     let record_id_1 = Uuid::now_v7();
     let epoch_1 = 10u32;
     let aad_original = RecordAad::new(
-        vault_id_1.as_bytes(),
+        secwet_id_1.as_bytes(),
         record_id_1.as_bytes(),
         RecordType::Project,
         epoch_1,
@@ -187,13 +187,13 @@ fn challenge_blob_moved_exhaustive_aad_mutation() {
     let payload = b"{\"database_url\": \"postgres://localhost:5432/db\"}";
     let blob = seal_record(&k_rec, &aad_original, payload).expect("sealing must succeed");
 
-    // 1. Bit-flipping each byte in vault_id
+    // 1. Bit-flipping each byte in secwet_id
     for byte_idx in 0..16 {
         for bit in 0..8 {
-            let mut bad_vault_id = *vault_id_1.as_bytes();
-            bad_vault_id[byte_idx] ^= 1 << bit;
+            let mut bad_secwet_id = *secwet_id_1.as_bytes();
+            bad_secwet_id[byte_idx] ^= 1 << bit;
             let aad_mut = RecordAad::new(
-                &bad_vault_id,
+                &bad_secwet_id,
                 record_id_1.as_bytes(),
                 RecordType::Project,
                 epoch_1,
@@ -201,7 +201,7 @@ fn challenge_blob_moved_exhaustive_aad_mutation() {
             assert_eq!(
                 open_record(&k_rec, &aad_mut, &blob),
                 Err(CryptoError),
-                "Flipping bit {} in vault_id byte {} must fail",
+                "Flipping bit {} in secwet_id byte {} must fail",
                 bit,
                 byte_idx
             );
@@ -214,7 +214,7 @@ fn challenge_blob_moved_exhaustive_aad_mutation() {
             let mut bad_record_id = *record_id_1.as_bytes();
             bad_record_id[byte_idx] ^= 1 << bit;
             let aad_mut = RecordAad::new(
-                vault_id_1.as_bytes(),
+                secwet_id_1.as_bytes(),
                 &bad_record_id,
                 RecordType::Project,
                 epoch_1,
@@ -258,7 +258,7 @@ fn challenge_blob_moved_exhaustive_aad_mutation() {
             continue;
         }
         let aad_mut = RecordAad::new(
-            vault_id_1.as_bytes(),
+            secwet_id_1.as_bytes(),
             record_id_1.as_bytes(),
             RecordType::Project,
             epoch_val,
@@ -305,7 +305,7 @@ fn challenge_hpke_wrap_and_unwrap_adversarial_stress() {
     let recipient_sk = StaticSecret::from(sk_bytes);
     let recipient_pk = x25519_dalek::PublicKey::from(&recipient_sk);
 
-    let info = b"secwet/v1/pair/vault-key";
+    let info = b"secwet/v1/pair/master-key";
     let plaintext_key = [0x55u8; 32];
 
     let wrapped = wrap_for_device(recipient_pk.as_bytes(), info, &plaintext_key)
@@ -384,11 +384,11 @@ fn challenge_hpke_wrap_and_unwrap_adversarial_stress() {
     // 5. Context / Info string manipulation
     let bad_infos: &[&[u8]] = &[
         b"",
-        b"secwet/v1/pair/vault-ke",
-        b"secwet/v1/pair/vault-key ",
-        b"secwet/v1/pair/vault-key\0",
-        b"secwet/v1/pair/vault-key-extra",
-        b"SECWET/V1/PAIR/VAULT-KEY",
+        b"secwet/v1/pair/master-ke",
+        b"secwet/v1/pair/master-key ",
+        b"secwet/v1/pair/master-key\0",
+        b"secwet/v1/pair/master-key-extra",
+        b"SECWET/V1/PAIR/MASTER-KEY",
     ];
     for &bad_info in bad_infos {
         assert_eq!(
@@ -719,15 +719,15 @@ fn challenge_device_id_and_fingerprint_collision_and_format() {
 #[test]
 fn challenge_hkdf_domain_separation_and_extreme_inputs() {
     let mut rng = OsRng;
-    let vault_id = Uuid::new_v4();
+    let secwet_id = Uuid::new_v4();
 
     // 1. Extreme IKMs (all 0s, all 1s, random)
     let ikms = [[0x00u8; 32], [0xFFu8; 32], [0x5Au8; 32]];
 
     for ikm in ikms {
-        let k_rec = derive_record_key(&ikm, &vault_id);
-        let k_evt = derive_event_key(&ikm, &vault_id);
-        let k_rec_pair = derive_keys(&ikm, &vault_id);
+        let k_rec = derive_record_key(&ikm, &secwet_id);
+        let k_evt = derive_event_key(&ikm, &secwet_id);
+        let k_rec_pair = derive_keys(&ikm, &secwet_id);
 
         assert_eq!(*k_rec, *k_rec_pair.0);
         assert_eq!(*k_evt, *k_rec_pair.1);
@@ -736,12 +736,12 @@ fn challenge_hkdf_domain_separation_and_extreme_inputs() {
         assert_ne!(*k_rec, *k_evt);
 
         // Recovery key domain separation
-        let k_recov = derive_recovery_key(&ikm[..16], &vault_id);
+        let k_recov = derive_recovery_key(&ikm[..16], &secwet_id);
         assert_ne!(*k_recov, *k_rec);
         assert_ne!(*k_recov, *k_evt);
     }
 
-    // 2. Vault ID separation
+    // 2. Secwet ID separation
     for _ in 0..100 {
         let v1 = Uuid::new_v4();
         let v2 = Uuid::new_v4();

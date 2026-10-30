@@ -23,7 +23,7 @@
 
 ## Why Secwet
 
-Most secret managers either force your credentials onto third-party cloud vaults with accounts, master passwords, and recurring subscriptions, or leave you juggling plain `.env` files that accidentally leak into git commits, shell histories, and unencrypted backups.
+Most secret managers either force your credentials onto third-party cloud services with accounts, master passwords, and recurring subscriptions, or leave you juggling plain `.env` files that accidentally leak into git commits, shell histories, and unencrypted backups.
 
 Secwet sits in between. It is passwordless, local-first, and end-to-end encrypted. Your master keys are stored directly in your operating system's secure enclave (macOS Keychain via native LocalAuthentication Touch ID). Your secrets are sealed with XChaCha20-Poly1305 before they ever touch disk and are never stored or transmitted in the clear.
 
@@ -36,14 +36,14 @@ It is lightweight, fast, and works 100% offline. No accounts, no email verificat
 - **Groups & Items.** Organize credentials your way. No rigid project templates or required folder hierarchies. Group items by team, infrastructure domain, client, or microservice.
 - **Environment Scopes.** Add optional environment scopes (General, Development, Staging, Production) only when an item needs them. Items without environments stay clean and simple.
 - **Secrets & Key-Value.** Secret values are masked by default. Reveal on demand, inline edit, or copy directly. The clipboard automatically clears sensitive tokens after 30 seconds.
-- **Encrypted Files & Certificates.** Store `.pem` certificates, private SSH keys (`id_ed25519`), service account credentials, and license files directly in your vault with drag-and-drop encryption, metadata tracking, and secure export.
+- **Encrypted Files & Certificates.** Store `.pem` certificates, private SSH keys (`id_ed25519`), service account credentials, and license files directly in Secwet with drag-and-drop encryption, metadata tracking, and secure export.
 - **Operational Notes.** Keep runbooks, database connection strings, and architecture notes right next to the secrets they document.
 - **CLI Process Injection.** `secwet run -- ./dev.sh` injects decrypted secrets into child process environments entirely in memory. Your secret tokens never land in shell history or on disk.
-- **Biometrics & Touch ID.** Unlock your vault in milliseconds with native macOS Touch ID or system passcode. Automatically locks when idle (1, 5, 15, 30, or 60 minutes), when the screen sleeps, or immediately with `Cmd+L`.
+- **Biometrics & Touch ID.** Unlock Secwet in milliseconds with native macOS Touch ID or system passcode. Automatically locks when idle (1, 5, 15, 30, or 60 minutes), when the screen sleeps, or immediately with `Cmd+L`.
 - **Zero-Leak Clipboard.** When copying secrets from the desktop app, the Rust host handles the system clipboard directly. Plaintext values are never passed into webview memory or stored in DOM state.
 - **Device Identity & Pairing.** Passwordless device authorization using Ed25519 signing keys and X25519/HPKE encryption keys. Pair new devices with an ephemeral single-use QR payload and a 6-digit confirmation code.
-- **Device Revocation & Key Rotation.** Revoke lost or decommissioned devices with one click. Rotate the vault's master encryption key so revoked devices cannot read future changes.
-- **Recovery Keys & Encrypted Backups.** Generate a 25-character Crockford Base32 recovery key to safeguard access. Export encrypted, versioned vault backups for secure cold storage.
+- **Device Revocation & Key Rotation.** Revoke lost or decommissioned devices with one click. Rotate the master encryption key so revoked devices cannot read future changes.
+- **Recovery Keys & Encrypted Backups.** Generate a 25-character Crockford Base32 recovery key to safeguard access. Export encrypted, versioned backups for secure cold storage.
 
 ## Safe by design
 
@@ -53,9 +53,9 @@ Every byte stored or transmitted by Secwet is governed by strict cryptographic b
 2. **Key Derivation (HKDF-SHA256).** Per-record encryption keys, sync event keys, and recovery keys are derived from the master key using HKDF-SHA256 with domain-separated salt and info parameters.
 3. **Asymmetric Key Exchange (HPKE RFC 9180).** Device pairing and cross-device key distribution use Hybrid Public Key Encryption in Mode Base (`DHKEM(X25519, HKDF-SHA256)`, `HKDF-SHA256`, `ChaCha20Poly1305`).
 4. **Device Identity & Non-Malleability (Ed25519).** Device identities and sync events are signed using Ed25519 with strict verification rules to prevent signature malleability.
-5. **OS Secure Storage & Biometrics.** The master vault key never touches unencrypted storage. It is protected by the macOS Keychain (`keyring`) and unlocked via LocalAuthentication (`LAContext`) Touch ID.
+5. **OS Secure Storage & Biometrics.** The master key never touches unencrypted storage. It is protected by the macOS Keychain (`keyring`) and unlocked via LocalAuthentication (`LAContext`) Touch ID.
 6. **In-Memory Secret Scrubbing.** Sensitive keys and plaintext secrets are guarded with `secrecy::SecretString` and `zeroize::Zeroizing`. Plaintext memory is wiped on drop, and sensitive values are automatically redacted from `Debug` logs and error messages.
-7. **Durable Local Storage.** Vault storage uses an embedded SQLite database with Write-Ahead Logging (`PRAGMA journal_mode = WAL`), foreign key integrity, and immediate durability.
+7. **Durable Local Storage.** Secwet storage uses an embedded SQLite database with Write-Ahead Logging (`PRAGMA journal_mode = WAL`), foreign key integrity, and immediate durability.
 
 The core security model lives in [`crates/secwet-core/src/crypto.rs`](crates/secwet-core/src/crypto.rs) and is covered by property tests and unit test suites.
 
@@ -63,11 +63,11 @@ The core security model lives in [`crates/secwet-core/src/crypto.rs`](crates/sec
 
 Secwet has no telemetry, no tracking analytics, no user accounts, and no advertising code. The local desktop application and CLI run entirely offline.
 
-The application webview operates under a strict Content Security Policy (CSP) with external network access blocked. When the optional relay sync is active, the relay server acts as a blind mailbox: it receives only sealed ciphertext envelopes with ephemeral routing IDs and never possesses the keys to decrypt vault contents.
+The application webview operates under a strict Content Security Policy (CSP) with external network access blocked. When the optional relay sync is active, the relay server acts as a blind mailbox: it receives only sealed ciphertext envelopes with ephemeral routing IDs and never possesses the keys to decrypt store contents.
 
 ## CLI
 
-Secwet includes a standalone, zero-dependency command line tool (`secwet`) that shares the same local vault as the desktop application.
+Secwet includes a standalone, zero-dependency command line tool (`secwet`) that shares the same local store as the desktop application.
 
 ### Configuration (`.secwet.toml`)
 
@@ -95,13 +95,13 @@ secwet get DATABASE_URL
 # Set or update a secret value from stdin
 echo "sec_live_example_12345" | secwet set STRIPE_SECRET_KEY --kind api_key
 
-# Import an existing .env file into the vault
+# Import an existing .env file into Secwet
 secwet import .env.production
 
 # Export decrypted secrets to a file or stdout
 secwet export --format dotenv --out .env.local
 
-# View vault status, device ID, epoch, and health
+# View store status, device ID, epoch, and health
 secwet status
 ```
 
@@ -115,7 +115,7 @@ secwet/
 │   │   └── src-tauri/       # Rust desktop host, Touch ID biometrics, clipboard manager
 │   └── mobile/              # Flutter mobile client (iOS, Android)
 ├── crates/
-│   ├── secwet-core/         # Vault engine: XChaCha20, HKDF, HPKE, SQLite WAL, models
+│   ├── secwet-core/         # Security core engine: XChaCha20, HKDF, HPKE, SQLite WAL, models
 │   ├── secwet-cli/          # Command line tool with in-memory process environment injection
 │   ├── secwet-proto/        # Wire protocol: Postcard AAD, serialized records, envelopes
 │   └── secwet-relay/        # Minimal Axum relay for blind encrypted sync events

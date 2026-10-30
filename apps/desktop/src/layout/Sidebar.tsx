@@ -1,7 +1,8 @@
 import { BrandMark, Icon, IconTile, type IconName } from "../components/Icon";
 import { thisDevice, type Plan } from "../data/mock";
-import type { GroupView, ItemView } from "../lib/api";
+import type { GroupView, ItemView, SpaceView } from "../lib/api";
 import { onWindowDragMouseDown } from "../lib/windowDrag";
+import { SpaceSwitcher } from "./SpaceSwitcher";
 import type { Route } from "./routes";
 import styles from "./Sidebar.module.css";
 
@@ -9,6 +10,12 @@ interface Props {
   route: Route;
   onNavigate: (route: Route) => void;
   homeLabel?: string;
+  spaces?: SpaceView[];
+  activeSpaceId?: string | null;
+  onSelectSpace?: (id: string | null) => void;
+  onNewSpace?: () => void;
+  onRenameSpace?: (id: string, name: string, icon?: string | null) => Promise<unknown> | void;
+  onDeleteSpace?: (id: string) => Promise<unknown> | void;
   groups?: GroupView[];
   items?: ItemView[];
   selectedGroupId?: string | null;
@@ -19,6 +26,14 @@ interface Props {
   onNewItemForGroup?: (groupId: string) => void;
   plan?: Plan;
   deviceName?: string;
+  /** Member mode and read-only archive: which create controls to show. Default true. */
+  canCreateGroup?: boolean;
+  canAddToGroup?: (groupId: string) => boolean;
+  canEditSpaces?: boolean;
+  canShareSpace?: (space: SpaceView) => boolean;
+  onShareSpace?: (space: SpaceView) => void;
+  /** Opens the members of a space from its menu in the space switcher. */
+  onOpenMembers?: (space: SpaceView) => void;
 }
 
 interface ItemProps {
@@ -47,11 +62,17 @@ function NavItem({ label, icon, initial, active, onClick, className }: ItemProps
 const initialOf = (name: string) =>
   name.replace(/[^A-Za-z0-9]/g, "").charAt(0).toUpperCase() || "#";
 
-/** Redesigned sidebar with Home, user-defined groups, and items under each group. */
+/** Redesigned sidebar with Home, Spaces Switcher, user-defined groups, and items under each group. */
 export function Sidebar({
   route,
   onNavigate,
   homeLabel,
+  spaces = [],
+  activeSpaceId,
+  onSelectSpace,
+  onNewSpace,
+  onRenameSpace,
+  onDeleteSpace,
   groups = [],
   items = [],
   selectedGroupId,
@@ -61,9 +82,17 @@ export function Sidebar({
   onNewGroup,
   onNewItemForGroup,
   deviceName,
+  canCreateGroup = true,
+  canAddToGroup = () => true,
+  canEditSpaces = true,
+  canShareSpace,
+  onShareSpace,
+  onOpenMembers,
 }: Props) {
   const displayHome = homeLabel || "Overview";
-  const userGroups = groups;
+  const userGroups = activeSpaceId
+    ? groups.filter((g) => g.space_id === activeSpaceId)
+    : groups;
   const activeGroupId = selectedGroupId ?? null;
   const handleSelectGroup = onSelectGroup || (() => {});
   const handleNewGroup = onNewGroup || (() => {});
@@ -95,6 +124,7 @@ export function Sidebar({
           {userGroups.map((g) => {
             const groupItems = items.filter((it) => (it.group_id ?? it.label_id) === g.id);
             const isGroupActive = route === "group" && g.id === activeGroupId;
+            const canAdd = Boolean(onNewItemForGroup) && canAddToGroup(g.id);
 
             return (
               <div key={g.id} className={styles.group}>
@@ -114,7 +144,7 @@ export function Sidebar({
                   >
                     <span>{g.name}</span>
                   </button>
-                  {onNewItemForGroup && (
+                  {canAdd && onNewItemForGroup && (
                     <button
                       className={styles.groupAdd}
                       aria-label={`Add to ${g.name}`}
@@ -144,7 +174,7 @@ export function Sidebar({
                   />
                 ))}
 
-                {groupItems.length === 0 && onNewItemForGroup && (
+                {groupItems.length === 0 && canAdd && onNewItemForGroup && (
                   <button
                     className={styles.emptyItemHint}
                     onClick={() => onNewItemForGroup(g.id)}
@@ -158,34 +188,56 @@ export function Sidebar({
             );
           })}
 
-          <div className={styles.newGroupContainer}>
-            <button
-              className={styles.newGroupBtn}
-              onClick={handleNewGroup}
-              title="New"
-              aria-label="New"
-            >
-              <span className={styles.newGroupIconWrap}>
-                <Icon name="plus" size={13} />
-              </span>
-              <span className={styles.newGroupText}>New</span>
-            </button>
-          </div>
+          {canCreateGroup && (
+            <div className={styles.newGroupContainer}>
+              <button
+                className={styles.newGroupBtn}
+                onClick={handleNewGroup}
+                title="New"
+                aria-label="New"
+              >
+                <span className={styles.newGroupIconWrap}>
+                  <Icon name="plus" size={13} />
+                </span>
+                <span className={styles.newGroupText}>New</span>
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
       <div className={styles.footer}>
-        <NavItem
-          icon="settings"
-          label="Settings"
-          active={route === "settings"}
-          onClick={() => onNavigate("settings")}
-        />
-        <div className={[styles.device, styles.expandedOnly].join(" ")}>
-          <span className={styles.deviceName}>
-            {deviceName && deviceName !== "desktop" ? deviceName : thisDevice.name}
-          </span>
-          <span className={styles.deviceMeta}>This device</span>
+        {spaces.length > 0 && (
+          <SpaceSwitcher
+            spaces={spaces}
+            activeSpaceId={activeSpaceId ?? null}
+            onSelectSpace={onSelectSpace || (() => {})}
+            onNewSpace={onNewSpace}
+            onRenameSpace={canEditSpaces ? onRenameSpace : undefined}
+            onDeleteSpace={canEditSpaces ? onDeleteSpace : undefined}
+            canShareSpace={canShareSpace}
+            onShareSpace={onShareSpace}
+            onOpenMembers={onOpenMembers}
+            totalGroupsCount={groups.length}
+          />
+        )}
+        <div className={styles.device}>
+          <div className={[styles.deviceInfo, styles.expandedOnly].join(" ")}>
+            <span className={styles.deviceName}>
+              {deviceName && deviceName !== "desktop" ? deviceName : thisDevice.name}
+            </span>
+            <span className={styles.deviceMeta}>This device</span>
+          </div>
+          <button
+            className={[styles.settingsBtn, route === "settings" && styles.settingsBtnActive]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={() => onNavigate("settings")}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Icon name="settings" size={16} />
+          </button>
         </div>
       </div>
     </aside>

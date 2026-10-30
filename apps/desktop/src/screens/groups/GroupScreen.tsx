@@ -25,6 +25,8 @@ interface Props {
   onRenameLabel?: (id: string, name: string) => Promise<void>;
   onDeleteGroup?: (id: string) => Promise<void>;
   onDeleteLabel?: (id: string) => Promise<void>;
+  /** Admin on this group (member mode) and not a read-only archive. Defaults to true. */
+  canManage?: boolean;
 }
 
 const initialOf = (name: string) =>
@@ -35,6 +37,7 @@ export function GroupScreen(props: Props) {
   const allGroups = props.groups || props.labels || [];
   const handleRename = props.onRenameGroup || props.onRenameLabel || (async () => {});
   const handleDelete = props.onDeleteGroup || props.onDeleteLabel || (async () => {});
+  const canManage = props.canManage ?? true;
 
   const [search, setSearch] = useState("");
   const [creatingItem, setCreatingItem] = useState(false);
@@ -71,16 +74,18 @@ export function GroupScreen(props: Props) {
 
   return (
     <div className={styles.screen}>
-      <TopBarActions>
-        <Button
-          variant="primary"
-          icon="plus"
-          onClick={() => setCreatingItem(true)}
-        >
-          New
-        </Button>
-        <MoreMenu label="Actions" items={menuItems} />
-      </TopBarActions>
+      {canManage && (
+        <TopBarActions>
+          <Button
+            variant="primary"
+            icon="plus"
+            onClick={() => setCreatingItem(true)}
+          >
+            New
+          </Button>
+          <MoreMenu label="Actions" items={menuItems} />
+        </TopBarActions>
+      )}
 
       {groupItems.length > 0 && (
         <SearchInput
@@ -96,15 +101,21 @@ export function GroupScreen(props: Props) {
         <EmptyState
           icon="folder"
           title="No entries yet"
-          body="Store secrets, encrypted assets, and notes for your apps and services here."
+          body={
+            canManage
+              ? "Store secrets, encrypted assets, and notes for your apps and services here."
+              : "Nothing here is shared with you yet."
+          }
           action={
-            <Button
-              variant="primary"
-              icon="plus"
-              onClick={() => setCreatingItem(true)}
-            >
-              New
-            </Button>
+            canManage ? (
+              <Button
+                variant="primary"
+                icon="plus"
+                onClick={() => setCreatingItem(true)}
+              >
+                New
+              </Button>
+            ) : undefined
           }
         />
       ) : filteredItems.length === 0 ? (

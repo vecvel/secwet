@@ -1,10 +1,10 @@
 use crate::resolver::format_timestamp_ms;
-use secwet_core::Vault;
+use secwet_core::Secwet;
 use std::io::IsTerminal;
 use uuid::Uuid;
 
-pub fn execute_list(vault: &Vault, item_id: Uuid, env_id: Option<Uuid>) -> Result<(), String> {
-    let mut secrets = vault
+pub fn execute_list(secwet: &Secwet, item_id: Uuid, env_id: Option<Uuid>) -> Result<(), String> {
+    let mut secrets = secwet
         .list_secrets(item_id, env_id)
         .map_err(|e| format!("{e}"))?;
     secrets.sort_by(|a, b| a.name.cmp(&b.name));

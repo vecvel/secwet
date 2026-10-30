@@ -60,10 +60,10 @@ impl KeyStore for FileKeyStore {
     }
 }
 
-/// Resolves the KeyStore implementation based on environment variables and vault state.
+/// Resolves the KeyStore implementation based on environment variables and secwet state.
 pub fn resolve_keystore(data_dir: &Path) -> Box<dyn KeyStore> {
     if let Ok(val) = std::env::var("SECWET_TEST_KEYSTORE") {
-        if val == "memory" || val == "1" || val == "true" {
+        if val == "memory" || val == "file" || val == "1" || val == "true" {
             let file_path = data_dir.join(".test_keystore.json");
             return Box::new(FileKeyStore::new(file_path));
         } else if !val.is_empty() {

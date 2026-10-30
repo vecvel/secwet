@@ -1,4 +1,4 @@
--- Non-secret vault metadata
+-- Non-secret store metadata
 CREATE TABLE meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -21,7 +21,7 @@ CREATE TABLE records (
 CREATE INDEX records_parent ON records(parent_id);
 CREATE INDEX records_type ON records(record_type);
 
--- Devices authorized in this vault
+-- Devices authorized in this secwet store
 CREATE TABLE devices (
   device_id TEXT PRIMARY KEY,
   name_blob BLOB NOT NULL,      -- Sealed device name

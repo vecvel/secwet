@@ -4,13 +4,20 @@ dist/
 apps/desktop/src-tauri/gen/
 .DS_Store
 
-# Documentation & notes
-docs/
+# SQLite databases
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
 *.log
 
 # Scripts & temporary verification scripts
 scripts/
 **/scripts/
+# The iOS Runner's "Build Rust" phase runs this one.
+!apps/mobile/scripts/
+# Server bootstrap, deploy and backup scripts used by the deploy workflows.
+!deploy/scripts/
 scratch/
 
 # Python artifacts
@@ -29,5 +36,7 @@ venv/
 # Flutter
 apps/mobile/.dart_tool/
 apps/mobile/build/
-.agents/
-.claude/
+
+# Claude Code personal settings (docs, .agents and the rest of .claude are
+# shared so other machines, such as the Windows test box, have them)
+.claude/settings.local.json

@@ -12,17 +12,24 @@ interface Props {
   requireText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** While the confirmed action runs: buttons and close are disabled. */
+  busy?: boolean;
 }
 
 /** Destructive confirmation. Large deletions ask the user to type the item's name. */
-export function ConfirmDialog({ title, body, confirmLabel, requireText, onConfirm, onCancel }: Props) {
+export function ConfirmDialog({ title, body, confirmLabel, requireText, onConfirm, onCancel, busy = false }: Props) {
   const [typed, setTyped] = useState("");
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<ReactNode>();
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     if (requireText && typed.trim() !== requireText) {
-      setError(`Type ${requireText} exactly to confirm.`);
+      setError(
+        <span>
+          Type <code className={styles.target}>{requireText}</code> exactly to confirm.
+        </span>
+      );
       return;
     }
     onConfirm();
@@ -32,12 +39,13 @@ export function ConfirmDialog({ title, body, confirmLabel, requireText, onConfir
     <Dialog
       title={title}
       onClose={onCancel}
+      busy={busy}
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="danger" type="submit" form="confirm-dialog">
+          <Button variant="danger" type="submit" form="confirm-dialog" disabled={busy}>
             {confirmLabel}
           </Button>
         </>
@@ -47,7 +55,11 @@ export function ConfirmDialog({ title, body, confirmLabel, requireText, onConfir
         <div className={styles.body}>{body}</div>
         {requireText && (
           <TextField
-            label={`Type ${requireText} to confirm`}
+            label={
+              <span>
+                Type <code className={styles.target}>{requireText}</code> to confirm
+              </span>
+            }
             name="confirm"
             autoComplete="off"
             spellCheck={false}

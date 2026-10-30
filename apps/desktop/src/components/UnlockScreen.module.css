@@ -32,6 +32,16 @@
   color: var(--color-accent);
 }
 
+/* Windows and Linux: brand on the left, window buttons on the right. */
+:global([data-titlebar="custom"]) .header {
+  padding-right: var(--space-3);
+}
+
+:global([data-titlebar="custom"]) .brand {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .content {
   display: flex;
   flex-direction: column;
@@ -40,7 +50,42 @@
   max-width: 400px;
 }
 
-.errorNotice {
+.recovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
   width: 100%;
-  margin-bottom: var(--space-2);
 }
+
+.toastContainer {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  z-index: 100;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 460px;
+}
+
+@media (max-width: 639px) {
+  .toastContainer {
+    bottom: var(--space-4);
+    right: var(--space-4);
+    left: var(--space-4);
+    max-width: none;
+    align-items: stretch;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  flex-wrap: wrap;
+}
+

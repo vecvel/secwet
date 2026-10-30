@@ -26,7 +26,7 @@ use secwet_proto::{RecordAad, WrappedKey};
 use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
 use uuid::Uuid;
-use x25519_dalek::StaticSecret;
+use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
 use zeroize::Zeroizing;
 
 // ============================================================================
@@ -215,6 +215,62 @@ pub fn open_record_parts(
     Ok(plaintext)
 }
 
+/// Seals an arbitrary plaintext buffer under a 32-byte key with raw AAD using XChaCha20Poly1305.
+///
+/// Returns distinct `(nonce, ciphertext)` parts (where ciphertext includes the 16-byte Poly1305 tag).
+pub fn seal_raw_parts(
+    key: &[u8; 32],
+    aad: &[u8],
+    plaintext: &[u8],
+) -> Result<([u8; NONCE_LEN], Vec<u8>), CryptoError> {
+    let mut nonce = [0u8; NONCE_LEN];
+    OsRng.fill_bytes(&mut nonce);
+
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let payload = Payload {
+        msg: plaintext,
+        aad,
+    };
+    let ciphertext = cipher
+        .encrypt(&XNonce::from(nonce), payload)
+        .map_err(|_| CryptoError)?;
+
+    Ok((nonce, ciphertext))
+}
+
+/// Decrypts ciphertext parts using a 32-byte key with raw AAD using XChaCha20Poly1305.
+pub fn open_raw_parts(
+    key: &[u8; 32],
+    aad: &[u8],
+    nonce: &[u8; NONCE_LEN],
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let payload = Payload {
+        msg: ciphertext,
+        aad,
+    };
+    let plaintext = cipher
+        .decrypt(&XNonce::from(*nonce), payload)
+        .map_err(|_| CryptoError)?;
+
+    Ok(plaintext)
+}
+
+/// Seals an arbitrary plaintext buffer under a 32-byte key with raw AAD using XChaCha20Poly1305.
+///
+/// Returns the standard framed blob: `[0x01] || [24-byte nonce] || [ciphertext + 16-byte tag]`.
+pub fn seal_raw(key: &[u8; 32], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
+    let (nonce, ciphertext) = seal_raw_parts(key, aad, plaintext)?;
+    Ok(encode_record_blob(&nonce, &ciphertext))
+}
+
+/// Opens a framed blob using a 32-byte key with raw AAD using XChaCha20Poly1305.
+pub fn open_raw(key: &[u8; 32], aad: &[u8], blob: &[u8]) -> Result<Vec<u8>, CryptoError> {
+    let (nonce, ciphertext) = decode_record_blob(blob)?;
+    open_raw_parts(key, aad, &nonce, ciphertext)
+}
+
 /// Authenticated encryption trait for record sealing and opening.
 pub trait RecordCipher {
     fn seal(&self, plaintext: &[u8], associated_data: &[u8]) -> Result<Vec<u8>, CryptoError>;
@@ -234,32 +290,32 @@ pub fn derive_hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> Zeroizing<[u8
     okm
 }
 
-/// Derives the record key `K_rec` from the vault key `k_v` and `vault_id`.
+/// Derives the record key `K_rec` from the master key `k_v` and `secwet_id`.
 ///
-/// Uses `info = b"secwet/v1/record"` and `salt = vault_id.as_bytes()`.
-pub fn derive_record_key(k_v: &[u8; 32], vault_id: &Uuid) -> Zeroizing<[u8; 32]> {
-    derive_hkdf_sha256(k_v, vault_id.as_bytes(), b"secwet/v1/record")
+/// Uses `info = b"secwet/v1/record"` and `salt = secwet_id.as_bytes()`.
+pub fn derive_record_key(k_v: &[u8; 32], secwet_id: &Uuid) -> Zeroizing<[u8; 32]> {
+    derive_hkdf_sha256(k_v, secwet_id.as_bytes(), b"secwet/v1/record")
 }
 
-/// Derives the event key `K_evt` from the vault key `k_v` and `vault_id`.
+/// Derives the event key `K_evt` from the master key `k_v` and `secwet_id`.
 ///
-/// Uses `info = b"secwet/v1/event"` and `salt = vault_id.as_bytes()`.
-pub fn derive_event_key(k_v: &[u8; 32], vault_id: &Uuid) -> Zeroizing<[u8; 32]> {
-    derive_hkdf_sha256(k_v, vault_id.as_bytes(), b"secwet/v1/event")
+/// Uses `info = b"secwet/v1/event"` and `salt = secwet_id.as_bytes()`.
+pub fn derive_event_key(k_v: &[u8; 32], secwet_id: &Uuid) -> Zeroizing<[u8; 32]> {
+    derive_hkdf_sha256(k_v, secwet_id.as_bytes(), b"secwet/v1/event")
 }
 
-/// Derives the recovery wrap key `K_r` from recovery secret bytes and `vault_id`.
+/// Derives the recovery wrap key `K_r` from recovery secret bytes and `secwet_id`.
 ///
-/// Uses `info = b"secwet/v1/recovery"` and `salt = vault_id.as_bytes()`.
-pub fn derive_recovery_key(recovery_secret: &[u8], vault_id: &Uuid) -> Zeroizing<[u8; 32]> {
-    derive_hkdf_sha256(recovery_secret, vault_id.as_bytes(), b"secwet/v1/recovery")
+/// Uses `info = b"secwet/v1/recovery"` and `salt = secwet_id.as_bytes()`.
+pub fn derive_recovery_key(recovery_secret: &[u8], secwet_id: &Uuid) -> Zeroizing<[u8; 32]> {
+    derive_hkdf_sha256(recovery_secret, secwet_id.as_bytes(), b"secwet/v1/recovery")
 }
 
-/// Derives both `(K_rec, K_evt)` from the vault key `k_v` and `vault_id`.
-pub fn derive_keys(k_v: &[u8; 32], vault_id: &Uuid) -> (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>) {
+/// Derives both `(K_rec, K_evt)` from the master key `k_v` and `secwet_id`.
+pub fn derive_keys(k_v: &[u8; 32], secwet_id: &Uuid) -> (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>) {
     (
-        derive_record_key(k_v, vault_id),
-        derive_event_key(k_v, vault_id),
+        derive_record_key(k_v, secwet_id),
+        derive_event_key(k_v, secwet_id),
     )
 }
 
@@ -530,4 +586,260 @@ pub fn format_normalized_recovery_key(normalized_25: &str) -> Result<String, Cry
         formatted.push(c);
     }
     Ok(formatted)
+}
+
+/// Derives the recovery wrap key `K_r` from a user-supplied recovery key string and `secwet_id`.
+///
+/// Normalizes and parses the Crockford Base32 string to extract the 125-bit entropy bytes,
+/// then applies HKDF-SHA256 (`salt = secwet_id`, `info = b"secwet/v1/recovery"`).
+pub fn derive_recovery_key_from_str(
+    recovery_key_str: &str,
+    secwet_id: &Uuid,
+) -> Result<Zeroizing<[u8; 32]>, CryptoError> {
+    let parsed = parse_recovery_key(recovery_key_str)?;
+    Ok(derive_recovery_key(&*parsed, secwet_id))
+}
+
+// ============================================================================
+// 10. Device Pairing Cryptography
+// ============================================================================
+
+/// Generates an ephemeral X25519 keypair for pairing session initiation or join.
+pub fn generate_ephemeral_x25519() -> (StaticSecret, [u8; 32]) {
+    let secret = StaticSecret::random_from_rng(&mut OsRng);
+    let public = X25519PublicKey::from(&secret);
+    (secret, public.to_bytes())
+}
+
+/// Computes the X25519 Diffie-Hellman shared secret between our secret and peer's ephemeral public key.
+pub fn compute_pairing_shared_secret(
+    my_secret: &StaticSecret,
+    peer_pub: &[u8; 32],
+) -> Result<Zeroizing<[u8; 32]>, CryptoError> {
+    let peer_public = X25519PublicKey::from(*peer_pub);
+    let shared = my_secret.diffie_hellman(&peer_public);
+    let mut key = Zeroizing::new([0u8; 32]);
+    key.copy_from_slice(shared.as_bytes());
+    Ok(key)
+}
+
+/// Formats the standard QR code URI for device pairing:
+/// `secwet://pair?v=1&s=<session_id>&k=<base64url(A_eph_pub)>&r=<relay host>`
+pub fn format_pairing_qr_payload(
+    session_id: &Uuid,
+    a_eph_pub: &[u8; 32],
+    relay_host: &str,
+) -> String {
+    let k_encoded = data_encoding::BASE64URL_NOPAD.encode(a_eph_pub);
+    format!(
+        "secwet://pair?v=1&s={}&k={}&r={}",
+        session_id, k_encoded, relay_host
+    )
+}
+
+/// Parses a pairing URI and extracts session_id, peer ephemeral pub, and relay host.
+pub fn parse_pairing_qr_payload(uri: &str) -> Result<(Uuid, [u8; 32], String), CryptoError> {
+    let stripped = uri.strip_prefix("secwet://pair?").ok_or(CryptoError)?;
+    let mut session_id = None;
+    let mut peer_pub = None;
+    let mut relay_host = None;
+
+    for param in stripped.split('&') {
+        let (k, v) = param.split_once('=').ok_or(CryptoError)?;
+        match k {
+            "s" => session_id = Uuid::parse_str(v).ok(),
+            "k" => {
+                if let Ok(bytes) = data_encoding::BASE64URL_NOPAD.decode(v.as_bytes()) {
+                    if bytes.len() == 32 {
+                        let mut arr = [0u8; 32];
+                        arr.copy_from_slice(&bytes);
+                        peer_pub = Some(arr);
+                    }
+                }
+            }
+            "r" => relay_host = Some(v.to_string()),
+            _ => {}
+        }
+    }
+
+    match (session_id, peer_pub, relay_host) {
+        (Some(s), Some(k), Some(r)) => Ok((s, k, r)),
+        _ => Err(CryptoError),
+    }
+}
+
+/// Seals device profile using XChaCha20-Poly1305 under HKDF key derived from shared secret.
+pub fn seal_pairing_profile(
+    shared_secret: &[u8; 32],
+    profile: &secwet_proto::PairingProfile,
+) -> Result<Vec<u8>, CryptoError> {
+    let hkdf = Hkdf::<Sha256>::new(None, shared_secret);
+    let mut key = [0u8; 32];
+    hkdf.expand(b"secwet/v1/pair-profile", &mut key)
+        .map_err(|_| CryptoError)?;
+
+    let serialized = postcard::to_stdvec(profile).map_err(|_| CryptoError)?;
+    let cipher = XChaCha20Poly1305::new((&key).into());
+    let mut nonce_bytes = [0u8; 24];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = XNonce::from(nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: &serialized,
+                aad: b"secwet-pair-profile",
+            },
+        )
+        .map_err(|_| CryptoError)?;
+
+    let mut out = Vec::with_capacity(24 + ciphertext.len());
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+/// Opens device profile using XChaCha20-Poly1305 under HKDF key derived from shared secret.
+pub fn open_pairing_profile(
+    shared_secret: &[u8; 32],
+    sealed: &[u8],
+) -> Result<secwet_proto::PairingProfile, CryptoError> {
+    if sealed.len() < 24 + 16 {
+        return Err(CryptoError);
+    }
+    let hkdf = Hkdf::<Sha256>::new(None, shared_secret);
+    let mut key = [0u8; 32];
+    hkdf.expand(b"secwet/v1/pair-profile", &mut key)
+        .map_err(|_| CryptoError)?;
+
+    let nonce = XNonce::try_from(&sealed[..24]).map_err(|_| CryptoError)?;
+    let cipher = XChaCha20Poly1305::new((&key).into());
+
+    let plaintext = cipher
+        .decrypt(
+            &nonce,
+            Payload {
+                msg: &sealed[24..],
+                aad: b"secwet-pair-profile",
+            },
+        )
+        .map_err(|_| CryptoError)?;
+
+    postcard::from_bytes(&plaintext).map_err(|_| CryptoError)
+}
+
+/// Computes the 6-digit Short Authentication String (SAS) formatted as "XXX YYY".
+pub fn compute_pairing_sas(
+    shared_secret: &[u8; 32],
+    session_id: &Uuid,
+    a_eph_pub: &[u8; 32],
+    n_eph_pub: &[u8; 32],
+    sign_pub: &[u8; 32],
+    enc_pub: &[u8; 32],
+) -> Result<String, CryptoError> {
+    let transcript_raw = postcard::to_stdvec(&(
+        session_id.as_bytes(),
+        a_eph_pub,
+        n_eph_pub,
+        sign_pub,
+        enc_pub,
+    ))
+    .map_err(|_| CryptoError)?;
+    let transcript: [u8; 32] = Sha256::digest(&transcript_raw).into();
+
+    let hkdf = Hkdf::<Sha256>::new(Some(session_id.as_bytes()), shared_secret);
+    let mut sas_bytes = [0u8; 4];
+    hkdf.expand(&transcript, &mut sas_bytes)
+        .map_err(|_| CryptoError)?;
+
+    let num = u32::from_be_bytes(sas_bytes) % 1_000_000;
+    Ok(format!("{:03} {:03}", num / 1000, num % 1000))
+}
+
+/// Wraps all active master keys for a newly approved recipient device.
+pub fn wrap_master_keys_for_device(
+    master_keys_by_epoch: &[(u32, [u8; 32])],
+    recipient_enc_pub: &[u8; 32],
+    recipient_device_id: &str,
+    secwet_id: &Uuid,
+) -> Result<Vec<secwet_proto::WrappedEpochKey>, CryptoError> {
+    let mut out = Vec::with_capacity(master_keys_by_epoch.len());
+    for (epoch, key) in master_keys_by_epoch {
+        let info = secwet_proto::KeyWrapInfo {
+            purpose: "secwet/v1/master-key",
+            secwet_id: secwet_id.as_bytes(),
+            key_epoch: *epoch,
+            recipient_device_id,
+        };
+        let info_bytes = postcard::to_stdvec(&info).map_err(|_| CryptoError)?;
+        let wrapped = wrap_for_device(recipient_enc_pub, &info_bytes, key)?;
+        out.push(secwet_proto::WrappedEpochKey {
+            epoch: *epoch,
+            wrapped,
+        });
+    }
+    Ok(out)
+}
+
+/// A master key and the epoch it belongs to.
+pub type EpochKey = (u32, Zeroizing<[u8; 32]>);
+
+/// Unwraps received master keys using our private X25519 encryption key.
+pub fn unwrap_master_keys_for_me(
+    wrapped_keys: &[secwet_proto::WrappedEpochKey],
+    my_enc_secret: &StaticSecret,
+    my_device_id: &str,
+    secwet_id: &Uuid,
+) -> Result<Vec<EpochKey>, CryptoError> {
+    let mut out = Vec::with_capacity(wrapped_keys.len());
+    for item in wrapped_keys {
+        let info = secwet_proto::KeyWrapInfo {
+            purpose: "secwet/v1/master-key",
+            secwet_id: secwet_id.as_bytes(),
+            key_epoch: item.epoch,
+            recipient_device_id: my_device_id,
+        };
+        let info_bytes = postcard::to_stdvec(&info).map_err(|_| CryptoError)?;
+        let key = unwrap_for_me(my_enc_secret, &info_bytes, &item.wrapped)?;
+        out.push((item.epoch, key));
+    }
+    Ok(out)
+}
+
+/// Creates and signs a PairingApproval record.
+pub fn create_pairing_approval(
+    secwet_id: &Uuid,
+    session_id: &Uuid,
+    device_id: &str,
+    sign_pub: &[u8; 32],
+    enc_pub: &[u8; 32],
+    signing_key: &SigningKey,
+) -> Result<(secwet_proto::PairingApproval, [u8; 64]), CryptoError> {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| CryptoError)?
+        .as_millis() as i64;
+
+    let approval = secwet_proto::PairingApproval {
+        secwet_id: *secwet_id.as_bytes(),
+        session_id: *session_id.as_bytes(),
+        device_id: device_id.to_string(),
+        sign_pub: *sign_pub,
+        enc_pub: *enc_pub,
+        approved_at: now_ms,
+    };
+    let approval_bytes = postcard::to_stdvec(&approval).map_err(|_| CryptoError)?;
+    let sig = signing_key.sign(&approval_bytes);
+    Ok((approval, sig.to_bytes()))
+}
+
+/// Verifies a PairingApproval signature against an authorized device's public key.
+pub fn verify_pairing_approval(
+    approval: &secwet_proto::PairingApproval,
+    signature: &[u8; 64],
+    authorized_sign_pub: &[u8; 32],
+) -> Result<(), CryptoError> {
+    let approval_bytes = postcard::to_stdvec(approval).map_err(|_| CryptoError)?;
+    verify_signature_strict_bytes(authorized_sign_pub, &approval_bytes, signature)
 }

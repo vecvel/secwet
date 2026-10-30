@@ -1,0 +1,30 @@
+[package]
+name = "secwet-ffi"
+description = "C ABI over secwet-app for the mobile hosts (iOS and Android)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+# staticlib: linked into the iOS Runner. cdylib: libsecwet_ffi.so on Android.
+# rlib: tests and other Rust callers.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+secwet-app.workspace = true
+secwet-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[build-dependencies]
+# Compiles the small JNI bridge (android/jni_bridge.c) on Android targets only.
+cc = "1"
+
+[dev-dependencies]
+tempfile.workspace = true
+# relay_pair_invite_tests.rs runs the real relay router in process.
+secwet-relay = { path = "../secwet-relay" }
+tokio.workspace = true
+axum.workspace = true

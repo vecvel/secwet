@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "description": "Authoritative reference .secwet fixture catalog for Milestone 3 E2E recovery and export testing",
+  "fixtures": [
+    {
+      "file": "valid_empty_workspace.secwet",
+      "category": "valid",
+      "expected_status": "ok",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "b82676d070ccdfaa5a6fa11feee87813a0307ba9cc741b39b258e377065c79c9",
+      "description": "Valid reference archive for an empty workspace with 0 entities"
+    },
+    {
+      "file": "valid_minimal_workspace.secwet",
+      "category": "valid",
+      "expected_status": "ok",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "37aa3f0ef31d29932a1200dc4138571ba0b11d42d71d789110c9963bf410bda9",
+      "description": "Valid reference archive containing 1 item, 1 environment, and 1 secret"
+    },
+    {
+      "file": "valid_enterprise_workspace.secwet",
+      "category": "valid",
+      "expected_status": "ok",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "0356f8f4f473cd414447aaeb46451eee141b15bf39d3c9bb8a30aba24ce92942",
+      "description": "Valid enterprise workspace archive with space, label, item, env, secret, and note"
+    },
+    {
+      "file": "valid_with_binary_asset.secwet",
+      "category": "valid",
+      "expected_status": "ok",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "6a81cf59f6db09856c5bdaf29f452a02813391ac37925d4cfbc3f840fe96c85d",
+      "description": "Valid workspace archive with binary file attachment"
+    },
+    {
+      "file": "corrupted_mac.secwet",
+      "category": "adversarial",
+      "expected_status": "mac_mismatch",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "2fa946787452623a32e53ceec41c0a132744687631663f7c1536bb9f35c14762",
+      "description": "Adversarial fixture: Poly1305 authentication tag has flipped bit"
+    },
+    {
+      "file": "corrupted_ciphertext.secwet",
+      "category": "adversarial",
+      "expected_status": "decryption_failed",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "39395d97d0aa4fc47be327f84dabd8aac42440720912354c64b547f72696da3f",
+      "description": "Adversarial fixture: Ciphertext body payload has flipped bit"
+    },
+    {
+      "file": "corrupted_aad_secwet_id.secwet",
+      "category": "adversarial",
+      "expected_status": "aad_mismatch",
+      "secwet_id": "deadbeef-0000-0000-0000-000000000000",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "44c0040cb7ad4bdeb46c24a66cb9e8d3c910884e06df86c3553e9b4c8570115b",
+      "description": "Adversarial fixture: Workspace UUID in envelope header doesn't match AAD"
+    },
+    {
+      "file": "corrupted_truncated_file.secwet",
+      "category": "corrupted",
+      "expected_status": "json_syntax_error",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "7c118f1fcdd56d891adeb9c674fc9c1db35d186333fe742bc39d3ebb04db2318",
+      "description": "Corrupted fixture: File truncated halfway through JSON envelope"
+    },
+    {
+      "file": "corrupted_invalid_json.secwet",
+      "category": "corrupted",
+      "expected_status": "json_syntax_error",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "6e81ae315d569992e2b1398f8da560ee5ce8d99b88bb0415207b061b8ff144a0",
+      "description": "Corrupted fixture: Malformed JSON syntax"
+    },
+    {
+      "file": "corrupted_unsupported_version.secwet",
+      "category": "corrupted",
+      "expected_status": "unsupported_version",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "6d1cac819fd88dd6b0b5fa0b6c263f056a7877bb381b5ffdd91ed7b8dbbccefb",
+      "description": "Corrupted fixture: Version 999 is unsupported"
+    },
+    {
+      "file": "corrupted_unsupported_cipher.secwet",
+      "category": "corrupted",
+      "expected_status": "unsupported_cipher",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "40edffa7b31ac45447101698de59094293b437d83e3ecbba08056de882ed7b79",
+      "description": "Corrupted fixture: Unsupported cipher algorithm"
+    },
+    {
+      "file": "corrupted_unsupported_kdf.secwet",
+      "category": "corrupted",
+      "expected_status": "unsupported_kdf",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "bf2e76fb45eb6457dade7e601e4777d4629b46a6e8326bc6c28ad720c6885520",
+      "description": "Corrupted fixture: Unsupported KDF algorithm"
+    },
+    {
+      "file": "corrupted_zero_length.secwet",
+      "category": "corrupted",
+      "expected_status": "zero_length",
+      "secwet_id": "0192e200-0000-7000-8000-000000000001",
+      "recovery_key_formatted": "524H3-6H2NC-SVRH6-DAQF6-DVVQZ",
+      "recovery_key_normalized": "524H36H2NCSVRH6DAQF6DVVQZ",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "description": "Corrupted fixture: 0-byte file"
+    }
+  ]
+}

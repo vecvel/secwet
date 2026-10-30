@@ -2,14 +2,25 @@ import { useEffect, useState } from "react";
 import { Button } from "./components/Button";
 import { EmptyState } from "./components/EmptyState";
 import { Icon } from "./components/Icon";
+import { Notice } from "./components/Notice";
 import { UnlockScreen } from "./components/UnlockScreen";
-import { initialDevices, type Device, type Plan } from "./data/mock";
+import { type Device, type Plan } from "./data/mock";
+import { usePlanStatus } from "./lib/usePlan";
 import { useIdleTimer } from "./hooks/useIdleTimer";
 import { BottomTabs } from "./layout/BottomTabs";
 import { Sidebar } from "./layout/Sidebar";
 import { TopBar } from "./layout/TopBar";
 import { type Route } from "./layout/routes";
-import { api, isLocked, isUnlocked } from "./lib/api";
+import {
+  canCreateSpace,
+  canManageMembers,
+  canPairDevices,
+  isShareableSpace,
+  canRotateMasterKey,
+  isReadOnly,
+  permissionsFor,
+} from "./lib/access";
+import { api, isLocked, isUnlocked, isUninitialized, type DeviceView, type SpaceView, type TreeNodeKind } from "./lib/api";
 import { useStore } from "./lib/store";
 import { ItemScreen } from "./screens/items/ItemScreen";
 import { GroupScreen } from "./screens/groups/GroupScreen";
@@ -18,12 +29,32 @@ import { NewGroupDialog } from "./screens/groups/NewGroupDialog";
 import { OverviewScreen } from "./screens/overview/OverviewScreen";
 import { CustomizeDashboardDialog } from "./screens/overview/CustomizeDashboardDialog";
 import { SettingsScreen, type SettingsTab } from "./screens/settings/SettingsScreen";
+import { NewSpaceDialog } from "./screens/spaces/NewSpaceDialog";
+import { OnboardingScreen } from "./screens/onboarding/OnboardingScreen";
+import { RestoreDialog } from "./screens/recovery/RestoreDialog";
+import { ShareDialog } from "./screens/sharing/ShareDialog";
+import { MembersDialog } from "./screens/members/MembersDialog";
 import styles from "./App.module.css";
+
+function toDevice(d: DeviceView): Device {
+  return {
+    id: d.id,
+    name: d.name,
+    platform: d.platform,
+    fingerprint: d.fingerprint,
+    addedAt: d.added_at,
+    lastSyncAt: d.last_seen_at ?? d.last_sync_at ?? undefined,
+    revokedAt: d.revoked_at ?? undefined,
+    current: Boolean(d.is_current ?? d.current),
+  };
+}
 
 export function App() {
   const [route, setRoute] = useState<Route>("overview");
   const [appState, store] = useStore();
   const {
+    spaces,
+    activeSpaceId,
     groups,
     items,
     environments,
@@ -38,15 +69,36 @@ export function App() {
     selectedEnvironmentId,
   } = appState;
 
+  const [creatingSpace, setCreatingSpace] = useState(false);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [creatingItemGroupId, setCreatingItemGroupId] = useState<string | null>(null);
-  const [cliConnected, setCliConnected] = useState(false);
-  const [plan, setPlan] = useState<Plan>("free");
-  const [devices, setDevices] = useState<Device[]>(initialDevices);
-  const [pendingRotation, setPendingRotation] = useState<string>();
-  const [keyRotatedAt, setKeyRotatedAt] = useState<number>();
+  const [cliConnected, setCliConnected] = useState(() => {
+    return typeof window !== "undefined" && window.localStorage.getItem("secwet:cli_guide_read") === "true";
+  });
+
+  function handleCliMarkedRead() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("secwet:cli_guide_read", "true");
+    }
+    setCliConnected(true);
+  }
+  // The real plan comes from the relay entitlement. The "Simulate plan"
+  // switch in Settings overrides it in development builds only.
+  const planStatus = usePlanStatus();
+  const [simulatedPlan, setPlan] = useState<Plan | null>(null);
+  const plan: Plan = (import.meta.env.DEV && simulatedPlan) || (planStatus?.plan === "pro" ? "pro" : "free");
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [membersSpace, setMembersSpace] = useState<SpaceView | null>(null);
+  const [sharing, setSharing] = useState<{ spaceId: string; focus?: { kind: TreeNodeKind; id: string } } | null>(
+    null
+  );
   const [recoveryKeyCreatedAt, setRecoveryKeyCreatedAt] = useState<number>();
+  const [restoringBackup, setRestoringBackup] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+
+  const effectiveRecoveryKeyCreatedAt = appState.recoveryStatus?.created
+    ? (appState.recoveryStatus.createdAt || recoveryKeyCreatedAt || Date.now())
+    : recoveryKeyCreatedAt;
 
   // Auto-lock Idle Timer
   useIdleTimer({
@@ -65,17 +117,109 @@ export function App() {
     }
   }, [settings.theme]);
 
-  // Selected entities
+  // Devices come from the backend (mock in browser preview); refresh on device changes.
+  const unlocked = isUnlocked(status);
+  useEffect(() => {
+    if (!unlocked) return;
+    let cancelled = false;
+    const load = () =>
+      api
+        .devicesList()
+        .then((list) => {
+          if (!cancelled) setDevices(list.map(toDevice));
+        })
+        .catch(() => {});
+    load();
+    let unlisten: (() => void) | undefined;
+    api
+      .onSecwetChanged((e) => {
+        if (e.scope === "devices" || e.scope === "all") load();
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [unlocked]);
+
+  // After a remote wipe the store is gone: drop screen state so onboarding starts clean.
+  const uninitialized = isUninitialized(status);
+  useEffect(() => {
+    if (!uninitialized) return;
+    setRoute("overview");
+    setSettingsTab("general");
+    setDevices([]);
+    setSharing(null);
+    setMembersSpace(null);
+    setCreatingSpace(false);
+    setCreatingGroup(false);
+    setCreatingItemGroupId(null);
+    setCustomizingDashboard(false);
+    setRestoringBackup(false);
+    setIsEditingHomeTitle(false);
+  }, [uninitialized]);
+
+  // Member mode and read-only archive
+  const access = appState.access;
+  const readOnly = isReadOnly(appState.linkStatus);
+  const canPair = canPairDevices(appState.access, readOnly);
+  const canManageMembersHere = canManageMembers(appState.access);
+  const spacePerms = (spaceId: string | null | undefined) =>
+    permissionsFor(access, readOnly, { spaceId: spaceId ?? null });
+  const groupPerms = (groupId: string | null | undefined) => {
+    const g = groups.find((x) => x.id === groupId);
+    return permissionsFor(access, readOnly, { spaceId: g?.space_id ?? null, groupId: groupId ?? null });
+  };
+  const manageableSpaces = spaces.filter((s) => spacePerms(s.id).canManage);
+  const canCreateGroupHere = activeSpaceId ? spacePerms(activeSpaceId).canManage : manageableSpaces.length > 0;
+  const canCreateSpaceHere = canCreateSpace(access, readOnly);
+  const pendingRotation =
+    appState.keyStatus?.rotation_recommended && canRotateMasterKey(access, readOnly)
+      ? appState.keyStatus.pending_reason?.trim() || "A device was revoked."
+      : undefined;
+
+  // Personal space and active space calculations
+  const personalSpace = spaces.find((s) => s.is_default || s.name.toLowerCase() === "personal");
+
+  const visibleGroups = activeSpaceId
+    ? groups.filter((g) => g.space_id === activeSpaceId)
+    : groups;
+
+  const visibleGroupIds = new Set(visibleGroups.map((g) => g.id));
+  const visibleItems = activeSpaceId
+    ? items.filter((i) => visibleGroupIds.has(i.group_id ?? i.label_id))
+    : items;
+
+  // Selected entities strictly within visible groups & visible items:
   const activeGroup =
-    groups.find((g) => g.id === selectedGroupId) ||
-    groups[0];
+    visibleGroups.find((g) => g.id === selectedGroupId) ||
+    visibleGroups[0] ||
+    null;
   const activeItem =
-    items.find((i) => i.id === selectedItemId) ||
-    items.find((i) => (i.group_id ?? i.label_id) === activeGroup?.id) ||
-    items[0];
-  const activeItemGroup =
-    groups.find((g) => g.id === (activeItem?.group_id ?? activeItem?.label_id)) ||
-    activeGroup;
+    visibleItems.find((i) => i.id === selectedItemId) ||
+    (activeGroup ? visibleItems.find((i) => (i.group_id ?? i.label_id) === activeGroup.id) : null) ||
+    visibleItems[0] ||
+    null;
+  const activeItemGroup = activeItem
+    ? visibleGroups.find((g) => g.id === (activeItem.group_id ?? activeItem.label_id)) || activeGroup
+    : activeGroup;
+  const activeItemSpace = spaces.find((s) => s.id === activeItemGroup?.space_id) ?? null;
+
+  const newTargetGroupId = activeGroup?.id || visibleGroups[0]?.id || null;
+  const canCreateFromTopBar =
+    visibleGroups.length === 0 ? canCreateGroupHere : groupPerms(newTargetGroupId).canManage;
+  // "Add secret" opens the active item, or a group to pick one: allowed when this device can write there.
+  const canAddSecretHere = activeItem
+    ? permissionsFor(access, readOnly, {
+        spaceId: activeItemGroup?.space_id ?? null,
+        groupId: activeItem.group_id ?? activeItem.label_id ?? null,
+        itemId: activeItem.id,
+        general: true,
+      }).canWrite || canCreateFromTopBar
+    : canCreateFromTopBar;
 
   const homeTitle = dashboardConfig.home_label || settings.home_label || "Overview";
   const [customizingDashboard, setCustomizingDashboard] = useState(false);
@@ -113,14 +257,53 @@ export function App() {
     );
   }, [effectiveDeviceName]);
 
-  // When vault is locked, render the UnlockScreen
+  // When secwet is uninitialized, render the OnboardingScreen
+  if (isUninitialized(status) || (isUnlocked(status) && appState.joining)) {
+    return (
+      <div className={styles.shell}>
+        <OnboardingScreen
+          onCreateWorkspace={async (deviceName) => {
+            await store.createWorkspace(deviceName);
+          }}
+          onRestoreBackup={() => setRestoringBackup(true)}
+          onJoinWithInvite={async (link, email, deviceName) => {
+            await store.acceptInvitation(link, email, deviceName);
+          }}
+          waitingForAccess={isUnlocked(status) && appState.joining}
+          wiped={appState.wipedNotice}
+          onPollAccess={() => store.pollJoinedAccess()}
+          onStopWaiting={() => {
+            store.finishJoining();
+          }}
+          defaultDeviceName={effectiveDeviceName}
+        />
+        {restoringBackup && (
+          <RestoreDialog
+            onClose={() => setRestoringBackup(false)}
+            onRestored={() => setRestoringBackup(false)}
+            defaultDeviceName={effectiveDeviceName}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // When secwet is locked, render the UnlockScreen
   if (isLocked(status)) {
     return (
       <div className={styles.shell}>
         <UnlockScreen
-          onUnlock={() => store.unlock()}
+          onUnlock={(recoveryKey) => store.unlock(recoveryKey)}
           deviceName={effectiveDeviceName}
+          onRestore={() => setRestoringBackup(true)}
         />
+        {restoringBackup && (
+          <RestoreDialog
+            onClose={() => setRestoringBackup(false)}
+            onRestored={() => setRestoringBackup(false)}
+            defaultDeviceName={effectiveDeviceName}
+          />
+        )}
       </div>
     );
   }
@@ -134,6 +317,18 @@ export function App() {
           setRoute(r);
         }}
         homeLabel={homeTitle}
+        spaces={spaces}
+        activeSpaceId={activeSpaceId}
+        onSelectSpace={(id) => store.selectSpace(id)}
+        onNewSpace={canCreateSpaceHere ? () => setCreatingSpace(true) : undefined}
+        onRenameSpace={(id, name, icon) => store.renameSpace(id, name, icon)}
+        onDeleteSpace={(id) => store.deleteSpace(id)}
+        canEditSpaces={canCreateSpaceHere}
+        canShareSpace={(s: SpaceView) => isShareableSpace(s) && spacePerms(s.id).canShare}
+        onShareSpace={(s: SpaceView) => setSharing({ spaceId: s.id })}
+        onOpenMembers={canManageMembersHere ? (s: SpaceView) => setMembersSpace(s) : undefined}
+        canCreateGroup={canCreateGroupHere}
+        canAddToGroup={(groupId) => groupPerms(groupId).canManage}
         groups={groups}
         items={items}
         selectedGroupId={activeGroup?.id ?? null}
@@ -164,29 +359,32 @@ export function App() {
                 >
                   Customize
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setSettingsTab("devices");
-                    setRoute("settings");
-                  }}
-                >
-                  Pair device
-                </Button>
-                <Button
-                  variant="primary"
-                  icon="plus"
-                  onClick={() => {
-                    const targetGroup = activeGroup || groups[0];
-                    if (targetGroup) {
-                      setCreatingItemGroupId(targetGroup.id);
-                    } else {
-                      setCreatingGroup(true);
-                    }
-                  }}
-                >
-                  New
-                </Button>
+                {canPair && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setSettingsTab("devices");
+                      setRoute("settings");
+                    }}
+                  >
+                    Pair device
+                  </Button>
+                )}
+                {canCreateFromTopBar && (
+                  <Button
+                    variant="primary"
+                    icon="plus"
+                    onClick={() => {
+                      if (visibleGroups.length === 0) {
+                        setCreatingGroup(true);
+                      } else {
+                        setCreatingItemGroupId(newTargetGroupId);
+                      }
+                    }}
+                  >
+                    New
+                  </Button>
+                )}
               </div>
             ) : undefined
           }
@@ -255,11 +453,21 @@ export function App() {
         </TopBar>
 
         <main className={styles.content}>
+          {readOnly && (
+            <div className={styles.banner}>
+              <Notice tone="warning" label="Unlinked">
+                This device was unlinked from Secwet. Sync is disabled. You can still view and export.
+              </Notice>
+            </div>
+          )}
+
           {route === "overview" && (
             <OverviewScreen
               plan={plan}
               cliConnected={cliConnected}
-              onCliCopied={() => setCliConnected(true)}
+              onCliCopied={handleCliMarkedRead}
+              items={visibleItems}
+              isSpaceFiltered={activeSpaceId !== null}
               onOpenItem={(itemId, envId) => {
                 store.selectItem(itemId, envId);
                 setRoute("item");
@@ -273,10 +481,11 @@ export function App() {
                 setRoute("group");
               }}
               onNewItem={() => {
-                if (activeGroup) {
-                  setRoute("group");
-                } else {
+                if (!canCreateFromTopBar) return;
+                if (visibleGroups.length === 0) {
                   setCreatingGroup(true);
+                } else {
+                  setCreatingItemGroupId(newTargetGroupId);
                 }
               }}
               onAddSecret={() => {
@@ -284,10 +493,13 @@ export function App() {
                   setRoute("item");
                 } else if (activeGroup) {
                   setRoute("group");
-                } else {
+                } else if (canCreateGroupHere) {
                   setCreatingGroup(true);
                 }
               }}
+              canCreate={canCreateFromTopBar}
+              canAddSecret={canAddSecretHere}
+              canPair={canPair}
               onOpenDevices={() => {
                 setSettingsTab("devices");
                 setRoute("settings");
@@ -296,12 +508,20 @@ export function App() {
                 setSettingsTab("recovery");
                 setRoute("settings");
               }}
+              onOpenSecurity={() => {
+                setSettingsTab("security");
+                setRoute("settings");
+              }}
+              onOpenCli={() => {
+                setSettingsTab("cli");
+                setRoute("settings");
+              }}
               onOpenSettings={() => {
                 setSettingsTab("general");
                 setRoute("settings");
               }}
               devices={devices}
-              recoveryKeyCreatedAt={recoveryKeyCreatedAt}
+              recoveryKeyCreatedAt={effectiveRecoveryKeyCreatedAt}
               pendingRotation={pendingRotation}
             />
           )}
@@ -311,8 +531,8 @@ export function App() {
               <GroupScreen
                 key={activeGroup.id}
                 group={activeGroup}
-                groups={groups}
-                items={items}
+                groups={visibleGroups}
+                items={visibleItems}
                 onSelectItem={(itemId) => {
                   store.selectItem(itemId);
                   setRoute("item");
@@ -327,20 +547,27 @@ export function App() {
                   await store.deleteGroup(id);
                   setRoute("overview");
                 }}
+                canManage={groupPerms(activeGroup.id).canManage}
               />
             ) : (
               <EmptyState
                 icon="folder"
-                title="No sections yet"
-                body="Create a section to organize your projects, credentials, and services."
+                title="No groups in this space"
+                body={
+                  canCreateGroupHere
+                    ? "Create a group to organize your projects, credentials, and services."
+                    : "Nothing in this space is shared with you yet."
+                }
                 action={
-                  <Button
-                    variant="primary"
-                    icon="plus"
-                    onClick={() => setCreatingGroup(true)}
-                  >
-                    New
-                  </Button>
+                  canCreateGroupHere ? (
+                    <Button
+                      variant="primary"
+                      icon="plus"
+                      onClick={() => setCreatingGroup(true)}
+                    >
+                      New Group
+                    </Button>
+                  ) : undefined
                 }
               />
             ))}
@@ -405,22 +632,33 @@ export function App() {
                   store.updateNote(id, { title, content })
                 }
                 onDeleteNote={(id: string) => store.deleteNote(id)}
+                onShare={
+                  activeItemSpace && isShareableSpace(activeItemSpace)
+                    ? (target) => setSharing({ spaceId: activeItemSpace.id, focus: target })
+                    : undefined
+                }
               />
             ) : (
               <EmptyState
                 icon="folder"
                 title="No entry selected"
-                body="Select an entry from the section or create a new one."
+                body="Select an entry from the sidebar or create a new one."
                 action={
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      if (activeGroup) setRoute("group");
-                      else setCreatingGroup(true);
-                    }}
-                  >
-                    View
-                  </Button>
+                  activeGroup || canCreateFromTopBar ? (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        if (activeGroup) setRoute("group");
+                        else if (visibleGroups.length === 0) {
+                          if (canCreateGroupHere) setCreatingGroup(true);
+                        } else if (groupPerms(visibleGroups[0].id).canManage) {
+                          setCreatingItemGroupId(visibleGroups[0].id);
+                        }
+                      }}
+                    >
+                      {activeGroup ? "View group" : "New"}
+                    </Button>
+                  ) : undefined
                 }
               />
             ))}
@@ -435,27 +673,20 @@ export function App() {
               onLockMinutesChange={(m) =>
                 store.updateSettings({ lock_minutes: m, lock_timeout_minutes: m })
               }
-              onCliCopied={() => setCliConnected(true)}
+              onCliCopied={handleCliMarkedRead}
               homeLabel={settings.home_label}
               onHomeLabelChange={(hl) => store.updateSettings({ home_label: hl })}
               deviceName={effectiveDeviceName}
               onDeviceNameChange={(dn) => store.updateSettings({ device_name: dn })}
               devices={devices}
-              onPairDevice={(d) => setDevices((all) => [...all, d])}
+              onPairDevice={(d) => setDevices((all) => [...all.filter((x) => x.id !== d.id), d])}
               onRevokeDevice={(id) => {
                 setDevices((all) =>
                   all.map((d) => (d.id === id ? { ...d, revokedAt: Date.now() } : d))
                 );
-                setPendingRotation(devices.find((d) => d.id === id)?.name);
               }}
-              pendingRotation={pendingRotation}
-              keyRotatedAt={keyRotatedAt}
-              recoveryKeyCreatedAt={recoveryKeyCreatedAt}
+              recoveryKeyCreatedAt={effectiveRecoveryKeyCreatedAt}
               onRecoveryKeyCreated={() => setRecoveryKeyCreatedAt(Date.now())}
-              onRotated={() => {
-                setKeyRotatedAt(Date.now());
-                setPendingRotation(undefined);
-              }}
               initialTab={settingsTab}
             />
           )}
@@ -464,15 +695,44 @@ export function App() {
 
       <BottomTabs route={route} onNavigate={setRoute} />
 
+      {creatingSpace && (
+        <NewSpaceDialog
+          onCancel={() => setCreatingSpace(false)}
+          onCreate={async (name, icon) => {
+            const created = await store.createSpace(name, icon);
+            store.selectSpace(created.id);
+            setCreatingSpace(false);
+          }}
+        />
+      )}
+
       {creatingGroup && (
         <NewGroupDialog
+          spaces={manageableSpaces}
+          defaultSpaceId={
+            (activeSpaceId && manageableSpaces.some((s) => s.id === activeSpaceId) ? activeSpaceId : null) ||
+            (personalSpace && manageableSpaces.some((s) => s.id === personalSpace.id) ? personalSpace.id : null) ||
+            manageableSpaces[0]?.id
+          }
           onCancel={() => setCreatingGroup(false)}
-          onCreate={async (name, icon) => {
-            const created = await store.createGroup(name, icon);
+          onCreate={async (name, icon, spaceId) => {
+            const created = await store.createGroup(name, icon, spaceId);
             await store.selectGroup(created.id);
             setRoute("group");
             setCreatingGroup(false);
           }}
+        />
+      )}
+
+      {membersSpace && <MembersDialog space={membersSpace} onClose={() => setMembersSpace(null)} />}
+
+      {sharing && (
+        <ShareDialog
+          spaces={spaces}
+          initialSpaceId={sharing.spaceId}
+          focus={sharing.focus ?? null}
+          canShareSpace={(s) => spacePerms(s.id).canShare}
+          onClose={() => setSharing(null)}
         />
       )}
 
@@ -489,23 +749,22 @@ export function App() {
         />
       )}
 
-      {creatingItemGroupId && (() => {
-        const targetGroup = groups.find((g) => g.id === creatingItemGroupId);
-        if (!targetGroup) return null;
-        return (
-          <NewItemDialog
-            groupName={targetGroup.name}
-            existingItems={items.filter((it) => (it.group_id ?? it.label_id) === targetGroup.id)}
-            onCancel={() => setCreatingItemGroupId(null)}
-            onCreate={async (name, desc) => {
-              const created = await store.createItem(targetGroup.id, name, desc);
-              setCreatingItemGroupId(null);
-              await store.selectItem(created.id);
-              setRoute("item");
-            }}
-          />
-        );
-      })()}
+      {creatingItemGroupId && (
+        <NewItemDialog
+          groups={visibleGroups}
+          initialGroupId={creatingItemGroupId}
+          existingItems={visibleItems}
+          onCancel={() => setCreatingItemGroupId(null)}
+          onCreate={async (name, desc, targetGroupId) => {
+            const finalGroupId = targetGroupId || creatingItemGroupId || activeGroup?.id || visibleGroups[0]?.id;
+            if (!finalGroupId) return;
+            const created = await store.createItem(finalGroupId, name, desc);
+            setCreatingItemGroupId(null);
+            await store.selectItem(created.id);
+            setRoute("item");
+          }}
+        />
+      )}
     </div>
   );
 }

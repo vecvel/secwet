@@ -1,0 +1,11 @@
+# Build context for relay.Dockerfile (repository root). Only the Cargo
+# workspace goes in; everything else stays out of the image build.
+**
+!Cargo.toml
+!Cargo.lock
+!crates/**
+!apps/desktop/src-tauri/**
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen
+**/target
+**/.DS_Store

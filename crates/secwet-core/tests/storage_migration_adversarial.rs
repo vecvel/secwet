@@ -1,6 +1,4 @@
-//! Empirical adversarial tests for secwet-core storage and migration (Milestone 1).
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.1, §5.2, §11.2, and `ORIGINAL_REQUEST.md`.
+//! Empirical adversarial tests for secwet-core storage and migration.
 //!
 //! Evaluates:
 //! 1. Migration `0002_flexible_organization.sql` on a database with existing v1 schema and records:
@@ -40,7 +38,7 @@ use secwet_core::records::{
     query_environments_by_item, query_items_by_label, reorder_labels, run_migrations,
     soft_delete_label, update_label_name, LabelRow, RecordRow, INITIAL_SCHEMA_SQL,
 };
-use secwet_core::{Error, SecretDraft, Vault, VaultStatus};
+use secwet_core::{Error, SecretDraft, Secwet, SecwetStatus};
 use secwet_proto::{EnvironmentBody, ProjectBody, RecordAad, RecordType, SecretBody, SecretKind};
 use tempfile::tempdir;
 use uuid::Uuid;
@@ -52,9 +50,9 @@ use uuid::Uuid;
 #[test]
 fn challenge_migration_0002_on_populated_v1_database() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("v1_populated_vault.sqlite3");
+    let db_path = dir.path().join("v1_populated_secwet.sqlite3");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let origin_device = "migration_tester_node";
     let now_ms = 1_730_200_000_000i64;
 
@@ -72,8 +70,8 @@ fn challenge_migration_0002_on_populated_v1_database() {
         conn.execute_batch(INITIAL_SCHEMA_SQL)
             .expect("v1 schema DDL");
         conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('vault_id', ?1)",
-            params![vault_id.to_string()],
+            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('secwet_id', ?1)",
+            params![secwet_id.to_string()],
         )
         .expect("insert meta v1");
         conn.execute("PRAGMA user_version = 1", [])
@@ -221,20 +219,20 @@ fn challenge_migration_0002_on_populated_v1_database() {
         let mut conn = open_connection(&db_path).expect("reopen connection");
         run_migrations(&mut conn).expect("execute migration 0002");
 
-        // Verify schema version is bumped to 2
+        // Verify schema version is bumped to 3
         let v = get_schema_version(&conn).expect("get_schema_version");
-        assert_eq!(v, 2, "user_version must be bumped to 2 after migration");
+        assert_eq!(v, 3, "user_version must be bumped to 3 after migration");
 
         let meta_ver = get_meta(&conn, "schema_version").expect("get_meta");
         assert_eq!(
             meta_ver,
-            Some("2".to_string()),
-            "meta.schema_version must be '2'"
+            Some("3".to_string()),
+            "meta.schema_version must be '3'"
         );
 
-        // Verify meta vault_id is preserved
-        let meta_vault = get_meta(&conn, "vault_id").expect("get_meta vault_id");
-        assert_eq!(meta_vault, Some(vault_id.to_string()));
+        // Verify meta secwet_id is preserved
+        let meta_secwet = get_meta(&conn, "secwet_id").expect("get_meta secwet_id");
+        assert_eq!(meta_secwet, Some(secwet_id.to_string()));
 
         // 3. Verify tables and indexes
         // labels table must exist with required columns
@@ -319,7 +317,7 @@ fn challenge_migration_0002_on_populated_v1_database() {
 
         // 5. Test Migration Idempotency: run_migrations again must succeed as a no-op
         run_migrations(&mut conn).expect("re-running migrations must succeed cleanly");
-        assert_eq!(get_schema_version(&conn).unwrap(), 2);
+        assert_eq!(get_schema_version(&conn).unwrap(), 3);
     }
 }
 
@@ -2144,18 +2142,18 @@ fn challenge_cascade_delete_item_large_scale_stress() {
 #[test]
 fn challenge_phase2_storage_migration_end_to_end() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let origin_device = "migration_challenger_node";
     let now_ms = 1_730_200_000_000i64;
 
     // Master key k_v and keystore
     let k_v = [42u8; 32];
-    let (k_rec, _k_evt) = derive_keys(&k_v, &vault_id);
+    let (k_rec, _k_evt) = derive_keys(&k_v, &secwet_id);
     let keystore = MemoryStore::new();
     keystore
-        .set(&format!("secwet/{vault_id}/vault-key/1"), &k_v)
+        .set(&format!("secwet/{secwet_id}/master-key/1"), &k_v)
         .expect("set key in keystore");
 
     let p1_id = Uuid::now_v7();
@@ -2171,8 +2169,8 @@ fn challenge_phase2_storage_migration_end_to_end() {
         conn.execute_batch(INITIAL_SCHEMA_SQL)
             .expect("v1 schema DDL");
         conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('vault_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
-            params![vault_id.to_string(), origin_device],
+            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('secwet_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
+            params![secwet_id.to_string(), origin_device],
         )
         .expect("insert meta v1");
         conn.execute("PRAGMA user_version = 1", [])
@@ -2181,7 +2179,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
         // Insert legacy Project 1 (record_type = 1, parent_id = None)
         let p1_body = ProjectBody::new("Production Web App");
         let p1_bytes = postcard::to_stdvec(&p1_body).unwrap();
-        let p1_aad = RecordAad::from_raw_type(vault_id.as_bytes(), p1_id.as_bytes(), 1, 1);
+        let p1_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), p1_id.as_bytes(), 1, 1);
         let p1_blob = seal_record(&k_rec, &p1_aad, &p1_bytes).unwrap();
         insert_record(
             &conn,
@@ -2201,7 +2199,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
         // Insert legacy Project 2 (record_type = 1, parent_id = None)
         let p2_body = ProjectBody::new("Internal Tools");
         let p2_bytes = postcard::to_stdvec(&p2_body).unwrap();
-        let p2_aad = RecordAad::from_raw_type(vault_id.as_bytes(), p2_id.as_bytes(), 1, 1);
+        let p2_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), p2_id.as_bytes(), 1, 1);
         let p2_blob = seal_record(&k_rec, &p2_aad, &p2_bytes).unwrap();
         insert_record(
             &conn,
@@ -2221,7 +2219,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
         // Insert legacy Environment 1 under P1 (record_type = 2, parent_id = Some(p1_id))
         let e1_body = EnvironmentBody::new(p1_id, "production", 0);
         let e1_bytes = postcard::to_stdvec(&e1_body).unwrap();
-        let e1_aad = RecordAad::from_raw_type(vault_id.as_bytes(), e1_id.as_bytes(), 2, 1);
+        let e1_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), e1_id.as_bytes(), 2, 1);
         let e1_blob = seal_record(&k_rec, &e1_aad, &e1_bytes).unwrap();
         insert_record(
             &conn,
@@ -2241,7 +2239,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
         // Insert legacy Environment 2 under P1 (record_type = 2, parent_id = Some(p1_id))
         let e2_body = EnvironmentBody::new(p1_id, "staging", 1);
         let e2_bytes = postcard::to_stdvec(&e2_body).unwrap();
-        let e2_aad = RecordAad::from_raw_type(vault_id.as_bytes(), e2_id.as_bytes(), 2, 1);
+        let e2_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), e2_id.as_bytes(), 2, 1);
         let e2_blob = seal_record(&k_rec, &e2_aad, &e2_bytes).unwrap();
         insert_record(
             &conn,
@@ -2268,7 +2266,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
             None,
         );
         let s1_bytes = postcard::to_stdvec(&s1_body).unwrap();
-        let s1_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s1_id.as_bytes(), 3, 1);
+        let s1_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s1_id.as_bytes(), 3, 1);
         let s1_blob = seal_record(&k_rec, &s1_aad, &s1_bytes).unwrap();
         insert_record(
             &conn,
@@ -2295,7 +2293,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
             Some("staging key".to_string()),
         );
         let s2_bytes = postcard::to_stdvec(&s2_body).unwrap();
-        let s2_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s2_id.as_bytes(), 3, 1);
+        let s2_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s2_id.as_bytes(), 3, 1);
         let s2_blob = seal_record(&k_rec, &s2_aad, &s2_bytes).unwrap();
         insert_record(
             &conn,
@@ -2314,26 +2312,26 @@ fn challenge_phase2_storage_migration_end_to_end() {
     }
 
     // Verify status is Locked
-    let status = Vault::status(dir.path()).expect("vault status");
-    assert_eq!(status, VaultStatus::Locked { vault_id });
+    let status = Secwet::status(dir.path()).expect("secwet status");
+    assert_eq!(status, SecwetStatus::Locked { secwet_id });
 
-    // 2. Unlock the vault - executes run_migrations (0002) and migrate_phase2_flexible_org
-    let vault = Vault::unlock(dir.path(), &keystore).expect("unlock migrated vault");
+    // 2. Unlock secwet - executes run_migrations (0002) and migrate_phase2_flexible_org
+    let secwet = Secwet::unlock(dir.path(), &keystore).expect("unlock migrated secwet");
     assert!(
-        vault.is_flexible_migrated(),
-        "vault must be marked flexible migrated"
+        secwet.is_flexible_migrated(),
+        "secwet must be marked flexible migrated"
     );
 
     // 3. Verify public flexible org APIs:
     // Labels: default "Projects" label seeded at position 0
-    let labels = vault.list_labels().expect("list labels");
+    let labels = secwet.list_labels().expect("list labels");
     assert_eq!(labels.len(), 1);
     assert_eq!(labels[0].name, "Projects");
     assert_eq!(labels[0].position, 0);
     let projects_label_id = labels[0].id;
 
     // Items: both legacy projects migrated into items under the "Projects" label
-    let items = vault.list_items(projects_label_id).expect("list items");
+    let items = secwet.list_items(projects_label_id).expect("list items");
     assert_eq!(items.len(), 2);
     let item1 = items.iter().find(|i| i.id == p1_id).expect("P1 migrated");
     let item2 = items.iter().find(|i| i.id == p2_id).expect("P2 migrated");
@@ -2343,7 +2341,7 @@ fn challenge_phase2_storage_migration_end_to_end() {
     assert_eq!(item2.label_id, projects_label_id);
 
     // Environments: e1 and e2 migrated under item1 (p1_id)
-    let envs = vault.list_environments(p1_id).expect("list environments");
+    let envs = secwet.list_environments(p1_id).expect("list environments");
     assert_eq!(envs.len(), 2);
     let env_prod = envs.iter().find(|e| e.id == e1_id).expect("e1 migrated");
     let env_stag = envs.iter().find(|e| e.id == e2_id).expect("e2 migrated");
@@ -2353,14 +2351,14 @@ fn challenge_phase2_storage_migration_end_to_end() {
     assert_eq!(env_stag.item_id, p1_id);
 
     // Secrets: s1 and s2 migrated under respective environments
-    let secrets_e1 = vault
+    let secrets_e1 = secwet
         .list_secrets(p1_id, Some(e1_id))
         .expect("list secrets e1");
     assert_eq!(secrets_e1.len(), 1);
     assert_eq!(secrets_e1[0].name, "DATABASE_URL");
     assert_eq!(secrets_e1[0].kind, SecretKind::EnvVar);
 
-    let secrets_e2 = vault
+    let secrets_e2 = secwet
         .list_secrets(p1_id, Some(e2_id))
         .expect("list secrets e2");
     assert_eq!(secrets_e2.len(), 1);
@@ -2368,14 +2366,14 @@ fn challenge_phase2_storage_migration_end_to_end() {
     assert_eq!(secrets_e2[0].kind, SecretKind::ApiKey);
 
     // Decryption of secret values
-    let s1_revealed = vault.reveal_secret(s1_id).expect("reveal s1");
+    let s1_revealed = secwet.reveal_secret(s1_id).expect("reveal s1");
     assert_eq!(s1_revealed.expose_secret(), "postgres://prod:sec@db/app");
 
-    let s2_revealed = vault.reveal_secret(s2_id).expect("reveal s2");
+    let s2_revealed = secwet.reveal_secret(s2_id).expect("reveal s2");
     assert_eq!(s2_revealed.expose_secret(), "test_api_key_value_123");
 
     // Overview counts
-    let ov = vault.overview().expect("overview");
+    let ov = secwet.overview().expect("overview");
     assert_eq!(ov.items_count, 2);
     assert_eq!(ov.labels_count, 1);
     assert_eq!(ov.environments_count, 2);
@@ -2384,16 +2382,16 @@ fn challenge_phase2_storage_migration_end_to_end() {
     assert_eq!(ov.notes_count, 0);
 
     // Backwards compatibility APIs continue to work
-    let legacy_projects = vault.list_projects().expect("list projects");
+    let legacy_projects = secwet.list_projects().expect("list projects");
     assert_eq!(legacy_projects.len(), 2);
 
-    vault.lock();
+    secwet.lock();
 
     // 4. Verify low-level SQLite database state directly
     {
         let conn = open_connection(&db_path).expect("open connection verification");
         let v = get_schema_version(&conn).expect("schema version");
-        assert_eq!(v, 2);
+        assert_eq!(v, 3);
 
         let mig = get_meta(&conn, "flexible_org_migrated").expect("meta mig");
         assert_eq!(mig.as_deref(), Some("1"));
@@ -2455,17 +2453,17 @@ fn challenge_phase2_storage_migration_end_to_end() {
     }
 
     // 5. Test idempotency: unlock a second time
-    let vault2 = Vault::unlock(dir.path(), &keystore).expect("unlock second time");
-    assert!(vault2.is_flexible_migrated());
-    let items2 = vault2
+    let secwet2 = Secwet::unlock(dir.path(), &keystore).expect("unlock second time");
+    assert!(secwet2.is_flexible_migrated());
+    let items2 = secwet2
         .list_items(projects_label_id)
         .expect("list items second time");
     assert_eq!(items2.len(), 2);
-    vault2.lock();
+    secwet2.lock();
 }
 
 // ============================================================================
-// 6. Milestone 2 Challenger 2: Adversarial Legacy v1 Migration & Zeroization
+// 6. Challenger 2: Adversarial Legacy v1 Migration & Zeroization
 // ============================================================================
 
 #[derive(serde::Serialize)]
@@ -2479,19 +2477,19 @@ struct AdversarialLegacyV1SecretBody {
 }
 
 #[test]
-fn challenge_phase2_migration_complex_adversarial_v1_vault() {
+fn challenge_phase2_migration_complex_adversarial_v1_secwet() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let origin_device = "challenger_migration_node_m2";
     let now_ms = 1_730_300_000_000i64;
 
     let k_v = [137u8; 32];
-    let (k_rec, _k_evt) = derive_keys(&k_v, &vault_id);
+    let (k_rec, _k_evt) = derive_keys(&k_v, &secwet_id);
     let keystore = MemoryStore::new();
     keystore
-        .set(&format!("secwet/{vault_id}/vault-key/1"), &k_v)
+        .set(&format!("secwet/{secwet_id}/master-key/1"), &k_v)
         .expect("set key in keystore");
 
     let p1_id = Uuid::now_v7();
@@ -2535,8 +2533,8 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         conn.execute_batch(INITIAL_SCHEMA_SQL)
             .expect("v1 schema DDL");
         conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('vault_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
-            params![vault_id.to_string(), origin_device],
+            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('secwet_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
+            params![secwet_id.to_string(), origin_device],
         )
         .expect("insert meta v1");
         conn.execute("PRAGMA user_version = 1", [])
@@ -2550,7 +2548,7 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
                                parent_id: Option<Uuid>,
                                payload_bytes: &[u8],
                                clock: u64| {
-            let aad = RecordAad::from_raw_type(vault_id.as_bytes(), id.as_bytes(), rec_type, 1);
+            let aad = RecordAad::from_raw_type(secwet_id.as_bytes(), id.as_bytes(), rec_type, 1);
             let blob = seal_record(&k_rec, &aad, payload_bytes).unwrap();
             let r_type = match rec_type {
                 1 => RecordType::Label,
@@ -2973,25 +2971,25 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         );
     }
 
-    // 2. Initial state verification: vault is Locked
-    let status = Vault::status(dir.path()).expect("vault status");
-    assert_eq!(status, VaultStatus::Locked { vault_id });
+    // 2. Initial state verification: secwet is Locked
+    let status = Secwet::status(dir.path()).expect("secwet status");
+    assert_eq!(status, SecwetStatus::Locked { secwet_id });
 
-    // 3. Unlock vault -> automatically runs Phase 2 migration
-    let vault = Vault::unlock(dir.path(), &keystore).expect("unlock legacy vault");
+    // 3. Unlock secwet -> automatically runs Phase 2 migration
+    let secwet = Secwet::unlock(dir.path(), &keystore).expect("unlock legacy secwet");
     assert!(
-        vault.is_flexible_migrated(),
-        "vault must report flexible_org_migrated"
+        secwet.is_flexible_migrated(),
+        "secwet must report flexible_org_migrated"
     );
 
     // 4. Verify Labels: exactly 1 label ("Projects")
-    let labels = vault.list_labels().expect("list labels");
+    let labels = secwet.list_labels().expect("list labels");
     assert_eq!(labels.len(), 1, "Only default 'Projects' label must exist");
     assert_eq!(labels[0].name, "Projects");
     let projects_label_id = labels[0].id;
 
     // 5. Verify Items: exactly 4 active items (P1, P2, P3, P5). P4 (deleted) is filtered out!
-    let items = vault.list_items(projects_label_id).expect("list items");
+    let items = secwet.list_items(projects_label_id).expect("list items");
     assert_eq!(
         items.len(),
         4,
@@ -3011,7 +3009,7 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
     assert_eq!(p2_item.name, "Edge Gateway 🚀 / (Special & Complex 0.1.0)");
 
     // 6. Verify Environments under each item:
-    let envs_p1 = vault.list_environments(p1_id).expect("list envs p1");
+    let envs_p1 = secwet.list_environments(p1_id).expect("list envs p1");
     assert_eq!(envs_p1.len(), 4);
     let env_names_p1: Vec<&str> = envs_p1.iter().map(|e| e.name.as_str()).collect();
     assert_eq!(
@@ -3019,7 +3017,7 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         vec!["production", "staging", "dev", "qa-canary"]
     );
 
-    let envs_p2 = vault.list_environments(p2_id).expect("list envs p2");
+    let envs_p2 = secwet.list_environments(p2_id).expect("list envs p2");
     assert_eq!(envs_p2.len(), 3);
     let env_names_p2: Vec<&str> = envs_p2.iter().map(|e| e.name.as_str()).collect();
     assert_eq!(
@@ -3027,24 +3025,24 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         vec!["prod-us-east-1", "prod-eu-central-1", "admin@secwet.test"]
     );
 
-    let envs_p3 = vault.list_environments(p3_id).expect("list envs p3");
+    let envs_p3 = secwet.list_environments(p3_id).expect("list envs p3");
     assert_eq!(envs_p3.len(), 1);
     assert_eq!(envs_p3[0].name, "default");
 
-    let envs_p5 = vault.list_environments(p5_id).expect("list envs p5");
+    let envs_p5 = secwet.list_environments(p5_id).expect("list envs p5");
     assert_eq!(envs_p5.len(), 3);
     let env_names_p5: Vec<&str> = envs_p5.iter().map(|e| e.name.as_str()).collect();
     assert_eq!(env_names_p5, vec!["batch", "streaming", "inference"]);
 
     // 7. Verify Secrets and Decryption (reveal_secret):
-    let s_e1_prod = vault
+    let s_e1_prod = secwet
         .list_secrets(p1_id, Some(e1_prod))
         .expect("list secrets e1_prod");
     assert_eq!(s_e1_prod.len(), 2);
     let s_multiline_meta = s_e1_prod.iter().find(|s| s.id == s1_multiline).unwrap();
     assert_eq!(s_multiline_meta.name, "DATABASE_URL");
     assert_eq!(s_multiline_meta.kind, SecretKind::EnvVar);
-    let s_multiline_rev = vault
+    let s_multiline_rev = secwet
         .reveal_secret(s1_multiline)
         .expect("reveal s1_multiline");
     assert_eq!(
@@ -3052,14 +3050,14 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         "postgres://prod_admin:p%40ssw0rd!@db-cluster.internal:5432/main_db?sslmode=verify-full\r\n# Connection pool configs\nPOOL_MAX=50\nTIMEOUT=30s\n"
     );
 
-    let s_cert_rev = vault.reveal_secret(s1_cert).expect("reveal s1_cert");
+    let s_cert_rev = secwet.reveal_secret(s1_cert).expect("reveal s1_cert");
     assert_eq!(
         s_cert_rev.expose_secret(),
         "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJALe1...==\n-----END CERTIFICATE-----\n"
     );
 
     // e1_dev secrets: soft-deleted secret must NOT be listed
-    let s_e1_dev = vault
+    let s_e1_dev = secwet
         .list_secrets(p1_id, Some(e1_dev))
         .expect("list secrets e1_dev");
     assert_eq!(
@@ -3067,15 +3065,15 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         0,
         "Soft-deleted secret must be filtered out"
     );
-    assert!(matches!(vault.reveal_secret(s1_del), Err(Error::NotFound)));
+    assert!(matches!(secwet.reveal_secret(s1_del), Err(Error::NotFound)));
 
-    let s_emoji_rev = vault.reveal_secret(s2_emoji).expect("reveal s2_emoji");
+    let s_emoji_rev = secwet.reveal_secret(s2_emoji).expect("reveal s2_emoji");
     assert_eq!(
         s_emoji_rev.expose_secret(),
         "token_🚀_🔥_🔒_secret_value_✨_123"
     );
 
-    let s_special_rev = vault
+    let s_special_rev = secwet
         .reveal_secret(s2_special_name)
         .expect("reveal s2_special");
     assert_eq!(
@@ -3083,12 +3081,12 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         "special_value_with_quotes_\"'and_backslashes\\"
     );
 
-    let s_leg_meta = vault
+    let s_leg_meta = secwet
         .list_secrets(p2_id, Some(e2_eucentral))
         .expect("list s2_leg");
     assert_eq!(s_leg_meta.len(), 1);
     assert_eq!(s_leg_meta[0].name, "LEGACY_FORMAT_SECRET");
-    let s_leg_rev = vault
+    let s_leg_rev = secwet
         .reveal_secret(s2_legacy_format)
         .expect("reveal s2_legacy_format");
     assert_eq!(
@@ -3096,25 +3094,25 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
         "v1_legacy_serialized_password_secret_val"
     );
 
-    let s_ssh_rev = vault.reveal_secret(s2_ssh).expect("reveal s2_ssh");
+    let s_ssh_rev = secwet.reveal_secret(s2_ssh).expect("reveal s2_ssh");
     assert!(s_ssh_rev
         .expose_secret()
         .starts_with("-----BEGIN OPENSSH PRIVATE KEY-----"));
 
-    let s_json_rev = vault.reveal_secret(s5_json).expect("reveal s5_json");
+    let s_json_rev = secwet.reveal_secret(s5_json).expect("reveal s5_json");
     assert_eq!(s_json_rev.expose_secret(), "{\"batch_size\": 1024, \"enabled\": true, \"null_field\": null, \"nested\": {\"ratio\": 0.95}}");
 
-    let s_large_rev = vault.reveal_secret(s5_large).expect("reveal s5_large");
+    let s_large_rev = secwet.reveal_secret(s5_large).expect("reveal s5_large");
     assert_eq!(s_large_rev.expose_secret().len(), 60_000);
 
-    let s_dotenv_rev = vault.reveal_secret(s5_dotenv).expect("reveal s5_dotenv");
+    let s_dotenv_rev = secwet.reveal_secret(s5_dotenv).expect("reveal s5_dotenv");
     assert_eq!(
         s_dotenv_rev.expose_secret(),
         "FOO=bar\nBAZ=\"qux with spaces\"\nEMPTY=\nSPECIAL=\"!@#$%^&*()_+\""
     );
 
     // 8. Overview aggregation metrics
-    let ov = vault.overview().expect("overview");
+    let ov = secwet.overview().expect("overview");
     assert_eq!(ov.labels_count, 1);
     assert_eq!(ov.items_count, 4);
     assert_eq!(ov.environments_count, 11);
@@ -3123,15 +3121,15 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
     assert_eq!(ov.notes_count, 0);
 
     // 9. Backwards compatibility legacy projects
-    let legacy_projs = vault.list_projects().expect("list_projects");
+    let legacy_projs = secwet.list_projects().expect("list_projects");
     assert_eq!(legacy_projs.len(), 4);
 
-    vault.lock();
+    secwet.lock();
 
     // 10. Low-level database row audit
     {
         let conn = open_connection(&db_path).expect("open connection");
-        assert_eq!(get_schema_version(&conn).unwrap(), 2);
+        assert_eq!(get_schema_version(&conn).unwrap(), 3);
         assert_eq!(
             get_meta(&conn, "flexible_org_migrated").unwrap().as_deref(),
             Some("1")
@@ -3190,17 +3188,17 @@ fn challenge_phase2_migration_complex_adversarial_v1_vault() {
 #[test]
 fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let origin_device = "challenger_discriminator_node";
     let now_ms = 1_730_300_100_000i64;
 
     let k_v = [200u8; 32];
-    let (k_rec, _k_evt) = derive_keys(&k_v, &vault_id);
+    let (k_rec, _k_evt) = derive_keys(&k_v, &secwet_id);
     let keystore = MemoryStore::new();
     keystore
-        .set(&format!("secwet/{vault_id}/vault-key/1"), &k_v)
+        .set(&format!("secwet/{secwet_id}/master-key/1"), &k_v)
         .expect("set key in keystore");
 
     let p_id = Uuid::now_v7();
@@ -3228,14 +3226,14 @@ fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
         conn.execute_batch(INITIAL_SCHEMA_SQL)
             .expect("v1 schema DDL");
         conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('vault_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
-            params![vault_id.to_string(), origin_device],
+            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('secwet_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
+            params![secwet_id.to_string(), origin_device],
         ).unwrap();
         conn.execute("PRAGMA user_version = 1", []).unwrap();
 
         // Project
         let p_body = ProjectBody::new("Discriminator Stress App");
-        let p_aad = RecordAad::from_raw_type(vault_id.as_bytes(), p_id.as_bytes(), 1, 1);
+        let p_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), p_id.as_bytes(), 1, 1);
         let p_blob = seal_record(&k_rec, &p_aad, &postcard::to_stdvec(&p_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3262,7 +3260,7 @@ fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
         .enumerate()
         {
             let e_body = EnvironmentBody::new(p_id, *ename, idx as u32);
-            let e_aad = RecordAad::from_raw_type(vault_id.as_bytes(), eid.as_bytes(), 2, 1);
+            let e_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), eid.as_bytes(), 2, 1);
             let e_blob =
                 seal_record(&k_rec, &e_aad, &postcard::to_stdvec(&e_body).unwrap()).unwrap();
             insert_record(
@@ -3290,7 +3288,7 @@ fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
             value: "value_env_byte_00".to_string(),
             note: None,
         };
-        let s_00_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s_00_id.as_bytes(), 3, 1);
+        let s_00_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s_00_id.as_bytes(), 3, 1);
         let s_00_blob =
             seal_record(&k_rec, &s_00_aad, &postcard::to_stdvec(&s_00).unwrap()).unwrap();
         insert_record(
@@ -3316,7 +3314,7 @@ fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
             value: "value_env_byte_01".to_string(),
             note: None,
         };
-        let s_01_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s_01_id.as_bytes(), 3, 1);
+        let s_01_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s_01_id.as_bytes(), 3, 1);
         let s_01_blob =
             seal_record(&k_rec, &s_01_aad, &postcard::to_stdvec(&s_01).unwrap()).unwrap();
         insert_record(
@@ -3342,7 +3340,7 @@ fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
             value: "value_env_byte_ff".to_string(),
             note: None,
         };
-        let s_ff_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s_ff_id.as_bytes(), 3, 1);
+        let s_ff_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s_ff_id.as_bytes(), 3, 1);
         let s_ff_blob =
             seal_record(&k_rec, &s_ff_aad, &postcard::to_stdvec(&s_ff).unwrap()).unwrap();
         insert_record(
@@ -3361,49 +3359,49 @@ fn challenge_phase2_migration_adversarial_postcard_discriminator_fallback() {
         .unwrap();
     }
 
-    let vault = Vault::unlock(dir.path(), &keystore).expect("unlock migrated vault");
-    assert!(vault.is_flexible_migrated());
+    let secwet = Secwet::unlock(dir.path(), &keystore).expect("unlock migrated secwet");
+    assert!(secwet.is_flexible_migrated());
 
     // Verify all 3 secrets decrypted correctly
-    let rev_00 = vault.reveal_secret(s_00_id).expect("reveal s_00");
+    let rev_00 = secwet.reveal_secret(s_00_id).expect("reveal s_00");
     assert_eq!(rev_00.expose_secret(), "value_env_byte_00");
 
-    let rev_01 = vault.reveal_secret(s_01_id).expect("reveal s_01");
+    let rev_01 = secwet.reveal_secret(s_01_id).expect("reveal s_01");
     assert_eq!(rev_01.expose_secret(), "value_env_byte_01");
 
-    let rev_ff = vault.reveal_secret(s_ff_id).expect("reveal s_ff");
+    let rev_ff = secwet.reveal_secret(s_ff_id).expect("reveal s_ff");
     assert_eq!(rev_ff.expose_secret(), "value_env_byte_ff");
 
     // Verify secret listings under each environment
-    let s_00_list = vault.list_secrets(p_id, Some(env_00)).expect("list s_00");
+    let s_00_list = secwet.list_secrets(p_id, Some(env_00)).expect("list s_00");
     assert_eq!(s_00_list.len(), 1);
     assert_eq!(s_00_list[0].name, "SECRET_ENV_BYTE_00");
 
-    let s_01_list = vault.list_secrets(p_id, Some(env_01)).expect("list s_01");
+    let s_01_list = secwet.list_secrets(p_id, Some(env_01)).expect("list s_01");
     assert_eq!(s_01_list.len(), 1);
     assert_eq!(s_01_list[0].name, "SECRET_ENV_BYTE_01");
 
-    let s_ff_list = vault.list_secrets(p_id, Some(env_ff)).expect("list s_ff");
+    let s_ff_list = secwet.list_secrets(p_id, Some(env_ff)).expect("list s_ff");
     assert_eq!(s_ff_list.len(), 1);
     assert_eq!(s_ff_list[0].name, "SECRET_ENV_BYTE_FF");
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
 fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let origin_device = "challenger_idempotency_node";
     let now_ms = 1_730_300_200_000i64;
 
     let k_v = [77u8; 32];
-    let (k_rec, _k_evt) = derive_keys(&k_v, &vault_id);
+    let (k_rec, _k_evt) = derive_keys(&k_v, &secwet_id);
     let keystore = MemoryStore::new();
     keystore
-        .set(&format!("secwet/{vault_id}/vault-key/1"), &k_v)
+        .set(&format!("secwet/{secwet_id}/master-key/1"), &k_v)
         .expect("set key in keystore");
 
     let p_id = Uuid::now_v7();
@@ -3415,13 +3413,13 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
         conn.execute_batch(INITIAL_SCHEMA_SQL)
             .expect("v1 schema DDL");
         conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('vault_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
-            params![vault_id.to_string(), origin_device],
+            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('secwet_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
+            params![secwet_id.to_string(), origin_device],
         ).unwrap();
         conn.execute("PRAGMA user_version = 1", []).unwrap();
 
         let p_body = ProjectBody::new("Idempotency Base Project");
-        let p_aad = RecordAad::from_raw_type(vault_id.as_bytes(), p_id.as_bytes(), 1, 1);
+        let p_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), p_id.as_bytes(), 1, 1);
         let p_blob = seal_record(&k_rec, &p_aad, &postcard::to_stdvec(&p_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3439,7 +3437,7 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
         .unwrap();
 
         let e_body = EnvironmentBody::new(p_id, "production", 0);
-        let e_aad = RecordAad::from_raw_type(vault_id.as_bytes(), e_id.as_bytes(), 2, 1);
+        let e_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), e_id.as_bytes(), 2, 1);
         let e_blob = seal_record(&k_rec, &e_aad, &postcard::to_stdvec(&e_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3464,7 +3462,7 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
             "base_val_123",
             None,
         );
-        let s_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s_id.as_bytes(), 3, 1);
+        let s_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s_id.as_bytes(), 3, 1);
         let s_blob = seal_record(&k_rec, &s_aad, &postcard::to_stdvec(&s_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3483,20 +3481,20 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
     }
 
     // First unlock: triggers Phase 2 migration
-    let mut vault = Vault::unlock(dir.path(), &keystore).expect("unlock 1");
-    assert!(vault.is_flexible_migrated());
+    let mut secwet = Secwet::unlock(dir.path(), &keystore).expect("unlock 1");
+    assert!(secwet.is_flexible_migrated());
 
-    let labels = vault.list_labels().expect("labels");
+    let labels = secwet.list_labels().expect("labels");
     let proj_label_id = labels[0].id;
 
     // Mutate in v2: add a second item, an environment, a secret, a file, and a note
-    let v2_item = vault
+    let v2_item = secwet
         .create_item(proj_label_id, "V2 Added Item", None)
         .expect("create item");
-    let v2_env = vault
+    let v2_env = secwet
         .add_environment(v2_item.id, "v2-staging")
         .expect("add env");
-    vault
+    secwet
         .create_secret(SecretDraft::new(
             v2_item.id,
             Some(v2_env.id),
@@ -3506,7 +3504,7 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
             None,
         ))
         .expect("create secret");
-    vault
+    secwet
         .upload_file(
             v2_item.id,
             Some(v2_env.id),
@@ -3515,7 +3513,7 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
             Some("application/pdf"),
         )
         .expect("upload file");
-    vault
+    secwet
         .create_note(
             v2_item.id,
             Some(v2_env.id),
@@ -3524,7 +3522,7 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
         )
         .expect("create note");
 
-    let ov1 = vault.overview().expect("ov1");
+    let ov1 = secwet.overview().expect("ov1");
     assert_eq!(ov1.labels_count, 1);
     assert_eq!(ov1.items_count, 2);
     assert_eq!(ov1.environments_count, 2);
@@ -3532,11 +3530,11 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
     assert_eq!(ov1.files_count, 1);
     assert_eq!(ov1.notes_count, 1);
 
-    vault.lock();
+    secwet.lock();
 
     // Unlock 10 times consecutively and assert state invariants
     for cycle in 2..=11 {
-        let v = Vault::unlock(dir.path(), &keystore)
+        let v = Secwet::unlock(dir.path(), &keystore)
             .unwrap_or_else(|e| panic!("unlock failed on cycle {cycle}: {e:?}"));
         assert!(
             v.is_flexible_migrated(),
@@ -3591,17 +3589,17 @@ fn challenge_phase2_migration_multi_unlock_idempotency_stress() {
 #[test]
 fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let origin_device = "challenger_leakage_node";
     let now_ms = 1_730_300_300_000i64;
 
     let k_v = [99u8; 32];
-    let (k_rec, _k_evt) = derive_keys(&k_v, &vault_id);
+    let (k_rec, _k_evt) = derive_keys(&k_v, &secwet_id);
     let keystore = MemoryStore::new();
     keystore
-        .set(&format!("secwet/{vault_id}/vault-key/1"), &k_v)
+        .set(&format!("secwet/{secwet_id}/master-key/1"), &k_v)
         .expect("set key in keystore");
 
     let p_id = Uuid::now_v7();
@@ -3622,13 +3620,13 @@ fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
         conn.execute_batch(INITIAL_SCHEMA_SQL)
             .expect("v1 schema DDL");
         conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('vault_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
-            params![vault_id.to_string(), origin_device],
+            "INSERT INTO meta (key, value) VALUES ('schema_version', '1'), ('secwet_id', ?1), ('device_id', ?2), ('current_key_epoch', '1')",
+            params![secwet_id.to_string(), origin_device],
         ).unwrap();
         conn.execute("PRAGMA user_version = 1", []).unwrap();
 
         let p_body = ProjectBody::new("Canary Inspection Project");
-        let p_aad = RecordAad::from_raw_type(vault_id.as_bytes(), p_id.as_bytes(), 1, 1);
+        let p_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), p_id.as_bytes(), 1, 1);
         let p_blob = seal_record(&k_rec, &p_aad, &postcard::to_stdvec(&p_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3646,7 +3644,7 @@ fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
         .unwrap();
 
         let e_body = EnvironmentBody::new(p_id, "production", 0);
-        let e_aad = RecordAad::from_raw_type(vault_id.as_bytes(), e_id.as_bytes(), 2, 1);
+        let e_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), e_id.as_bytes(), 2, 1);
         let e_blob = seal_record(&k_rec, &e_aad, &postcard::to_stdvec(&e_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3671,7 +3669,7 @@ fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
             canary_secret_value,
             Some("canary secret note".to_string()),
         );
-        let s_aad = RecordAad::from_raw_type(vault_id.as_bytes(), s_id.as_bytes(), 3, 1);
+        let s_aad = RecordAad::from_raw_type(secwet_id.as_bytes(), s_id.as_bytes(), 3, 1);
         let s_blob = seal_record(&k_rec, &s_aad, &postcard::to_stdvec(&s_body).unwrap()).unwrap();
         insert_record(
             &conn,
@@ -3689,12 +3687,12 @@ fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
         .unwrap();
     }
 
-    // 2. Unlock vault (executes Phase 2 migration)
-    let mut vault = Vault::unlock(dir.path(), &keystore).expect("unlock vault");
-    assert!(vault.is_flexible_migrated());
+    // 2. Unlock secwet (executes Phase 2 migration)
+    let mut secwet = Secwet::unlock(dir.path(), &keystore).expect("unlock secwet");
+    assert!(secwet.is_flexible_migrated());
 
     // 3. Add canary file and note in v2
-    let file_view = vault
+    let file_view = secwet
         .upload_file(
             p_id,
             Some(e_id),
@@ -3705,13 +3703,13 @@ fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
         .expect("upload file");
     assert_eq!(file_view.name, canary_file_name);
 
-    let note_view = vault
+    let note_view = secwet
         .create_note(p_id, Some(e_id), canary_note_title, canary_note_content)
         .expect("create note");
     assert_eq!(note_view.title, canary_note_title);
 
-    // Lock vault to ensure zero active lock held
-    vault.lock();
+    // Lock secwet to ensure zero active lock held
+    secwet.lock();
 
     // 4. Force a WAL checkpoint TRUNCATE to flush all pages to disk
     {
@@ -3721,15 +3719,15 @@ fn challenge_phase2_migration_raw_disk_strings_inspection_zero_leakage() {
     }
 
     // 5. Raw Disk Inspection: read disk files
-    let mut disk_data = std::fs::read(&db_path).expect("read vault.sqlite3");
+    let mut disk_data = std::fs::read(&db_path).expect("read secwet.sqlite3");
 
-    let wal_path = dir.path().join("vault.sqlite3-wal");
+    let wal_path = dir.path().join("secwet.sqlite3-wal");
     if wal_path.exists() {
         let wal_bytes = std::fs::read(&wal_path).expect("read wal");
         disk_data.extend_from_slice(&wal_bytes);
     }
 
-    let shm_path = dir.path().join("vault.sqlite3-shm");
+    let shm_path = dir.path().join("secwet.sqlite3-shm");
     if shm_path.exists() {
         let shm_bytes = std::fs::read(&shm_path).expect("read shm");
         disk_data.extend_from_slice(&shm_bytes);
@@ -3779,10 +3777,10 @@ fn challenge_phase2_zeroization_witness_and_memory_safety_comprehensive() {
     let dir = tempdir().expect("tempdir");
     let keystore = MemoryStore::new();
 
-    // 1. Create vault
-    let vault = Vault::create(dir.path(), "device-zeroize-test", &keystore).expect("create");
-    let rec_w = vault.test_k_rec_witness();
-    let evt_w = vault.test_k_evt_witness();
+    // 1. Create secwet
+    let secwet = Secwet::create(dir.path(), "device-zeroize-test", &keystore).expect("create");
+    let rec_w = secwet.test_k_rec_witness();
+    let evt_w = secwet.test_k_evt_witness();
 
     {
         let r = rec_w.lock().unwrap();
@@ -3791,8 +3789,8 @@ fn challenge_phase2_zeroization_witness_and_memory_safety_comprehensive() {
         assert_ne!(*e, [0u8; 32], "k_evt must be non-zero while unlocked");
     }
 
-    // Lock vault
-    vault.lock();
+    // Lock secwet
+    secwet.lock();
 
     {
         let r = rec_w.lock().unwrap();
@@ -3801,8 +3799,8 @@ fn challenge_phase2_zeroization_witness_and_memory_safety_comprehensive() {
         assert_eq!(*e, [0u8; 32], "k_evt must be zeroized upon lock()");
     }
 
-    // 2. Unlock vault
-    let unlocked = Vault::unlock(dir.path(), &keystore).expect("unlock");
+    // 2. Unlock secwet
+    let unlocked = Secwet::unlock(dir.path(), &keystore).expect("unlock");
     let rec_w2 = unlocked.test_k_rec_witness();
     let evt_w2 = unlocked.test_k_evt_witness();
 
@@ -3813,7 +3811,7 @@ fn challenge_phase2_zeroization_witness_and_memory_safety_comprehensive() {
         assert_ne!(*e, [0u8; 32], "k_evt must be non-zero while unlocked");
     }
 
-    // Drop unlocked vault without calling lock()
+    // Drop unlocked secwet without calling lock()
     drop(unlocked);
 
     {

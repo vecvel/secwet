@@ -1,0 +1,10 @@
+{
+  "format": "secwet-export",
+  "version": 1,
+  "secwet_id": "0192e200-0000-7000-8000-000000000001",
+  "created_at": 1730000000000,
+  "kdf": "hkdf-sha256",
+  "cipher": "xchacha20poly1305",
+  "nonce": "vW0gPtkIpj9oioxoipRoSDSDQzPSsMc2",
+  "ciphertext": "jOSi7knNjM1AIaZq/74EFxugSgXChvlQdx9MGPwD3/Ot6X+/q92XskMcDn/Q2AWcWzEXVwOHOuNJNrOxrhvrXyojh+2h6sP6q2EkTtdWTY4nh3bBc/CiZVbMsZ60hgZ4qz8uwc/XBmBKP1615iApxht+GYLV0KEcUXOdJAS7kFBXOMJVuGNx6fOsZ+m+INPvWtB410wcPf0Xlb9WsyQ2d1CNDRtBYFhiTa7WIFf8R0U73+AjCr3PWffXulJhDp2PS1Tlpe9tbbnyZ2V7f+vUgjyds9K3avNkArYMbblusege4UxE0/cQXqEUd81CVj2bgCBgPO7y3CM9TLFvJ8AG7GNZivfjfINnAib/MMtoyGvhB6mLdcHgRzvQna2QxQdIb18YnLprRk41XGKvy06eveq0vPJdYoR0HOhTJeTFxaTFpzjadtHdYRQdMQpdtRjForm5qTGcE1EUVNEU+3B/W6oWjpSlM7Qndt2lcfCXUEmbQjTHVoMuLieiw4tq+twHJR97gup8mGSLVZTwFQRVnibNwB6Dh6FZvh6Hqr7uIr44qEllrVBZpKrhChpXSrgyOqzZhWzFwMPiDnzHaLxArQjjANgNAX6/MgTMABtirhgcfjKduf5pq7XZF1xYU4nugGftc9+SN+0Vtwq4SK9FdJrEBiQCpDl4yyKhUtpHNhRoAGaaNHBPxwe6x9XBPf+pEEJALjshu6X1nBcoG+mN926i0J0AZSjAhv3gTqISL9B+loBfWA=="
+}

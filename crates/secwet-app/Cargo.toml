@@ -1,0 +1,33 @@
+[package]
+name = "secwet-app"
+description = "Shared application layer: the commands behind the desktop and mobile apps."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["os-keyring"]
+# Desktop and CLI hosts: `AppState::default_state` uses the OS keychain.
+# Mobile hosts build with --no-default-features and pass their own KeyStore.
+os-keyring = ["secwet-core/os-keyring"]
+
+[dependencies]
+# test-util keeps the in-memory KeyStore that SECWET_TEST_KEYSTORE=memory selects
+# for the desktop end-to-end tests, as before the move.
+secwet-core = { workspace = true, features = ["test-util"] }
+secwet-proto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+x25519-dalek.workspace = true
+uuid.workspace = true
+directories.workspace = true
+secrecy.workspace = true
+subtle.workspace = true
+sha2.workspace = true
+zeroize.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

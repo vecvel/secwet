@@ -47,3 +47,132 @@
 .limits li + li {
   margin-top: var(--space-2);
 }
+
+.codeSnippet {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-surface-sunken);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-count, 4px);
+  border: 1px solid var(--color-border-strong);
+  word-break: break-all;
+  user-select: all;
+}
+
+.sectionDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-base);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.sectionDesc code {
+  font-family: var(--font-sans);
+  font-size: 0.9em;
+  padding: 1px var(--space-1);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-count, 4px);
+  border: 1px solid var(--color-border-strong);
+}
+
+.codeCard {
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-card, 8px);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+
+.codeCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-separator);
+  background: var(--color-card-header-bg);
+}
+
+.codeCardTitle {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+}
+
+.codePre {
+  margin: 0;
+  padding: var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.cliMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.cliDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-base);
+}
+
+.commandBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px var(--space-2) 3px var(--space-3);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control, 8px);
+  margin-top: var(--space-1);
+}
+
+.commandCode {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow-x: auto;
+  user-select: all;
+}
+
+.copyIconBtn {
+  flex-shrink: 0;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: var(--radius-count) !important;
+  color: var(--color-text-tertiary) !important;
+  background: transparent !important;
+}
+
+.copiedIconBtn {
+  color: var(--color-success) !important;
+}
+
+/* Members and security */
+.noticeGap {
+  margin-bottom: var(--space-2);
+}
+
+.confirmBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.formError {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}

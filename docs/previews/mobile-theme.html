@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secwet mobile preview</title>
+<style>
+body{margin:0;background:#E9E6DF;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;color:#26231E}
+body.dark{background:#060605;color:#EDEAE3}
+.bar{display:flex;align-items:center;gap:12px;padding:20px 32px 0}
+.bar h1{font-size:15px;font-weight:600;margin:0 12px 0 0}
+.seg{display:inline-flex;background:rgba(38,35,30,.06);border-radius:8px;padding:2px}
+body.dark .seg{background:rgba(237,234,227,.07)}
+.seg button{all:unset;cursor:pointer;font-size:13px;padding:6px 14px;border-radius:6px;color:inherit;opacity:.7}
+.seg button.on{background:#fff;opacity:1}
+body.dark .seg button.on{background:#2A2925}
+.row{display:flex;flex-wrap:wrap;gap:28px;padding:24px 32px 40px}
+.cap{font-size:12px;opacity:.6;margin:0 0 8px 4px}
+
+/* Tokens copied from packages/design-tokens/tokens.json */
+.ph{--sidebar:#F6F4EF;--bg:#FFFFFF;--surface:#FAF9F6;--sunken:#F2EFE9;--t1:#26231E;--t2:#5A554B;--t3:#746E62;--border:rgba(38,35,30,.035);--borderStrong:rgba(38,35,30,.065);--sep:rgba(38,35,30,.055);--hdr:rgba(38,35,30,.025);--accent:#3D6A4C;--tint:rgba(61,106,76,.13);--tintSoft:rgba(61,106,76,.07);--fill:#3D6A4C;--onFill:#FFFFFF;--success:#2D7248;--warning:#8F5F00;--danger:#B0372D;
+width:320px;height:680px;border-radius:40px;background:var(--bg);color:var(--t1);position:relative;overflow:hidden;box-shadow:0 0 0 8px #1b1a18,0 0 0 9px rgba(0,0,0,.25);font-size:14px;line-height:1.5}
+body.dark .ph{--sidebar:#1A1916;--bg:#131210;--surface:#1C1B18;--sunken:#0E0D0C;--t1:#EDEAE3;--t2:#B5B0A5;--t3:#8E897E;--border:rgba(237,234,227,.035);--borderStrong:rgba(237,234,227,.065);--sep:rgba(237,234,227,.055);--hdr:rgba(237,234,227,.03);--accent:#8FBE9C;--tint:rgba(143,190,156,.15);--tintSoft:rgba(143,190,156,.08);--fill:#3D6A4C;--onFill:#F6F4EF;--success:#7FC28F;--warning:#E0B04D;--danger:#EE8A7F}
+.ph.side{background:var(--sidebar)}
+.sb{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font-size:14px;font-weight:600}
+.sb i{display:inline-block;width:22px;height:11px;border:1.5px solid currentColor;border-radius:3px;opacity:.9}
+.scroll{position:absolute;top:44px;bottom:0;left:0;right:0;overflow:hidden;padding:0 16px}
+
+/* Top bar: breadcrumb only, actions on the right (TopBar) */
+.top{display:flex;align-items:center;gap:8px;height:52px}
+.crumbs{flex:1;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;min-width:0}
+.crumbs .c{color:var(--t3)}
+.crumbs .dot{width:3px;height:3px;border-radius:50%;background:var(--t3);opacity:.6}
+.brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;flex:1}
+.mark{width:26px;height:26px;color:var(--accent)}
+.ptitle{flex:1;font-size:20px;font-weight:600;line-height:28px}
+.lock{position:absolute;inset:44px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.lock .mark{width:56px;height:56px}
+.lock .wm{font-size:20px;font-weight:600}
+.lock .sys{width:150px;height:150px;border-radius:24px;background:rgba(120,120,120,.22);backdrop-filter:blur(20px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-size:13px;color:var(--t1)}
+
+/* Button.module.css (coarse pointer: 44px min height) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap;box-sizing:border-box}
+.btn.p{background:var(--fill);color:var(--onFill)}
+.btn.s{border:1px solid color-mix(in srgb,var(--t1) 4%,transparent);background:color-mix(in srgb,var(--t1) 5%,transparent);color:var(--t1)}
+.btn.t{padding:0 4px;color:var(--accent)}
+.btn.sm{height:32px}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:6px;color:var(--t2);flex:none}
+.ib.sm{width:32px;height:32px}
+
+/* Badge.module.css */
+.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border:1px solid var(--borderStrong);border-radius:8px;background:var(--bg);font-size:11px;color:var(--t2);white-space:nowrap;box-sizing:border-box}
+.badge .d{width:6px;height:6px;border-radius:50%;background:var(--t3)}
+.badge.acc .d{background:var(--accent)}.badge.ok .d{background:var(--success)}.badge.warn .d{background:var(--warning)}
+
+/* SegmentedTabs.module.css */
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--sep);margin-bottom:12px;overflow:hidden;white-space:nowrap}
+.tab{display:inline-flex;align-items:center;gap:8px;height:44px;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px;box-sizing:border-box}
+.tab.on{color:var(--t1);border-bottom-color:color-mix(in srgb,var(--accent) 65%,transparent)}
+.count{font-size:11px;color:var(--t3);background:var(--surface);border:1px solid var(--border);padding:0 6px;border-radius:4px;line-height:16px;font-weight:400}
+.tab.on .count{color:var(--accent);border-color:var(--tintSoft);background:var(--tintSoft)}
+
+/* Cards, lists, stats */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden}
+.card .ch{background:var(--hdr);padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid var(--sep)}
+.li{display:flex;align-items:center;gap:12px;padding:10px 14px;min-height:44px;box-sizing:border-box}
+.li+.li{border-top:1px solid var(--sep)}
+.li .tx{flex:1;min-width:0}
+.li .n{font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .m{font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .r{font-size:12px;color:var(--t3)}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px}
+.stat .l{font-size:12px;color:var(--t3)}
+.stat .v{font-size:20px;font-weight:600;line-height:1.4}
+.qa{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 14px}
+.search{display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--t3);font-size:13px;box-sizing:border-box;margin-bottom:12px}
+.sec{font-size:12px;color:var(--t3);margin:4px 2px 8px;display:flex;align-items:center;justify-content:space-between}
+.desc{font-size:12px;color:var(--t3);margin:0 0 4px}
+.mask{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t3);margin-top:2px}
+
+/* Sidebar: tiles, groups, space switcher, footer */
+.tile{width:24px;height:24px;border-radius:6px;background:var(--tint);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;line-height:1}
+.tile.on{background:var(--fill);color:var(--onFill)}
+.glabel{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--t3);margin:14px 2px 2px 8px;height:24px}
+.nav-i{display:flex;align-items:center;gap:10px;height:44px;padding:0 10px;border-radius:8px;font-size:14px}
+.nav-i.on{background:var(--tintSoft)}
+.nav-i .grow{flex:1}
+.newrow{display:flex;align-items:center;gap:10px;height:44px;padding:0 10px;border:1px solid var(--borderStrong);border-radius:8px;color:var(--t3);font-size:13px;margin-top:12px}
+.switch{display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;border-radius:8px;background:var(--surface);border:1px solid var(--borderStrong);font-size:13px;font-weight:500;box-sizing:border-box}
+.switch .grow{flex:1}
+
+/* BottomTabs.module.css: three tabs, Overview in the center; fade starts 32px above, solid at 80% */
+.bt{position:absolute;left:0;right:0;bottom:0;height:90px;display:grid;grid-template-columns:repeat(3,1fr);padding-bottom:34px;box-sizing:border-box}
+.bt .fade{position:absolute;inset:-32px 0 0;pointer-events:none;background:linear-gradient(to bottom,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 0%,var(--bg)) 0%,transparent) 0%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 10%,var(--bg)) 0.9%,transparent) 8%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 20%,var(--bg)) 5.8%,transparent) 16%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 30%,var(--bg)) 16.3%,transparent) 24%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 40%,var(--bg)) 31.7%,transparent) 32%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 50%,var(--bg)) 50%,transparent) 40%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 60%,var(--bg)) 68.3%,transparent) 48%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 70%,var(--bg)) 83.7%,transparent) 56%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 80%,var(--bg)) 94.2%,transparent) 64%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 90%,var(--bg)) 99.1%,transparent) 72%,
+color-mix(in srgb,color-mix(in srgb,var(--sunken) 100%,var(--bg)) 100%,transparent) 80%,
+var(--sunken) 100%)}
+.ph.side .bt .fade{--bg:var(--sidebar)}
+.bt .tb{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:56px;font-size:11px;color:var(--t3)}
+.bt .tb .tile{background:linear-gradient(var(--tint),var(--tint)),var(--bg)}
+.bt .tb.on{color:var(--t1)}
+.bt .tb.on .tile{background:var(--fill);color:var(--onFill)}
+.home{position:absolute;bottom:8px;left:50%;width:120px;height:5px;margin-left:-60px;border-radius:3px;background:var(--t1);opacity:.85}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.i.s{width:14px;height:14px}
+</style>
+</head>
+<body class="dark">
+<svg width="0" height="0" style="position:absolute">
+<defs>
+<symbol id="grid" viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></symbol>
+<symbol id="folder" viewBox="0 0 20 20"><path d="M2.75 5.75c0-.83.67-1.5 1.5-1.5h3.4l1.7 1.9h6.4c.83 0 1.5.67 1.5 1.5v7.1c0 .83-.67 1.5-1.5 1.5H4.25c-.83 0-1.5-.67-1.5-1.5z"/></symbol>
+<symbol id="key" viewBox="0 0 20 20"><circle cx="6.75" cy="10" r="3.75"/><path d="M10.5 10h7M15 10v2.75M17.5 10v2"/></symbol>
+<symbol id="device" viewBox="0 0 20 20"><rect x="5.5" y="2.5" width="9" height="15" rx="2"/><path d="M8.75 4.5h2.5"/></symbol>
+<symbol id="recovery" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.75"/><circle cx="10" cy="10" r="2.75"/><path d="M5.2 5.2l2.85 2.85M11.95 11.95l2.85 2.85M14.8 5.2l-2.85 2.85M8.05 11.95L5.2 14.8"/></symbol>
+<symbol id="settings" viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.75"/><path d="M9.2 3.25h1.6l.35 1.65a5.5 5.5 0 0 1 1.25.72l1.55-.7 1.13 1.13-.7 1.55c.3.38.54.8.72 1.25l1.65.35v1.6l-1.65.35a5.5 5.5 0 0 1-.72 1.25l.7 1.55-1.13 1.13-1.55-.7a5.5 5.5 0 0 1-1.25.72l-.35 1.65H9.2l-.35-1.65a5.5 5.5 0 0 1-1.25-.72l-1.55.7-1.13-1.13.7-1.55a5.5 5.5 0 0 1-.72-1.25L3.25 10.8v-1.6l1.65-.35c.18-.45.42-.87.72-1.25l-.7-1.55 1.13-1.13 1.55.7c.38-.3.8-.54 1.25-.72z"/></symbol>
+<symbol id="customize" viewBox="0 0 20 20"><path d="M3 6h7.5M14.5 6H17M3 14h2.5M9.5 14H17"/><circle cx="12.5" cy="6" r="2"/><circle cx="7.5" cy="14" r="2"/></symbol>
+<symbol id="plus" viewBox="0 0 20 20"><path d="M10 4.5v11M4.5 10h11"/></symbol>
+<symbol id="more" viewBox="0 0 20 20"><circle cx="5" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="search" viewBox="0 0 20 20"><circle cx="8.75" cy="8.75" r="5.25"/><path d="M12.6 12.6L16.5 16.5"/></symbol>
+<symbol id="copy" viewBox="0 0 20 20"><rect x="7" y="7" width="9.5" height="9.5" rx="1.75"/><path d="M13 7V4.75C13 3.78 12.22 3 11.25 3h-6.5C3.78 3 3 3.78 3 4.75v6.5c0 .97.78 1.75 1.75 1.75H7"/></symbol>
+<symbol id="eye" viewBox="0 0 20 20"><path d="M2 10s3-5.25 8-5.25S18 10 18 10s-3 5.25-8 5.25S2 10 2 10z"/><circle cx="10" cy="10" r="2.5"/></symbol>
+<symbol id="chevD" viewBox="0 0 20 20"><path d="M6 8l4 4 4-4"/></symbol>
+<symbol id="chevR" viewBox="0 0 20 20"><path d="M8 6l4 4-4 4"/></symbol>
+<symbol id="user" viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.25"/><path d="M4.5 16.5c0-3 2.5-4.75 5.5-4.75s5.5 1.75 5.5 4.75"/></symbol>
+<symbol id="brand" viewBox="12 12 40 40"><path d="M12.371 31.35L12.396 31.01L12.451 30.665L12.532 30.317L12.638 29.966L12.765 29.611L12.913 29.253L13.077 28.893L13.256 28.53L13.448 28.165L13.649 27.799L13.858 27.431L14.072 27.062L14.289 26.692L14.506 26.321L14.722 25.95L14.932 25.579L15.136 25.209L15.331 24.838L15.514 24.469L15.684 24.101L15.836 23.734L15.97 23.368L16.086 22.998L16.188 22.618L16.278 22.228L16.357 21.832L16.427 21.429L16.49 21.022L16.548 20.611L16.602 20.199L16.653 19.787L16.705 19.375L16.758 18.966L16.814 18.561L16.874 18.162L16.942 17.769L17.017 17.384L17.103 17.009L17.201 16.645L17.312 16.293L17.438 15.955L17.581 15.633L17.742 15.327L17.924 15.039L18.128 14.771L18.356 14.524L18.609 14.293L18.885 14.074L19.182 13.866L19.5 13.669L19.836 13.483L20.189 13.308L20.557 13.144L20.938 12.992L21.331 12.85L21.734 12.72L22.146 12.6L22.564 12.491L22.987 12.393L23.414 12.307L23.843 12.23L24.271 12.165L24.698 12.111L25.122 12.067L25.541 12.034L25.954 12.012L26.358 12.001L26.752 12L27.135 12.01L27.505 12.03L27.869 12.064L28.237 12.112L28.607 12.174L28.979 12.25L29.352 12.339L29.726 12.441L30.099 12.555L30.472 12.68L30.843 12.816L31.212 12.962L31.578 13.117L31.94 13.282L32.298 13.456L32.651 13.637L32.999 13.825L33.34 14.021L33.674 14.222L34 14.43L34.317 14.642L34.626 14.859L34.925 15.08L35.213 15.304L35.49 15.531L35.755 15.76L36.008 15.995L36.248 16.238L36.477 16.49L36.695 16.75L36.903 17.017L37.102 17.292L37.292 17.574L37.474 17.862L37.649 18.157L37.818 18.457L37.823 18.467L37.789 18.473L37.37 18.572L36.956 18.703L36.546 18.864L36.14 19.052L35.737 19.266L35.338 19.502L34.942 19.76L34.549 20.036L34.158 20.329L33.769 20.636L33.383 20.955L32.999 21.284L32.616 21.62L32.235 21.962L31.854 22.306L31.475 22.652L31.097 22.996L30.719 23.336L30.341 23.671L29.964 23.998L29.586 24.314L29.207 24.618L28.828 24.907L28.442 25.186L28.044 25.458L27.636 25.726L27.219 25.99L26.796 26.251L26.368 26.51L25.938 26.768L25.507 27.026L25.077 27.285L24.649 27.546L24.226 27.809L23.81 28.076L23.402 28.348L23.004 28.625L22.618 28.909L22.247 29.2L21.891 29.499L21.552 29.807L21.233 30.126L20.935 30.456L20.66 30.797L20.411 31.152L20.188 31.52L19.994 31.903L19.824 32.305L19.672 32.727L19.538 33.169L19.422 33.627L19.323 34.101L19.24 34.588L19.174 35.087L19.124 35.596L19.09 36.114L19.072 36.638L19.068 37.166L19.079 37.698L19.104 38.231L19.144 38.763L19.196 39.293L19.213 39.429L19.066 39.352L18.747 39.171L18.428 38.976L18.103 38.767L17.772 38.543L17.437 38.306L17.1 38.056L16.762 37.794L16.425 37.522L16.091 37.239L15.761 36.947L15.437 36.646L15.12 36.338L14.812 36.023L14.515 35.702L14.231 35.376L13.96 35.045L13.705 34.712L13.467 34.375L13.248 34.037L13.049 33.698L12.872 33.359L12.719 33.021L12.591 32.684L12.49 32.349L12.417 32.018L12.377 31.687Z" fill="currentColor" fill-opacity="0.382" fill-rule="evenodd" stroke="none"/><path d="M22.758 37.266L22.758 36.837L22.771 36.413L22.797 35.994L22.836 35.583L22.889 35.181L22.956 34.789L23.038 34.41L23.134 34.045L23.246 33.695L23.373 33.362L23.516 33.048L23.681 32.751L23.871 32.47L24.085 32.202L24.321 31.947L24.577 31.705L24.852 31.473L25.144 31.25L25.451 31.036L25.772 30.83L26.104 30.63L26.446 30.436L26.796 30.246L27.153 30.059L27.514 29.874L27.878 29.69L28.244 29.506L28.609 29.321L28.972 29.134L29.331 28.944L29.684 28.749L30.03 28.548L30.366 28.342L30.692 28.127L31.005 27.904L31.309 27.667L31.61 27.414L31.908 27.147L32.204 26.868L32.497 26.579L32.788 26.283L33.078 25.981L33.367 25.676L33.656 25.369L33.945 25.064L34.234 24.762L34.524 24.465L34.814 24.176L35.107 23.897L35.401 23.629L35.698 23.375L35.998 23.138L36.301 22.919L36.608 22.72L36.919 22.545L37.234 22.394L37.554 22.27L37.88 22.175L38.211 22.112L38.552 22.077L38.906 22.066L39.27 22.077L39.644 22.11L40.027 22.164L40.416 22.237L40.811 22.328L41.21 22.437L41.612 22.561L42.015 22.701L42.419 22.855L42.821 23.022L43.221 23.201L43.617 23.391L44.007 23.59L44.391 23.798L44.766 24.014L45.133 24.236L45.488 24.464L45.832 24.696L46.162 24.932L46.477 25.17L46.775 25.409L47.057 25.648L47.324 25.894L47.584 26.154L47.835 26.426L48.078 26.71L48.313 27.006L48.539 27.311L48.758 27.626L48.968 27.949L49.17 28.28L49.365 28.617L49.551 28.961L49.729 29.31L49.9 29.663L50.063 30.019L50.217 30.378L50.365 30.738L50.504 31.099L50.636 31.461L50.76 31.821L50.876 32.18L50.985 32.536L51.087 32.889L51.181 33.237L51.268 33.58L51.345 33.921L51.413 34.261L51.47 34.602L51.519 34.944L51.558 35.285L51.588 35.628L51.609 35.971L51.623 36.314L51.629 36.659L51.628 37.004L51.619 37.351L51.604 37.698L51.583 38.047L51.556 38.397L51.523 38.748L51.485 39.101L51.442 39.456L51.395 39.812L51.344 40.17L51.288 40.53L51.23 40.892L51.168 41.255L51.104 41.621L51.037 41.99L50.97 42.369L50.904 42.765L50.839 43.177L50.773 43.602L50.706 44.037L50.636 44.481L50.564 44.931L50.487 45.385L50.406 45.841L50.318 46.296L50.225 46.748L50.124 47.194L50.014 47.633L49.895 48.063L49.767 48.48L49.627 48.883L49.476 49.269L49.312 49.636L49.134 49.982L48.942 50.305L48.735 50.601L48.512 50.87L48.272 51.109L48.014 51.314L47.734 51.488L47.429 51.633L47.102 51.752L46.753 51.845L46.386 51.915L46.001 51.963L45.601 51.99L45.188 52L44.762 51.993L44.327 51.971L43.884 51.935L43.434 51.889L42.98 51.832L42.523 51.767L42.065 51.696L41.609 51.62L41.155 51.541L40.706 51.461L40.263 51.381L39.829 51.304L39.405 51.23L38.992 51.162L38.594 51.101L38.211 51.048L37.838 51.002L37.468 50.957L37.1 50.913L36.734 50.869L36.372 50.825L36.012 50.779L35.654 50.731L35.3 50.681L34.948 50.628L34.599 50.572L34.254 50.511L33.911 50.445L33.571 50.374L33.234 50.297L32.901 50.214L32.57 50.123L32.243 50.024L31.919 49.916L31.599 49.8L31.282 49.673L30.968 49.537L30.658 49.389L30.351 49.23L30.048 49.059L29.745 48.876L29.438 48.682L29.13 48.479L28.82 48.266L28.509 48.044L28.2 47.813L27.891 47.573L27.585 47.325L27.282 47.07L26.983 46.806L26.689 46.536L26.402 46.258L26.121 45.974L25.848 45.684L25.583 45.388L25.329 45.087L25.085 44.781L24.852 44.47L24.631 44.154L24.424 43.834L24.232 43.511L24.054 43.184L23.892 42.855L23.747 42.522L23.615 42.18L23.491 41.822L23.375 41.449L23.268 41.063L23.17 40.666L23.082 40.259L23.003 39.843L22.935 39.421L22.877 38.994L22.83 38.564L22.794 38.131L22.77 37.698ZM27.651 37.981L27.662 38.327L27.684 38.672L27.687 38.671L27.692 38.751L27.733 38.956L27.8 39.153L27.892 39.339L28.007 39.512L28.145 39.669L28.301 39.806L28.474 39.922L28.661 40.014L28.858 40.081L29.062 40.122L29.27 40.135L29.478 40.122L29.682 40.081L29.879 40.014L30.066 39.922L30.239 39.806L30.395 39.669L30.533 39.512L30.648 39.339L30.74 39.153L30.807 38.956L30.848 38.751L30.862 38.544L30.853 38.416L30.856 38.416L30.841 38.175L30.833 37.933L30.834 37.692L30.842 37.451L30.858 37.21L30.882 36.969L30.914 36.73L30.954 36.492L31.001 36.255L31.056 36.02L31.119 35.787L31.189 35.556L31.267 35.327L31.353 35.101L31.445 34.879L31.545 34.659L31.652 34.442L31.766 34.23L31.887 34.021L32.015 33.816L32.15 33.615L32.291 33.419L32.438 33.228L32.591 33.041L32.751 32.86L32.916 32.684L33.087 32.513L33.263 32.349L33.445 32.19L33.632 32.037L33.824 31.89L34.02 31.749L34.221 31.616L34.426 31.488L34.636 31.368L34.849 31.254L35.065 31.148L35.286 31.049L35.509 30.956L35.735 30.872L35.964 30.794L36.195 30.725L36.428 30.662L36.663 30.608L36.9 30.561L37.139 30.522L37.378 30.491L37.618 30.468L37.618 30.464L37.698 30.459L37.902 30.418L38.099 30.352L38.286 30.259L38.459 30.144L38.616 30.007L38.753 29.85L38.869 29.677L38.961 29.49L39.028 29.293L39.068 29.089L39.082 28.881L39.068 28.673L39.028 28.469L38.961 28.272L38.869 28.085L38.753 27.912L38.616 27.756L38.459 27.619L38.286 27.503L38.099 27.411L37.902 27.344L37.698 27.303L37.49 27.29L37.363 27.298L37.362 27.295L37.018 27.328L36.676 27.373L36.335 27.429L35.996 27.496L35.659 27.574L35.325 27.663L34.994 27.763L34.667 27.873L34.343 27.995L34.023 28.126L33.708 28.269L33.398 28.421L33.093 28.584L32.794 28.756L32.5 28.938L32.212 29.13L31.931 29.331L31.657 29.541L31.389 29.76L31.129 29.987L30.876 30.223L30.632 30.467L30.395 30.719L30.167 30.979L29.947 31.246L29.736 31.519L29.535 31.8L29.342 32.087L29.159 32.38L28.986 32.68L28.823 32.984L28.67 33.294L28.527 33.609L28.394 33.928L28.272 34.251L28.16 34.578L28.059 34.909L27.969 35.242L27.891 35.579L27.823 35.918L27.766 36.259L27.72 36.601L27.686 36.945L27.663 37.29L27.651 37.636ZM39.803 29.142L39.817 29.349L39.857 29.553L39.924 29.751L40.016 29.937L40.132 30.11L40.269 30.267L40.426 30.404L40.599 30.52L40.785 30.612L40.983 30.679L41.187 30.719L41.394 30.733L41.602 30.719L41.806 30.679L42.004 30.612L42.19 30.52L42.363 30.404L42.52 30.267L42.657 30.11L42.773 29.937L42.865 29.751L42.932 29.553L42.972 29.349L42.986 29.142L42.972 28.934L42.932 28.73L42.865 28.532L42.773 28.346L42.657 28.173L42.52 28.016L42.363 27.879L42.19 27.763L42.004 27.671L41.806 27.604L41.602 27.564L41.394 27.55L41.187 27.564L40.983 27.604L40.785 27.671L40.599 27.763L40.426 27.879L40.269 28.016L40.132 28.173L40.016 28.346L39.924 28.532L39.857 28.73L39.817 28.934Z" fill="currentColor" fill-rule="evenodd" stroke="none"/></symbol>
+</defs>
+</svg>
+
+<div class="bar">
+  <h1>Secwet mobile, styled like desktop</h1>
+  <div class="seg"><button data-m="light">Light</button><button data-m="dark" class="on">Dark</button></div>
+</div>
+
+<div class="row">
+
+<!-- 0 Lock -->
+<div>
+<p class="cap">0. Launch: blank, system prompt only</p>
+<div class="ph"><div class="sb">9:41<i></i></div>
+<div class="lock"><div class="sys"><svg viewBox="0 0 48 48" width="64" height="64" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 14V8a4 4 0 0 1 4-4h6M34 4h6a4 4 0 0 1 4 4v6M44 34v6a4 4 0 0 1-4 4h-6M14 44H8a4 4 0 0 1-4-4v-6M16 17v4M32 17v4M24 17v10h-2M17 33c4 3.5 10 3.5 14 0"/></svg><div>Face ID</div></div></div>
+<div class="home"></div>
+</div></div>
+
+<!-- 1 Overview -->
+<div>
+<p class="cap">1. Overview (center tab, opens on launch)</p>
+<div class="ph"><div class="sb">9:41<i></i></div>
+<div class="scroll">
+  <div class="top"><div class="ptitle">Overview</div><span class="ib sm"><svg class="i"><use href="#customize"/></svg></span><span class="btn p sm"><svg class="i"><use href="#plus"/></svg>New</span></div>
+  <div class="stats">
+    <div class="stat"><div class="l">Secrets</div><div class="v">5</div></div>
+    <div class="stat"><div class="l">Assets</div><div class="v">2</div></div>
+    <div class="stat"><div class="l">Notes</div><div class="v">2</div></div>
+    <div class="stat"><div class="l">Devices</div><div class="v">2</div></div>
+  </div>
+  <div class="card"><div class="ch">Recently changed secrets</div>
+    <div class="li"><div class="tx"><div class="n">SENTRY_AUTH_TOKEN</div><div class="m">Frontend App · General</div></div><span class="r">15 min ago</span></div>
+    <div class="li"><div class="tx"><div class="n">STRIPE_SECRET_KEY</div><div class="m">Payments API · Production</div></div><span class="r">1 hr ago</span></div>
+  </div>
+  <div class="card"><div class="ch">Quick actions</div>
+    <div class="qa"><span class="btn s"><svg class="i"><use href="#plus"/></svg>New entry</span><span class="btn s"><svg class="i"><use href="#key"/></svg>Add secret</span></div>
+  </div>
+</div>
+<div class="bt"><span class="fade"></span>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#folder"/></svg></span>Groups</div>
+  <div class="tb on"><span class="tile"><svg class="i"><use href="#grid"/></svg></span>Overview</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#settings"/></svg></span>Settings</div>
+</div><div class="home"></div>
+</div></div>
+
+<!-- 2 Groups tab = the desktop sidebar -->
+<div>
+<p class="cap">2. Groups tab: the desktop sidebar as a screen</p>
+<div class="ph side"><div class="sb">9:41<i></i></div>
+<div class="scroll">
+  <div class="top"><div class="ptitle">Groups</div></div>
+  <div class="switch"><svg class="i"><use href="#user"/></svg><span class="grow">Personal</span><svg class="i" style="color:var(--t3)"><use href="#chevD"/></svg></div>
+  <div class="glabel">Projects<span class="ib sm" style="width:24px;height:24px"><svg class="i s"><use href="#plus"/></svg></span></div>
+  <div class="nav-i on"><span class="tile on">P</span><span class="grow">Payments API</span><svg class="i" style="color:var(--t3)"><use href="#chevR"/></svg></div>
+  <div class="nav-i"><span class="tile">F</span><span class="grow">Frontend App</span><svg class="i" style="color:var(--t3)"><use href="#chevR"/></svg></div>
+  <div class="glabel">Personal<span class="ib sm" style="width:24px;height:24px"><svg class="i s"><use href="#plus"/></svg></span></div>
+  <div class="nav-i"><span class="tile">M</span><span class="grow">Master Credentials</span><svg class="i" style="color:var(--t3)"><use href="#chevR"/></svg></div>
+  <div class="newrow"><svg class="i"><use href="#plus"/></svg>New</div>
+</div>
+<div class="bt"><span class="fade"></span>
+  <div class="tb on"><span class="tile"><svg class="i"><use href="#folder"/></svg></span>Groups</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#grid"/></svg></span>Overview</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#settings"/></svg></span>Settings</div>
+</div><div class="home"></div>
+</div></div>
+
+<!-- 3 Group screen -->
+<div>
+<p class="cap">3. Group: items with the desktop pills</p>
+<div class="ph"><div class="sb">9:41<i></i></div>
+<div class="scroll">
+  <div class="top"><div class="crumbs"><span>Projects</span></div><span class="btn p sm"><svg class="i"><use href="#plus"/></svg>New</span><span class="ib sm"><svg class="i"><use href="#more"/></svg></span></div>
+  <div class="search"><svg class="i"><use href="#search"/></svg>Search Projects...</div>
+  <div class="card">
+    <div class="li" style="align-items:flex-start"><span class="tile">P</span><div class="tx"><div class="n">Payments API</div><div class="m">Stripe and billing microservices</div>
+      <div class="pills"><span class="badge acc"><span class="d"></span>2 envs</span><span class="badge">2 secrets</span><span class="badge">1 asset</span><span class="badge">1 note</span></div></div><svg class="i" style="color:var(--t3);margin-top:4px"><use href="#chevR"/></svg></div>
+    <div class="li" style="align-items:flex-start"><span class="tile">F</span><div class="tx"><div class="n">Frontend App</div><div class="m">Desktop and mobile client bundles</div>
+      <div class="pills"><span class="badge">2 secrets</span><span class="badge">1 asset</span><span class="badge">1 note</span></div></div><svg class="i" style="color:var(--t3);margin-top:4px"><use href="#chevR"/></svg></div>
+  </div>
+</div>
+<div class="bt"><span class="fade"></span>
+  <div class="tb on"><span class="tile"><svg class="i"><use href="#folder"/></svg></span>Groups</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#grid"/></svg></span>Overview</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#settings"/></svg></span>Settings</div>
+</div><div class="home"></div>
+</div></div>
+
+<!-- 4 Item -->
+<div>
+<p class="cap">4. Item: environments and content tabs</p>
+<div class="ph"><div class="sb">9:41<i></i></div>
+<div class="scroll">
+  <div class="top"><div class="crumbs"><span class="c">Projects</span><span class="dot"></span><span>Payments API</span></div><span class="ib sm"><svg class="i"><use href="#more"/></svg></span></div>
+  <p class="desc">Stripe and billing microservices</p>
+  <div class="tabs"><span class="tab">General</span><span class="tab on">Production</span><span class="tab">Staging</span></div>
+  <div class="tabs"><span class="tab on">Secrets <span class="count">2</span></span><span class="tab">Assets <span class="count">1</span></span><span class="tab">Notes <span class="count">1</span></span></div>
+  <div style="display:flex;gap:8px"><div class="search" style="flex:1"><svg class="i"><use href="#search"/></svg>Search secrets...</div><span class="btn p" style="width:44px;padding:0"><svg class="i"><use href="#plus"/></svg></span></div>
+  <div class="tabs"><span class="tab on">All <span class="count">2</span></span><span class="tab">Access token <span class="count">0</span></span><span class="tab">API key <span class="count">1</span></span></div>
+  <div class="card">
+    <div class="li"><div class="tx"><div class="n">STRIPE_SECRET_KEY</div><div class="m">API key, Rotated quarterly via dashboard</div><div class="mask">••••••••••••2345 <svg class="i s"><use href="#copy"/></svg></div></div><span class="ib sm"><svg class="i"><use href="#eye"/></svg></span></div>
+    <div class="li"><div class="tx"><div class="n">PAYPAL_CLIENT_SECRET</div><div class="m">Password, Webhook signature verification</div><div class="mask">••••••••••••yPal <svg class="i s"><use href="#copy"/></svg></div></div><span class="ib sm"><svg class="i"><use href="#eye"/></svg></span></div>
+  </div>
+</div>
+<div class="bt"><span class="fade"></span>
+  <div class="tb on"><span class="tile"><svg class="i"><use href="#folder"/></svg></span>Groups</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#grid"/></svg></span>Overview</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#settings"/></svg></span>Settings</div>
+</div><div class="home"></div>
+</div></div>
+
+<!-- 5 Settings > Devices -->
+<div>
+<p class="cap">5. Settings: same tabs, Devices shown</p>
+<div class="ph"><div class="sb">9:41<i></i></div>
+<div class="scroll">
+  <div class="top"><div class="crumbs"><span>Settings</span></div></div>
+  <div class="tabs"><span class="tab">General</span><span class="tab">CLI</span><span class="tab">Security</span><span class="tab on">Devices</span><span class="tab">Recovery</span><span class="tab">Sync</span></div>
+  <div class="sec">Active Devices<span class="btn p sm"><svg class="i"><use href="#plus"/></svg>Pair a device</span></div>
+  <div class="card">
+    <div class="li"><div class="tx"><div class="n">iPhone 17 <span class="badge">This device</span></div><div class="m">iOS, added 26 Oct, key 482913</div></div><span class="badge ok"><span class="d"></span>Active</span></div>
+    <div class="li"><div class="tx"><div class="n">Desktop</div><div class="m">macOS, last synced 1 hr ago, key 91DD 3C07</div></div><span class="btn t sm">Revoke</span></div>
+  </div>
+  <div class="sec" style="margin-top:18px">Appearance and locking</div>
+  <div class="card">
+    <div class="li"><div class="tx"><div class="n">Appearance</div><div class="m">Follows the system light or dark setting.</div></div><span class="btn s sm">System<svg class="i s"><use href="#chevD"/></svg></span></div>
+    <div class="li"><div class="tx"><div class="n">Lock Secwet after</div><div class="m">Idle time before Secwet locks.</div></div><span class="btn s sm">15 min<svg class="i s"><use href="#chevD"/></svg></span></div>
+  </div>
+</div>
+<div class="bt"><span class="fade"></span>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#folder"/></svg></span>Groups</div>
+  <div class="tb"><span class="tile"><svg class="i"><use href="#grid"/></svg></span>Overview</div>
+  <div class="tb on"><span class="tile"><svg class="i"><use href="#settings"/></svg></span>Settings</div>
+</div><div class="home"></div>
+</div></div>
+
+</div>
+<script>
+if(location.hash==='#light'){document.body.className='light';document.querySelectorAll('.seg button').forEach(function(x){x.classList.toggle('on',x.dataset.m==='light')})}
+document.querySelectorAll('.seg button').forEach(function(b){b.onclick=function(){document.body.className=b.dataset.m;document.querySelectorAll('.seg button').forEach(function(x){x.classList.toggle('on',x===b)})}});
+</script>
+</body>
+</html>

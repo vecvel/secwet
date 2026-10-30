@@ -1,0 +1,44 @@
+# HTTPS for the relay. Caddy gets and renews the certificate for
+# RELAY_DOMAIN automatically; the DNS A record must point at this server.
+{
+	email {$ACME_EMAIL}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$RELAY_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		-Server
+	}
+
+	# The relay accepts at most 10 MB per request (encrypted snapshots); this
+	# refuses anything far bigger before it reaches the relay.
+	request_body {
+		max_size 16MB
+	}
+
+	# WebSocket upgrades (/v1/secwets/{id}/stream) pass through unchanged.
+	# Caddy replaces any X-Forwarded-For sent by the client with the real
+	# client address, so the relay can trust it.
+	reverse_proxy relay:8080 {
+		health_uri /health
+		health_interval 15s
+		transport http {
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

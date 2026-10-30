@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # The desktop concurrency/lifecycle stress tests are slow (~12 min under WSL, ~2 min on Windows).
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Tauri system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      # pnpm version comes from packageManager in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck desktop
+        run: pnpm typecheck
+
+      # Also produces apps/desktop/dist, which the Tauri crate embeds at compile time.
+      - name: Build desktop frontend
+        run: pnpm desktop:build
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The relay, CLI and FFI integration tests need Postgres (DATABASE_URL).
+      # Service containers only run on Linux runners, so each OS starts its own.
+      - name: Postgres (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          docker run -d --name pg -p 5432:5432 \
+            -e POSTGRES_USER=secwet -e POSTGRES_PASSWORD=secwet -e POSTGRES_DB=secwet_relay \
+            postgres:17.6-alpine
+          for _ in $(seq 1 30); do docker exec pg pg_isready -U secwet -d secwet_relay && break; sleep 2; done
+
+      # windows-latest ships PostgreSQL as a stopped service (user postgres,
+      # password root); start it and add the test role and database.
+      - name: Postgres (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $svc = Get-Service -Name "postgresql*" | Select-Object -First 1
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service -Name $svc.Name
+          $env:PGPASSWORD = "root"
+          & "$env:PGBIN\psql.exe" -U postgres -c "CREATE ROLE secwet LOGIN PASSWORD 'secwet';"
+          & "$env:PGBIN\psql.exe" -U postgres -c "CREATE DATABASE secwet_relay OWNER secwet;"
+
+      - name: Rust tests
+        env:
+          DATABASE_URL: postgres://secwet:secwet@localhost:5432/secwet_relay
+        run: cargo test --workspace --no-fail-fast

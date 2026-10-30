@@ -2,15 +2,18 @@
  * apps/desktop/src/lib/store.ts
  *
  * Unified reactive state management for Secwet Desktop using useSyncExternalStore.
- * Authoritative: docs/IMPLEMENTATION.md §9.2 and Milestone 4 requirements.
  */
 import { useSyncExternalStore } from "react";
 import {
   api,
   isUnlocked,
-  isUninitialized,
+  type AccessView,
+  type ActiveSession,
+  type KeyStatusDto,
+  type LinkStatusDto,
   type DashboardConfig,
   type EnvironmentView,
+  type ExportSummaryDto,
   type AssetMetaView,
   type FileMetaView,
   type GroupView,
@@ -25,11 +28,15 @@ import {
   type SecretMeta,
   type Settings,
   type SettingsPatch,
-  type VaultStatus,
+  type SecwetStatus,
+  type SpaceView,
 } from "./api";
 
 export interface AppStateSnapshot {
-  status: VaultStatus;
+  status: SecwetStatus;
+  recoveryStatus: { created: boolean; createdAt?: number };
+  spaces: SpaceView[];
+  activeSpaceId: string | null;
   groups: GroupView[];
   labels: LabelView[];
   items: ItemView[];
@@ -38,6 +45,7 @@ export interface AppStateSnapshot {
   assets: AssetMetaView[];
   files: FileMetaView[];
   notes: NoteMetaView[];
+  activeSessions: ActiveSession[];
   overview: Overview | null;
   dashboardConfig: DashboardConfig;
   settings: Settings;
@@ -47,6 +55,17 @@ export interface AppStateSnapshot {
   selectedEnvironmentId: string | null;
   loading: boolean;
   error: string | null;
+
+  /** What this device may do. Null until loaded; treated as owner. */
+  access: AccessView | null;
+  /** "unlinked" after a sync-only revocation: the store is a read-only archive. */
+  linkStatus: LinkStatusDto | null;
+  /** Master key epoch and rotation prompt. */
+  keyStatus: KeyStatusDto | null;
+  /** True after joining with an invite until shared data arrives. */
+  joining: boolean;
+  /** Set when a remote wipe erased this device; onboarding explains what happened. */
+  wipedNotice: boolean;
 
   // Backward-compatibility properties
   projects: ProjectView[];
@@ -68,8 +87,12 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 class AppStore {
+  private hasExplicitlyChosenSpace = false;
   private state: AppStateSnapshot = {
     status: { status: "uninitialized" },
+    recoveryStatus: { created: false },
+    spaces: [],
+    activeSpaceId: null,
     groups: [],
     labels: [],
     items: [],
@@ -78,6 +101,7 @@ class AppStore {
     assets: [],
     files: [],
     notes: [],
+    activeSessions: [],
     overview: null,
     dashboardConfig: DEFAULT_DASHBOARD_CONFIG,
     settings: DEFAULT_SETTINGS,
@@ -87,6 +111,11 @@ class AppStore {
     selectedEnvironmentId: null,
     loading: true,
     error: null,
+    access: null,
+    linkStatus: null,
+    keyStatus: null,
+    joining: false,
+    wipedNotice: false,
     projects: [],
     selectedProjectId: null,
   };
@@ -116,7 +145,7 @@ class AppStore {
     return () => this.listeners.delete(listener);
   };
 
-  private setState(partial: Partial<AppStateSnapshot>) {
+  public setState(partial: Partial<AppStateSnapshot>) {
     const updated = { ...this.state, ...partial };
 
     // Synchronize groups and labels
@@ -157,29 +186,70 @@ class AppStore {
       this.setState({ loading: true, error: null });
 
       // 1. Setup event listeners
-      const unlistenChanged = await api.onVaultChanged(async (e) => {
-        await this.handleVaultChanged(e.scope);
+      const unlistenChanged = await api.onSecwetChanged(async (e) => {
+        await this.handleAppChanged(e.scope);
       });
 
-      const unlistenLocked = await api.onVaultLocked(() => {
+      const unlistenLocked = await api.onSecwetLocked(() => {
         this.setState({
           status: { status: "locked" },
           secrets: [],
           assets: [],
           files: [],
           notes: [],
+          activeSessions: [],
         });
       });
 
-      this.unlistenFns = [unlistenChanged, unlistenLocked];
+      const unlistenWiped = await api.onWiped(() => {
+        this.resetToOnboarding();
+      });
 
-      // 2. Fetch initial status
-      let status = await api.vaultStatus();
-      if (isUninitialized(status)) {
-        const sysDevName = await api.systemDeviceName().catch(() => undefined);
-        status = await api.vaultCreate(sysDevName);
+      const unlistenUnlinked = await api.onUnlinked((link) => {
+        this.setState({
+          linkStatus: link && link.state ? link : { state: "unlinked", revoked_at: Date.now() },
+        });
+      });
+
+      // Poll active process sessions every 2 seconds when unlocked
+      const pollTimer = setInterval(() => {
+        if (isUnlocked(this.state.status)) {
+          this.reloadActiveSessions().catch(() => {});
+        }
+      }, 2000);
+
+      this.unlistenFns = [
+        unlistenChanged,
+        unlistenLocked,
+        unlistenWiped,
+        unlistenUnlinked,
+        () => clearInterval(pollTimer),
+      ];
+
+      // Auto-refresh when window gains focus or becomes visible (e.g. after running CLI commands in terminal)
+      if (typeof window !== "undefined") {
+        const onFocus = () => {
+          if (isUnlocked(this.state.status)) {
+            this.handleAppChanged("all").catch((err) => {
+              console.error("Failed to auto-refresh on window focus:", err);
+            });
+          }
+        };
+        window.addEventListener("focus", onFocus);
+        const onVisibilityChange = () => {
+          if (document.visibilityState === "visible") {
+            onFocus();
+          }
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        this.unlistenFns.push(() => {
+          window.removeEventListener("focus", onFocus);
+          document.removeEventListener("visibilitychange", onVisibilityChange);
+        });
       }
 
+      // 2. Fetch initial status
+      const status = await api.secwetStatus();
       this.setState({ status });
 
       if (isUnlocked(status)) {
@@ -200,12 +270,30 @@ class AppStore {
 
   public async reloadAll() {
     try {
-      const [groups, items, overview, settings, dashboardConfig] = await Promise.all([
+      const [
+        spaces,
+        groups,
+        items,
+        overview,
+        settings,
+        dashboardConfig,
+        activeSessions,
+        recoveryStatus,
+        access,
+        linkStatus,
+        keyStatus,
+      ] = await Promise.all([
+        api.spacesList().catch(() => [] as SpaceView[]),
         api.groupsList().catch(() => [] as GroupView[]),
         api.itemsList().catch(() => [] as ItemView[]),
         api.overview().catch(() => null),
         api.settingsGet().catch(() => this.state.settings),
         api.dashboardGet().catch(() => this.state.dashboardConfig),
+        api.activeSessionsList().catch(() => [] as ActiveSession[]),
+        api.recoveryStatus().catch(() => this.state.recoveryStatus),
+        api.myAccess().catch(() => this.state.access),
+        api.linkStatus().catch(() => this.state.linkStatus),
+        api.keyStatus().catch(() => this.state.keyStatus),
       ]);
 
       if (
@@ -221,17 +309,36 @@ class AppStore {
         }
       }
 
+      // Resolve active space: default to Personal space if user hasn't explicitly picked a space
+      let activeSpaceId = this.state.activeSpaceId;
+      const defaultSpace = spaces.find((s) => s.is_default) || spaces[0];
+      if (!this.hasExplicitlyChosenSpace && defaultSpace) {
+        activeSpaceId = defaultSpace.id;
+      } else if (activeSpaceId !== null) {
+        if (!spaces.some((s) => s.id === activeSpaceId)) {
+          activeSpaceId = defaultSpace?.id || null;
+        }
+      }
+
+      const visibleGroups = activeSpaceId
+        ? groups.filter((g) => g.space_id === activeSpaceId)
+        : groups;
+
       // Resolve selected group/label
       let selectedGroupId = this.state.selectedGroupId ?? this.state.selectedLabelId;
-      if (!selectedGroupId || !groups.some((g) => g.id === selectedGroupId)) {
-        selectedGroupId = groups[0]?.id || null;
+      if (!selectedGroupId || !visibleGroups.some((g) => g.id === selectedGroupId)) {
+        selectedGroupId = visibleGroups[0]?.id || null;
       }
 
       // Resolve selected item
       let selectedItemId = this.state.selectedItemId;
+      const visibleGroupIds = new Set(visibleGroups.map((g) => g.id));
+      const visibleItems = activeSpaceId
+        ? items.filter((i) => visibleGroupIds.has(i.group_id ?? i.label_id))
+        : items;
       const itemsForGroup = items.filter((i) => (i.group_id ?? i.label_id) === selectedGroupId);
-      if (!selectedItemId || !items.some((i) => i.id === selectedItemId)) {
-        selectedItemId = itemsForGroup[0]?.id || items[0]?.id || null;
+      if (!selectedItemId || !visibleItems.some((i) => i.id === selectedItemId)) {
+        selectedItemId = itemsForGroup[0]?.id || visibleItems[0]?.id || null;
       }
 
       // Load item-specific data if an item is selected
@@ -259,6 +366,8 @@ class AppStore {
       }
 
       this.setState({
+        spaces,
+        activeSpaceId,
         groups,
         labels: groups,
         items,
@@ -267,9 +376,14 @@ class AppStore {
         assets,
         files: assets,
         notes,
+        activeSessions,
         overview,
         settings,
         dashboardConfig,
+        recoveryStatus: recoveryStatus || this.state.recoveryStatus,
+        access,
+        linkStatus,
+        keyStatus,
         selectedGroupId,
         selectedLabelId: selectedGroupId,
         selectedItemId,
@@ -378,10 +492,11 @@ class AppStore {
     });
   }
 
-  public async handleVaultChanged(scope: string) {
+  public async handleAppChanged(scope: string) {
     if (!isUnlocked(this.state.status)) return;
 
     if (
+      scope === "spaces" ||
       scope === "groups" ||
       scope === "labels" ||
       scope === "items" ||
@@ -410,15 +525,233 @@ class AppStore {
     } else if (scope === "settings") {
       const settings = await api.settingsGet();
       this.setState({ settings });
+    } else if (scope === "sessions") {
+      await this.reloadActiveSessions();
+    } else if (scope === "access" || scope === "members") {
+      await this.reloadAccess();
+    } else if (scope === "keys" || scope === "devices") {
+      await this.reloadKeyStatus();
+    } else if (scope === "link") {
+      await this.reloadLinkStatus();
     }
+  }
+
+  // ==========================================================================
+  // Access, key and link status
+  // ==========================================================================
+
+  public async reloadAccess(): Promise<AccessView | null> {
+    const access = await api.myAccess().catch(() => this.state.access);
+    this.setState({ access });
+    return access;
+  }
+
+  public async reloadKeyStatus(): Promise<KeyStatusDto | null> {
+    const keyStatus = await api.keyStatus().catch(() => this.state.keyStatus);
+    this.setState({ keyStatus });
+    return keyStatus;
+  }
+
+  public async reloadLinkStatus(): Promise<LinkStatusDto | null> {
+    const linkStatus = await api.linkStatus().catch(() => this.state.linkStatus);
+    this.setState({ linkStatus });
+    return linkStatus;
+  }
+
+  /**
+   * Invite links exist only in memory right after an invite is created; the backend
+   * never returns them again. Keyed by invitation id.
+   */
+  private inviteLinks = new Map<string, string>();
+
+  public rememberInviteLink(invitationId: string, link: string) {
+    this.inviteLinks.set(invitationId, link);
+  }
+
+  public inviteLink(invitationId: string | null | undefined): string | undefined {
+    return invitationId ? this.inviteLinks.get(invitationId) : undefined;
+  }
+
+  /** After a remote wipe the local store is gone: drop every cached value and show onboarding. */
+  public resetToOnboarding() {
+    this.hasExplicitlyChosenSpace = false;
+    this.inviteLinks.clear();
+    this.setState({
+      status: { status: "uninitialized" },
+      recoveryStatus: { created: false },
+      spaces: [],
+      activeSpaceId: null,
+      groups: [],
+      labels: [],
+      items: [],
+      environments: [],
+      secrets: [],
+      assets: [],
+      files: [],
+      notes: [],
+      activeSessions: [],
+      overview: null,
+      dashboardConfig: DEFAULT_DASHBOARD_CONFIG,
+      settings: DEFAULT_SETTINGS,
+      selectedGroupId: null,
+      selectedLabelId: null,
+      selectedItemId: null,
+      selectedEnvironmentId: null,
+      access: null,
+      linkStatus: null,
+      keyStatus: null,
+      joining: false,
+      wipedNotice: true,
+      loading: false,
+      error: null,
+      projects: [],
+      selectedProjectId: null,
+    });
+  }
+
+  /** Joins a shared workspace with an invite link, then waits for access to arrive. */
+  public async acceptInvitation(link: string, email: string, deviceName: string): Promise<SecwetStatus> {
+    const status = await api.invitationAccept(link, email, deviceName);
+    this.setState({ status, joining: isUnlocked(status), wipedNotice: false });
+    return status;
+  }
+
+  /**
+   * One poll while joining. Returns true once access and at least one space arrived;
+   * the caller polls every few seconds and can stop at any time.
+   */
+  public async pollJoinedAccess(): Promise<boolean> {
+    const [access, spaces] = await Promise.all([
+      api.myAccess().catch(() => null),
+      api.spacesList().catch(() => [] as SpaceView[]),
+    ]);
+    const arrived = Boolean(access && access.grants.some((g) => g.role !== "no_access") && spaces.length > 0);
+    if (arrived) {
+      await this.finishJoining();
+    }
+    return arrived;
+  }
+
+  /** Leaves the waiting state and shows the app (data keeps arriving through sync). */
+  public async finishJoining() {
+    this.setState({ joining: false, loading: true });
+    await this.reloadAll();
+  }
+
+  public async reloadActiveSessions() {
+    if (!isUnlocked(this.state.status)) return;
+    try {
+      const activeSessions = await api.activeSessionsList();
+      const current = this.state.activeSessions;
+      const isSame =
+        current.length === activeSessions.length &&
+        current.every((s, i) => s.session_id === activeSessions[i]?.session_id);
+      if (!isSame) {
+        this.setState({ activeSessions });
+      }
+    } catch (e) {
+      console.error("Failed to reload active sessions:", e);
+    }
+  }
+
+  public async stopActiveSession(sessionId: string) {
+    await api.activeSessionStop(sessionId);
+    await this.reloadActiveSessions();
+  }
+
+  public handleSecwetChanged = (scope: string) => this.handleAppChanged(scope);
+
+  // ==========================================================================
+  // Space Mutations & Selection
+  // ==========================================================================
+
+  public selectSpace(spaceId: string | null) {
+    this.hasExplicitlyChosenSpace = true;
+
+    const visibleGroups = spaceId
+      ? this.state.groups.filter((g) => g.space_id === spaceId)
+      : this.state.groups;
+
+    const nextGroupId = visibleGroups.some((g) => g.id === this.state.selectedGroupId)
+      ? this.state.selectedGroupId
+      : visibleGroups[0]?.id || null;
+
+    const visibleGroupIds = new Set(visibleGroups.map((g) => g.id));
+    const visibleItems = spaceId
+      ? this.state.items.filter((i) => visibleGroupIds.has(i.group_id ?? i.label_id))
+      : this.state.items;
+
+    const nextItemId = visibleItems.some((i) => i.id === this.state.selectedItemId)
+      ? this.state.selectedItemId
+      : (nextGroupId ? visibleItems.find((i) => (i.group_id ?? i.label_id) === nextGroupId)?.id || visibleItems[0]?.id : null) || null;
+
+    this.setState({
+      activeSpaceId: spaceId,
+      selectedGroupId: nextGroupId,
+      selectedLabelId: nextGroupId,
+      selectedItemId: nextItemId,
+    });
+
+    if (nextItemId) {
+      this.reloadItemContent(nextItemId);
+    } else {
+      this.setState({
+        environments: [],
+        secrets: [],
+        assets: [],
+        files: [],
+        notes: [],
+      });
+    }
+  }
+
+  public async createSpace(name: string, icon?: string | null): Promise<SpaceView> {
+    const space = await api.spaceCreate(name, icon);
+    await this.reloadAll();
+    this.selectSpace(space.id);
+    return space;
+  }
+
+  public async renameSpace(id: string, name: string, icon?: string | null): Promise<SpaceView> {
+    const space = await api.spaceRename(id, name, icon);
+    await this.reloadAll();
+    return space;
+  }
+
+  public async deleteSpace(id: string): Promise<void> {
+    await api.spaceDelete(id);
+    if (this.state.activeSpaceId === id) {
+      const defaultSpace = this.state.spaces.find((s) => s.is_default && s.id !== id);
+      this.setState({ activeSpaceId: defaultSpace?.id || null });
+    }
+    await this.reloadAll();
+  }
+
+  public async reorderSpaces(ids: string[]): Promise<void> {
+    await api.spaceReorder(ids);
+    await this.reloadAll();
+  }
+
+  public async moveGroupToSpace(groupId: string, spaceId: string): Promise<void> {
+    await api.groupMoveToSpace(groupId, spaceId);
+    await this.reloadAll();
   }
 
   // ==========================================================================
   // Group & Label Mutations
   // ==========================================================================
 
-  public async createGroup(name: string, icon?: string | null): Promise<GroupView> {
-    const group = await api.groupCreate(name, icon);
+  public async createGroup(
+    name: string,
+    icon?: string | null,
+    spaceId?: string | null
+  ): Promise<GroupView> {
+    const targetSpaceId = spaceId !== undefined ? spaceId : (this.state.activeSpaceId || undefined);
+    const group = await api.groupCreate(name, icon, targetSpaceId);
+    if (group.space_id && this.state.activeSpaceId !== null && this.state.activeSpaceId !== group.space_id) {
+      this.hasExplicitlyChosenSpace = true;
+      this.setState({ activeSpaceId: group.space_id });
+    }
     await this.reloadAll();
     await this.selectGroup(group.id);
     return group;
@@ -644,18 +977,17 @@ class AppStore {
     return updated;
   }
 
-  public async unlock(): Promise<void> {
-    const biometricEnabled = typeof window !== "undefined" && window.localStorage.getItem("secwet:biometric_unlock") !== "false";
-    if (biometricEnabled) {
-      await api.biometricAuthenticate("Unlock Secwet");
-    }
-    await api.vaultUnlock();
+  public async unlock(recoveryKey?: string): Promise<void> {
+    // When biometric unlock is on, the Rust side shows the OS prompt and
+    // refuses to open the store until it passes (or the recovery key
+    // matches, while the device can't run the check).
+    await api.secwetUnlock(recoveryKey);
     this.setState({ status: { status: "unlocked" } });
     await this.reloadAll();
   }
 
   public async lock(): Promise<void> {
-    await api.vaultLock();
+    await api.secwetLock();
     this.setState({
       status: { status: "locked" },
       secrets: [],
@@ -694,20 +1026,59 @@ class AppStore {
   public async deleteProject(projectId: string): Promise<void> {
     await this.deleteItem(projectId);
   }
+
+  // ==========================================================================
+  // Recovery & Backup Methods
+  // ==========================================================================
+
+  public async createRecoveryKey(): Promise<string> {
+    const key = await api.recoveryKeyCreate();
+    const recoveryStatus = await api.recoveryStatus().catch(() => ({ created: true, createdAt: Date.now() }));
+    this.setState({ recoveryStatus });
+    return key;
+  }
+
+  public async replaceRecoveryKey(): Promise<string> {
+    const key = await api.recoveryKeyReplace();
+    const recoveryStatus = await api.recoveryStatus().catch(() => ({ created: true, createdAt: Date.now() }));
+    this.setState({ recoveryStatus });
+    return key;
+  }
+
+  public async exportWorkspace(filePath?: string | null, recoveryKey: string = ""): Promise<ExportSummaryDto> {
+    return api.workspaceExport(filePath, recoveryKey);
+  }
+
+  public async restoreWorkspace(
+    filePath?: string | null,
+    recoveryKey: string = "",
+    deviceName?: string
+  ): Promise<SecwetStatus> {
+    const status = await api.workspaceRestore(filePath, recoveryKey, deviceName);
+    this.setState({ status, wipedNotice: false });
+    if (isUnlocked(status)) {
+      await this.reloadAll();
+    }
+    return status;
+  }
+
+  public async createWorkspace(deviceName?: string): Promise<SecwetStatus> {
+    const sysDevName = deviceName || (await api.systemDeviceName().catch(() => undefined));
+    const status = await api.secwetCreate(sysDevName);
+    this.setState({ status, wipedNotice: false });
+    if (isUnlocked(status)) {
+      await this.reloadAll();
+    }
+    return status;
+  }
 }
 
 export const appStore = new AppStore();
 export const store = appStore;
-export const vaultStore = appStore; // Backward-compatible alias
-
-export type VaultStateSnapshot = AppStateSnapshot; // Backward-compatible alias
-export type VaultStore = AppStore; // Backward-compatible alias
+export const secwetStore = appStore;
 
 /** React hook subscribing to the application store */
 export function useStore(): [AppStateSnapshot, AppStore] {
   const snapshot = useSyncExternalStore(appStore.subscribe, appStore.getState);
   return [snapshot, appStore];
 }
-
-/** Backward-compatible alias for useStore */
-export const useVault = useStore;

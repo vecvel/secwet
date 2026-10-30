@@ -3,21 +3,21 @@ use predicates::prelude::*;
 use secrecy::ExposeSecret;
 use secwet_cli::dotenv::parse_dotenv;
 use secwet_cli::keystore::FileKeyStore;
-use secwet_core::{SecretDraft, SecretKind, Vault};
+use secwet_core::{SecretDraft, SecretKind, Secwet};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tempfile::tempdir;
 
-fn setup_test_vault(data_dir: &Path, project_name: &str, envs: &[&str]) -> Vault {
+fn setup_test_secwet(data_dir: &Path, project_name: &str, envs: &[&str]) -> Secwet {
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault =
-        Vault::create(data_dir, "adversarial-test-device", &keystore).expect("create vault");
+    let mut secwet =
+        Secwet::create(data_dir, "adversarial-test-device", &keystore).expect("create secwet");
     let env_strings: Vec<String> = envs.iter().map(|s| s.to_string()).collect();
-    vault
+    secwet
         .create_project(project_name, &env_strings)
         .expect("create project");
-    vault
+    secwet
 }
 
 // =========================================================================
@@ -29,8 +29,8 @@ fn test_adversarial_exit_code_forwarding_all_codes() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_test_vault(data_dir, "runner-proj", &["dev"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_test_secwet(data_dir, "runner-proj", &["dev"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let draft = SecretDraft::new(
@@ -41,8 +41,8 @@ fn test_adversarial_exit_code_forwarding_all_codes() {
         "dummy_val",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     let test_codes = [0, 7, 42, 127, 255];
 
@@ -73,8 +73,8 @@ fn test_adversarial_exit_code_forwarding_signals() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_test_vault(data_dir, "runner-proj", &["dev"]);
-    vault.lock();
+    let secwet = setup_test_secwet(data_dir, "runner-proj", &["dev"]);
+    secwet.lock();
 
     // SIGKILL (signal 9) -> expected exit code 128 + 9 = 137
     let mut cmd_kill = Command::cargo_bin("secwet").unwrap();
@@ -120,8 +120,8 @@ fn test_adversarial_run_nonexistent_binary_returns_code_1() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_test_vault(data_dir, "runner-proj", &["dev"]);
-    vault.lock();
+    let secwet = setup_test_secwet(data_dir, "runner-proj", &["dev"]);
+    secwet.lock();
 
     let mut cmd = Command::cargo_bin("secwet").unwrap();
     cmd.env("SECWET_DATA_DIR", data_dir)
@@ -151,8 +151,8 @@ fn test_adversarial_secret_injection_and_zero_leakage() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_test_vault(data_dir, "crypto-proj", &["production"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_test_secwet(data_dir, "crypto-proj", &["production"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let canary_secrets = [
@@ -163,9 +163,9 @@ fn test_adversarial_secret_injection_and_zero_leakage() {
 
     for (name, val) in &canary_secrets {
         let draft = SecretDraft::new(project.id, env.id, *name, SecretKind::EnvVar, *val, None);
-        vault.create_secret(draft).unwrap();
+        secwet.create_secret(draft).unwrap();
     }
-    vault.lock();
+    secwet.lock();
 
     let file_alpha = data_dir.join("child_alpha.txt");
     let file_beta = data_dir.join("child_beta.txt");
@@ -267,8 +267,8 @@ fn test_adversarial_zero_leakage_on_child_error() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_test_vault(data_dir, "error-proj", &["dev"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_test_secwet(data_dir, "error-proj", &["dev"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let secret_payload = "SUPER_SECRET_TOKEN_NEVER_LEAK_ON_CRASH_9999";
@@ -280,8 +280,8 @@ fn test_adversarial_zero_leakage_on_child_error() {
         secret_payload,
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
     // Child writes an error message and exits 42
     let mut cmd = Command::cargo_bin("secwet").unwrap();
@@ -330,8 +330,8 @@ fn test_adversarial_get_piping_byte_exact_no_newline() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let mut vault = setup_test_vault(data_dir, "piping-proj", &["dev"]);
-    let project = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_test_secwet(data_dir, "piping-proj", &["dev"]);
+    let project = secwet.list_projects().unwrap().remove(0);
     let env = &project.environments[0];
 
     let max_64k = "A".repeat(65_536);
@@ -368,9 +368,9 @@ fn test_adversarial_get_piping_byte_exact_no_newline() {
             val.as_str(),
             None,
         );
-        vault.create_secret(draft).unwrap();
+        secwet.create_secret(draft).unwrap();
     }
-    vault.lock();
+    secwet.lock();
 
     for (name, expected_val) in &test_cases {
         let mut cmd = Command::cargo_bin("secwet").unwrap();
@@ -400,11 +400,11 @@ fn test_adversarial_get_piping_byte_exact_no_newline() {
 fn test_adversarial_secwet_toml_deep_discovery_and_cli_flag_overrides() {
     let temp = tempdir().unwrap();
     let root = temp.path();
-    let vault_dir = root.join("vault_data");
-    std::fs::create_dir_all(&vault_dir).unwrap();
+    let secwet_dir = root.join("secwet_data");
+    std::fs::create_dir_all(&secwet_dir).unwrap();
 
-    let mut vault = setup_test_vault(&vault_dir, "core-banking", &["production", "staging"]);
-    let core_proj = vault.list_projects().unwrap().remove(0);
+    let mut secwet = setup_test_secwet(&secwet_dir, "core-banking", &["production", "staging"]);
+    let core_proj = secwet.list_projects().unwrap().remove(0);
     let prod_env = core_proj
         .environments
         .iter()
@@ -425,7 +425,7 @@ fn test_adversarial_secwet_toml_deep_discovery_and_cli_flag_overrides() {
         "resolved_from_parent_toml_prod",
         None,
     );
-    vault.create_secret(draft1).unwrap();
+    secwet.create_secret(draft1).unwrap();
 
     // Secret in core-banking / staging
     let draft2 = SecretDraft::new(
@@ -436,14 +436,12 @@ fn test_adversarial_secwet_toml_deep_discovery_and_cli_flag_overrides() {
         "resolved_with_env_flag_override",
         None,
     );
-    vault.create_secret(draft2).unwrap();
+    secwet.create_secret(draft2).unwrap();
 
     // Create a 2nd project: payments-service / development
-    vault
-        .create_project("payments-service", &["development".to_string()])
+    secwet.create_project("payments-service", &["development".to_string()])
         .unwrap();
-    let pay_proj = vault
-        .list_projects()
+    let pay_proj = secwet.list_projects()
         .unwrap()
         .into_iter()
         .find(|p| p.name == "payments-service")
@@ -458,8 +456,8 @@ fn test_adversarial_secwet_toml_deep_discovery_and_cli_flag_overrides() {
         "resolved_with_full_cli_override",
         None,
     );
-    vault.create_secret(draft3).unwrap();
-    vault.lock();
+    secwet.create_secret(draft3).unwrap();
+    secwet.lock();
 
     // Write .secwet.toml at root
     let toml_path = root.join(".secwet.toml");
@@ -467,9 +465,9 @@ fn test_adversarial_secwet_toml_deep_discovery_and_cli_flag_overrides() {
         r#"
 project = "core-banking"
 env = "production"
-vault = "{}"
+data_dir = '{}'
 "#,
-        vault_dir.display()
+        secwet_dir.display()
     );
     std::fs::write(&toml_path, toml_content).unwrap();
 
@@ -544,9 +542,9 @@ fn test_adversarial_secwet_toml_default_env_fallback() {
     let temp = tempdir().unwrap();
     let root = temp.path();
 
-    // Vault has project "service-a" with environments "Development" and "production"
-    let mut vault = setup_test_vault(root, "service-a", &["production", "Development"]);
-    let proj = vault.list_projects().unwrap().remove(0);
+    // Secwet has project "service-a" with environments "Development" and "production"
+    let mut secwet = setup_test_secwet(root, "service-a", &["production", "Development"]);
+    let proj = secwet.list_projects().unwrap().remove(0);
     let dev_env = proj
         .environments
         .iter()
@@ -561,14 +559,14 @@ fn test_adversarial_secwet_toml_default_env_fallback() {
         "default_dev_val",
         None,
     );
-    vault.create_secret(draft).unwrap();
-    vault.lock();
+    secwet.create_secret(draft).unwrap();
+    secwet.lock();
 
-    // Write .secwet.toml specifying project and vault, but NO env
+    // Write .secwet.toml specifying project and data_dir, but NO env
     let toml_path = root.join(".secwet.toml");
     std::fs::write(
         &toml_path,
-        format!("project = \"service-a\"\nvault = \"{}\"\n", root.display()),
+        format!("project = \"service-a\"\ndata_dir = '{}'\n", root.display()),
     )
     .unwrap();
 
@@ -715,8 +713,8 @@ fn test_adversarial_cli_import_and_update_roundtrip() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path();
 
-    let vault = setup_test_vault(data_dir, "import-proj", &["development"]);
-    vault.lock();
+    let secwet = setup_test_secwet(data_dir, "import-proj", &["development"]);
+    secwet.lock();
 
     // Initial import
     let env_file_1 = data_dir.join("v1.env");
@@ -806,18 +804,17 @@ NEW_VAR=newly_added_val
 }
 
 // =========================================================================
-// 6. SQLite WAL Concurrency: CLI and Open Vault Simultaneous Access
+// 6. SQLite WAL Concurrency: CLI and Open Secwet Simultaneous Access
 // =========================================================================
 
 #[test]
-fn test_adversarial_concurrency_cli_and_open_vault_wal() {
+fn test_adversarial_concurrency_cli_and_open_secwet_wal() {
     let temp = tempdir().unwrap();
     let data_dir = temp.path().to_path_buf();
 
     let keystore = FileKeyStore::new(data_dir.join(".test_keystore.json"));
-    let mut vault = Vault::create(&data_dir, "concurrency-adversary", &keystore).unwrap();
-    let project = vault
-        .create_project("wal-stress", &["production".to_string()])
+    let mut secwet = Secwet::create(&data_dir, "concurrency-adversary", &keystore).unwrap();
+    let project = secwet.create_project("wal-stress", &["production".to_string()])
         .unwrap();
     let env_id = project.environments[0].id;
 
@@ -826,7 +823,7 @@ fn test_adversarial_concurrency_cli_and_open_vault_wal() {
         let name = format!("SEED_SECRET_{i}");
         let val = format!("seed_value_{i}");
         let draft = SecretDraft::new(project.id, env_id, &name, SecretKind::EnvVar, &val, None);
-        vault.create_secret(draft).unwrap();
+        secwet.create_secret(draft).unwrap();
     }
 
     let running = Arc::new(AtomicBool::new(true));
@@ -946,19 +943,17 @@ fn test_adversarial_concurrency_cli_and_open_vault_wal() {
         count
     }));
 
-    // Meanwhile, in THIS thread, perform concurrent in-process Vault mutations and reads
+    // Meanwhile, in THIS thread, perform concurrent in-process Secwet mutations and reads
     for i in 0..15 {
         let name = format!("HOST_WRITTEN_{i}");
         let val = format!("host_val_{i}");
         let draft = SecretDraft::new(project.id, env_id, &name, SecretKind::EnvVar, &val, None);
-        let meta = vault
-            .create_secret(draft)
-            .expect("host vault create_secret must succeed under concurrent CLI access");
+        let meta = secwet.create_secret(draft)
+            .expect("host secwet create_secret must succeed under concurrent CLI access");
 
         // Reveal the secret we just created
-        let revealed = vault
-            .reveal_secret(meta.id)
-            .expect("host vault reveal_secret must succeed");
+        let revealed = secwet.reveal_secret(meta.id)
+            .expect("host secwet reveal_secret must succeed");
         assert_eq!(revealed.expose_secret(), val.as_str());
 
         // Update the secret
@@ -971,9 +966,8 @@ fn test_adversarial_concurrency_cli_and_open_vault_wal() {
             &updated_val,
             None,
         );
-        vault
-            .update_secret(meta.id, update_draft)
-            .expect("host vault update_secret must succeed");
+        secwet.update_secret(meta.id, update_draft)
+            .expect("host secwet update_secret must succeed");
 
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
@@ -987,8 +981,7 @@ fn test_adversarial_concurrency_cli_and_open_vault_wal() {
     }
 
     // Verify database consistency: both host and CLI secrets exist
-    let all_secrets = vault
-        .list_environment_secrets(env_id)
+    let all_secrets = secwet.list_environment_secrets(env_id)
         .expect("list secrets at end");
     assert!(
         all_secrets.iter().any(|s| s.name == "SEED_SECRET_0"),
@@ -1005,5 +998,5 @@ fn test_adversarial_concurrency_cli_and_open_vault_wal() {
         "CLI-written secret must be present"
     );
 
-    vault.lock();
+    secwet.lock();
 }

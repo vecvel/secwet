@@ -1,13 +1,16 @@
 [package]
 name = "secwet-core"
-description = "Shared security core: vault model, crypto boundaries and sync events."
+description = "Shared security core: secwet store model, crypto boundaries and sync events."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [features]
-default = []
+default = ["os-keyring"]
 test-util = []
+# OS keychain backend (`KeyringStore`) for desktop and CLI. Mobile builds turn
+# it off and pass their own `KeyStore` (iOS Keychain, Android Keystore).
+os-keyring = ["dep:keyring"]
 
 
 [dependencies]
@@ -29,13 +32,17 @@ zeroize.workspace = true
 secrecy.workspace = true
 subtle.workspace = true
 postcard.workspace = true
-keyring.workspace = true
+keyring = { workspace = true, optional = true }
 data-encoding.workspace = true
 
 # Storage & Platform (docs/IMPLEMENTATION.md §5.1, §5.2)
 rusqlite.workspace = true
 directories.workspace = true
 uuid.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 secwet-core = { path = ".", features = ["test-util"] }

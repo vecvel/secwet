@@ -1,27 +1,41 @@
 use crate::dotenv::parse_dotenv;
-use secwet_core::{SecretDraft, Vault};
+use secwet_core::{SecretDraft, Secwet};
 use secwet_proto::SecretKind;
 use std::path::Path;
 use uuid::Uuid;
 
 pub fn execute_import(
-    vault: &mut Vault,
+    secwet: &mut Secwet,
     item_id: Uuid,
     item_name: &str,
     env_id: Option<Uuid>,
     env_name: Option<&str>,
     file_path: &Path,
 ) -> Result<(), String> {
-    let content = std::fs::read_to_string(file_path)
-        .map_err(|e| format!("cannot read file '{}': {e}", file_path.display()))?;
+    let content = if file_path == Path::new("-") {
+        use std::io::Read;
+        let mut buffer = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buffer)
+            .map_err(|e| format!("cannot read from stdin: {e}"))?;
+        buffer
+    } else {
+        std::fs::read_to_string(file_path)
+            .map_err(|e| format!("cannot read file '{}': {e}", file_path.display()))?
+    };
 
     let pairs = parse_dotenv(&content)?;
     if pairs.is_empty() {
-        eprintln!("No secrets found in '{}'", file_path.display());
+        let source = if file_path == Path::new("-") {
+            "stdin".to_string()
+        } else {
+            format!("'{}'", file_path.display())
+        };
+        eprintln!("No secrets found in {source}");
         return Ok(());
     }
 
-    let existing_secrets = vault
+    let existing_secrets = secwet
         .list_secrets(item_id, env_id)
         .map_err(|e| format!("{e}"))?;
     let mut existing_map = std::collections::HashMap::new();
@@ -36,10 +50,10 @@ pub fn execute_import(
         let draft = SecretDraft::new(item_id, env_id, &key, SecretKind::EnvVar, val, None);
 
         if let Some(&id) = existing_map.get(&key) {
-            vault.update_secret(id, draft).map_err(|e| format!("{e}"))?;
+            secwet.update_secret(id, draft).map_err(|e| format!("{e}"))?;
             updated += 1;
         } else {
-            let meta = vault.create_secret(draft).map_err(|e| format!("{e}"))?;
+            let meta = secwet.create_secret(draft).map_err(|e| format!("{e}"))?;
             existing_map.insert(key, meta.id);
             created += 1;
         }

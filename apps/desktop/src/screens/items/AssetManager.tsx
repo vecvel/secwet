@@ -19,6 +19,10 @@ interface Props {
   onUpload: (name: string, mime: string, bytes: number[] | Uint8Array) => Promise<void>;
   onRename: (id: string, name: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  /** Member mode and read-only archive: hide controls the role doesn't allow. */
+  canUpload?: boolean;
+  canRename?: boolean;
+  canDelete?: boolean;
 }
 
 const MAX_ASSET_SIZE = 50 * 1024 * 1024; // 50 MiB
@@ -37,6 +41,9 @@ export function AssetManager({
   onUpload,
   onRename,
   onDelete,
+  canUpload = true,
+  canRename = true,
+  canDelete = true,
 }: Props) {
   const assets = propAssets ?? propFiles ?? [];
   const [dragOver, setDragOver] = useState(false);
@@ -127,6 +134,7 @@ export function AssetManager({
       />
 
       {/* Drag & Drop Upload Zone */}
+      {canUpload && (
       <div
         className={[styles.dropzone, dragOver && styles.dropzoneDragOver]
           .filter(Boolean)
@@ -146,6 +154,7 @@ export function AssetManager({
           Encrypted on-device before storage · Up to 50 MiB per asset
         </span>
       </div>
+      )}
 
       {uploadError && <div className={styles.errorNotice}>{uploadError}</div>}
 
@@ -156,13 +165,15 @@ export function AssetManager({
           title="No assets yet"
           body="Upload documents, certificates, PDFs, images, or configurations."
           action={
-            <Button
-              variant="secondary"
-              icon="plus"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Upload asset
-            </Button>
+            canUpload ? (
+              <Button
+                variant="secondary"
+                icon="plus"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Upload asset
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -180,18 +191,22 @@ export function AssetManager({
                   icon: "download",
                   onSelect: () => downloadDirect(asset),
                 },
-                {
+              ];
+              if (canRename) {
+                menuItems.push({
                   label: "Rename",
                   icon: "pencil",
                   onSelect: () => setRenamingAsset(asset),
-                },
-                {
+                });
+              }
+              if (canDelete) {
+                menuItems.push({
                   label: "Delete",
                   icon: "trash",
                   danger: true,
                   onSelect: () => setDeletingAsset(asset),
-                },
-              ];
+                });
+              }
 
               return (
                 <li key={asset.id} className={styles.assetCard}>

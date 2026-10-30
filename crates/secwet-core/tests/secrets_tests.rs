@@ -1,10 +1,8 @@
 //! Secrets CRUD, copy, and security invariants acceptance tests.
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §6, §7 (F5, F6), §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secrecy::ExposeSecret;
 use secwet_core::keys::MemoryStore;
-use secwet_core::{Error, SecretDraft, SecretKind, Vault};
+use secwet_core::{Error, SecretDraft, SecretKind, Secwet};
 use tempfile::tempdir;
 
 /// Acceptance test: `secret_roundtrip_multiline`
@@ -19,9 +17,9 @@ fn secret_roundtrip_multiline() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "device-1", &keystore).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "device-1", &keystore).unwrap();
 
-    let p = vault.create_project("Infra", &[]).unwrap();
+    let p = secwet.create_project("Infra", &[]).unwrap();
     let env_id = p.environments[0].id;
 
     let multiline_ssh_key = "\
@@ -43,12 +41,12 @@ AAAAAAAABkZXBsb3kBAgME
         Some("Production CI/CD deploy key".to_string()),
     );
 
-    let meta = vault
+    let meta = secwet
         .create_secret(draft)
         .expect("create_secret should succeed");
 
     // Reveal secret and compare byte-for-byte
-    let revealed = vault
+    let revealed = secwet
         .reveal_secret(meta.id)
         .expect("reveal_secret should succeed");
     assert_eq!(
@@ -57,7 +55,7 @@ AAAAAAAABkZXBsb3kBAgME
         "Revealed secret must match input multiline string byte-for-byte"
     );
 
-    vault.lock();
+    secwet.lock();
 }
 
 /// Acceptance test: `secret_name_unique_per_environment_case_sensitive`
@@ -71,9 +69,9 @@ fn secret_name_unique_per_environment_case_sensitive() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "device-1", &keystore).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "device-1", &keystore).unwrap();
 
-    let p = vault.create_project("BackendAPI", &[]).unwrap();
+    let p = secwet.create_project("BackendAPI", &[]).unwrap();
     let dev_env = p.environments[0].id;
 
     // 1. Create initial secret
@@ -85,7 +83,7 @@ fn secret_name_unique_per_environment_case_sensitive() {
         "postgres://localhost:5432/db",
         None,
     );
-    vault.create_secret(draft1).unwrap();
+    secwet.create_secret(draft1).unwrap();
 
     // 2. Duplicate exact name in same environment must fail
     let duplicate_draft = SecretDraft::new(
@@ -96,7 +94,7 @@ fn secret_name_unique_per_environment_case_sensitive() {
         "postgres://localhost:5432/other",
         None,
     );
-    let dup_err = vault.create_secret(duplicate_draft);
+    let dup_err = secwet.create_secret(duplicate_draft);
     match dup_err {
         Err(Error::Duplicate { field: "name" }) => {}
         other => panic!(
@@ -114,7 +112,7 @@ fn secret_name_unique_per_environment_case_sensitive() {
         "postgres://localhost:5432/lower",
         None,
     );
-    let lower_meta = vault
+    let lower_meta = secwet
         .create_secret(lower_draft)
         .expect("Different casing must be allowed per case-sensitive env var semantics");
     assert_eq!(lower_meta.name, "database_url");
@@ -129,18 +127,18 @@ fn secret_name_unique_per_environment_case_sensitive() {
         "postgres://staging:5432/db",
         None,
     );
-    vault
+    secwet
         .create_secret(stg_draft)
         .expect("Same secret name in different environment must succeed");
 
-    vault.lock();
+    secwet.lock();
 }
 
 /// Acceptance test: `list_secrets_never_contains_values`
 ///
 /// Verifies:
 /// 1. Create secrets with sensitive values ("super_secret_password_xyz").
-/// 2. Call `Vault::list_secrets(env_id)`.
+/// 2. Call `Secwet::list_secrets(env_id)`.
 /// 3. Assert each returned `SecretMeta` has `value_tail == "_xyz"`.
 /// 4. Assert no field in `SecretMeta` contains the full value.
 /// 5. Serialize `SecretMeta` to JSON and confirm full value is absent.
@@ -149,9 +147,9 @@ fn list_secrets_never_contains_values() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "device-1", &keystore).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "device-1", &keystore).unwrap();
 
-    let p = vault.create_project("SecurityApp", &[]).unwrap();
+    let p = secwet.create_project("SecurityApp", &[]).unwrap();
     let env_id = p.environments[0].id;
 
     let sensitive_password = "super_secret_password_xyz";
@@ -164,9 +162,9 @@ fn list_secrets_never_contains_values() {
         sensitive_password,
         Some("Top secret credential".to_string()),
     );
-    vault.create_secret(draft).unwrap();
+    secwet.create_secret(draft).unwrap();
 
-    let secret_list = vault.list_environment_secrets(env_id).unwrap();
+    let secret_list = secwet.list_environment_secrets(env_id).unwrap();
     assert_eq!(secret_list.len(), 1);
 
     let meta = &secret_list[0];
@@ -191,7 +189,7 @@ fn list_secrets_never_contains_values() {
         "Serialized SecretMeta must contain value_tail"
     );
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
@@ -199,13 +197,13 @@ fn copy_secret_to_environment_and_refuse_duplicate() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "device-1", &keystore).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "device-1", &keystore).unwrap();
 
-    let p = vault.create_project("CopyTest", &[]).unwrap();
+    let p = secwet.create_project("CopyTest", &[]).unwrap();
     let dev_env = p.environments[0].id;
     let stg_env = p.environments[1].id;
 
-    let original = vault
+    let original = secwet
         .create_secret(SecretDraft::new(
             p.id,
             dev_env,
@@ -217,7 +215,7 @@ fn copy_secret_to_environment_and_refuse_duplicate() {
         .unwrap();
 
     // Copy to Staging
-    let copied = vault
+    let copied = secwet
         .copy_secret_to_environment(original.id, stg_env)
         .expect("Copy to Staging should succeed");
 
@@ -231,11 +229,11 @@ fn copy_secret_to_environment_and_refuse_duplicate() {
     assert_eq!(copied.value_tail, "cdef");
 
     // Revealed value in Staging matches original
-    let rev_copied = vault.reveal_secret(copied.id).unwrap();
+    let rev_copied = secwet.reveal_secret(copied.id).unwrap();
     assert_eq!(rev_copied.expose_secret(), "sk_test_1234567890abcdef");
 
     // Attempting to copy again to Staging fails with Duplicate
-    let dup_err = vault.copy_secret_to_environment(original.id, stg_env);
+    let dup_err = secwet.copy_secret_to_environment(original.id, stg_env);
     match dup_err {
         Err(Error::Duplicate { field: "name" }) => {}
         other => panic!(
@@ -244,7 +242,7 @@ fn copy_secret_to_environment_and_refuse_duplicate() {
         ),
     }
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
@@ -252,8 +250,8 @@ fn secret_name_regex_and_length_validation() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "device-1", &keystore).unwrap();
-    let p = vault.create_project("ValidationProj", &[]).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "device-1", &keystore).unwrap();
+    let p = secwet.create_project("ValidationProj", &[]).unwrap();
     let env_id = p.environments[0].id;
 
     // Valid secret names
@@ -264,7 +262,7 @@ fn secret_name_regex_and_length_validation() {
         "db.host@prod",
         "my-secret-token",
     ] {
-        vault
+        secwet
             .create_secret(SecretDraft::new(
                 p.id,
                 env_id,
@@ -278,7 +276,7 @@ fn secret_name_regex_and_length_validation() {
 
     // Invalid: starts with number
     assert!(matches!(
-        vault.create_secret(SecretDraft::new(
+        secwet.create_secret(SecretDraft::new(
             p.id,
             env_id,
             "1NUMBER_FIRST",
@@ -291,7 +289,7 @@ fn secret_name_regex_and_length_validation() {
 
     // Invalid: contains spaces
     assert!(matches!(
-        vault.create_secret(SecretDraft::new(
+        secwet.create_secret(SecretDraft::new(
             p.id,
             env_id,
             "KEY WITH SPACES",
@@ -304,7 +302,7 @@ fn secret_name_regex_and_length_validation() {
 
     // Invalid: empty value
     assert!(matches!(
-        vault.create_secret(SecretDraft::new(
+        secwet.create_secret(SecretDraft::new(
             p.id,
             env_id,
             "EMPTY_VAL_KEY",
@@ -318,7 +316,7 @@ fn secret_name_regex_and_length_validation() {
     // Invalid: > 64 KiB value
     let too_large = "x".repeat(65_537);
     assert!(matches!(
-        vault.create_secret(SecretDraft::new(
+        secwet.create_secret(SecretDraft::new(
             p.id,
             env_id,
             "TOO_LARGE_VAL",
@@ -329,7 +327,7 @@ fn secret_name_regex_and_length_validation() {
         Err(Error::Invalid { field: "value", .. })
     ));
 
-    vault.lock();
+    secwet.lock();
 }
 
 #[test]
@@ -337,12 +335,12 @@ fn update_secret_moves_between_environments() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = MemoryStore::new();
 
-    let mut vault = Vault::create(dir.path(), "device-1", &keystore).unwrap();
-    let p = vault.create_project("MoveTest", &[]).unwrap();
+    let mut secwet = Secwet::create(dir.path(), "device-1", &keystore).unwrap();
+    let p = secwet.create_project("MoveTest", &[]).unwrap();
     let dev_env = p.environments[0].id;
     let stg_env = p.environments[1].id;
 
-    let original = vault
+    let original = secwet
         .create_secret(SecretDraft::new(
             p.id,
             dev_env,
@@ -354,7 +352,7 @@ fn update_secret_moves_between_environments() {
         .unwrap();
 
     // Move to Staging with updated value
-    let updated = vault
+    let updated = secwet
         .update_secret(
             original.id,
             SecretDraft::new(
@@ -374,13 +372,13 @@ fn update_secret_moves_between_environments() {
     assert_eq!(updated.value_tail, "4321");
 
     // Verify it is no longer in dev_env
-    let dev_secrets = vault.list_environment_secrets(dev_env).unwrap();
+    let dev_secrets = secwet.list_environment_secrets(dev_env).unwrap();
     assert!(dev_secrets.is_empty());
 
     // Verify it is now in stg_env
-    let stg_secrets = vault.list_environment_secrets(stg_env).unwrap();
+    let stg_secrets = secwet.list_environment_secrets(stg_env).unwrap();
     assert_eq!(stg_secrets.len(), 1);
     assert_eq!(stg_secrets[0].id, original.id);
 
-    vault.lock();
+    secwet.lock();
 }

@@ -31,10 +31,6 @@
   transition: background 0.15s ease;
 }
 
-.itemCard:active {
-  background: var(--color-accent-tint-soft);
-}
-
 .itemMain {
   display: flex;
   flex-direction: column;

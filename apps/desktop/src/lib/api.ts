@@ -2,7 +2,7 @@
  * apps/desktop/src/lib/api.ts
  *
  * Typed Tauri 2 IPC client and seamless browser mock fallback.
- * Authoritative: docs/IMPLEMENTATION.md §9.1, §9.2, and secwet-proto.
+ * The types mirror the secwet-proto wire contract.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -14,12 +14,22 @@ import { type SecretKind } from "../data/mock";
 
 export type { SecretKind };
 
+export interface SpaceView {
+  id: string;
+  name: string;
+  position: number;
+  icon?: string | null;
+  is_default: boolean;
+  groups_count: number;
+}
+
 export interface GroupView {
   id: string;
   name: string;
   position: number;
   icon?: string | null;
   items_count: number;
+  space_id?: string | null;
 }
 export type LabelView = GroupView;
 
@@ -81,6 +91,16 @@ export interface SecretDraft {
   environmentId?: string | null;
 }
 
+export interface ActiveSession {
+  session_id: string;
+  pid: number;
+  item_id: string;
+  environment_id?: string | null;
+  command: string;
+  secret_ids: string[];
+  started_at: number;
+}
+
 export interface AssetMetaView {
   id: string;
   item_id: string;
@@ -139,13 +159,49 @@ export interface DashboardConfig {
   widgets: string[];
 }
 
-export type VaultStatus =
+export interface RelayStatusDto {
+  connected: boolean;
+  relay_url: string;
+  plan: string;
+  device_limit: number;
+  active_devices: number;
+  expires_at?: string | null;
+  pending_outbox_count: number;
+}
+
+/** Plan of this Secwet. `paused` means Pro ended: sync is paused, local data is untouched. */
+export type PlanState = "free" | "pro" | "paused";
+
+export interface PlanStatusDto {
+  plan: PlanState;
+  device_limit: number;
+  active_devices: number;
+  /** RFC 3339 end of the Pro entitlement, if it has one. */
+  expires_at?: string | null;
+  /** Unix ms of the last entitlement check on the relay. */
+  checked_at?: number | null;
+  relay_configured: boolean;
+  /** Sync, pairing and sharing run only on an active Pro plan. */
+  sync_enabled: boolean;
+  /** Revocation and key rotation over the relay (Pro, and Pro that ended). */
+  relay_security: boolean;
+  secwet_id: string;
+}
+
+export interface RegisterSecwetResponse {
+  secwet_id: string;
+  device_id: string;
+  created_at: string;
+  current_epoch: number;
+}
+
+export type SecwetStatus =
   | { status: "uninitialized" }
-  | { status: "locked"; vault_id?: string }
-  | { status: "unlocked"; vault_id?: string }
+  | { status: "locked"; secwet_id?: string }
+  | { status: "unlocked"; secwet_id?: string }
   | "Uninitialized"
-  | { Locked: { vault_id: string } }
-  | { Unlocked: { vault_id: string } };
+  | { Locked: { secwet_id: string } }
+  | { Unlocked: { secwet_id: string } };
 
 export interface RecentSecret {
   id: string;
@@ -160,7 +216,7 @@ export interface RecentSecret {
 }
 
 export interface ChecklistState {
-  vault_created: boolean;
+  secwet_created: boolean;
   recovery_key_created: boolean;
   cli_connected: boolean;
   add_device_done: boolean;
@@ -206,9 +262,23 @@ export interface DeviceView {
   fingerprint: string;
   added_at: number;
   last_sync_at?: number;
+  last_seen_at?: number;
   revoked_at?: number;
   current?: boolean;
+  is_current?: boolean;
 }
+
+export interface PairingSessionInfo {
+  session_id: string;
+  expires_at: string;
+  qr_payload: string;
+}
+
+export type PairingPollResponse =
+  | { status: "waiting" }
+  | { status: "found"; name: string; platform: string; fingerprint: string; code: string; device_id: string }
+  | { status: "expired" }
+  | { status: "approved" };
 
 export interface UiError {
   code: string;
@@ -216,7 +286,7 @@ export interface UiError {
   message: string;
 }
 
-export interface VaultChangedEvent {
+export interface SecwetChangedEvent {
   scope: string; // "labels" | "items" | "environments" | "secrets" | "files" | "notes" | "dashboard" | "settings" | "all"
 }
 
@@ -230,11 +300,191 @@ export interface SyncReport {
   pulled: number;
 }
 
+/** The biometric the OS offers; "none" hides every biometric control. */
+export type BiometryKind =
+  | "none"
+  | "touch_id"
+  | "face_id"
+  | "optic_id"
+  | "windows_hello_face"
+  | "windows_hello_fingerprint"
+  | "windows_hello_iris"
+  | "fingerprint"
+  // Android only; listed so the shared app-layer enum maps one to one.
+  | "face"
+  | "iris"
+  | "multiple";
+
+export interface BiometricStatus {
+  available: boolean;
+  kind: BiometryKind;
+  /** Unlock requires the biometric check (enforced in Rust). */
+  enabled: boolean;
+}
+
+export interface CliInstallStatus {
+  installed: boolean;
+  path: string | null;
+  in_path: boolean;
+  binary_found: boolean;
+  binary_path: string | null;
+  symlink_target: string | null;
+  can_install: boolean;
+  error?: string | null;
+}
+
+export interface RecoveryStatusDto {
+  created: boolean;
+  created_at?: number;
+}
+
+export interface ExportSummaryDto {
+  file_path: string;
+  spaces_count: number;
+  labels_count: number;
+  items_count: number;
+  environments_count: number;
+  secrets_count: number;
+  notes_count: number;
+  files_count: number;
+  bytes_written: number;
+  projects_count?: number;
+  assets_count?: number;
+}
+
+// ----------------------------------------------------------------------------
+// Revocation, key rotation, link status
+// ----------------------------------------------------------------------------
+
+export interface RevokeResultDto {
+  device_id: string;
+  wipe_requested: boolean;
+  rotation_recommended: boolean;
+}
+
+export interface KeyStatusDto {
+  epoch: number;
+  /** Milliseconds since the Unix epoch, or null when the key was never rotated. */
+  rotated_at: number | null;
+  rotation_recommended: boolean;
+  pending_reason: string | null;
+}
+
+export interface KeyRotationReport {
+  previous_epoch: number;
+  epoch: number;
+  resealed: number;
+  recipients: number;
+  adopted_from_conflict: boolean;
+}
+
+export interface LinkStatusDto {
+  state: "active" | "unlinked";
+  revoked_at: number | null;
+}
+
+// ----------------------------------------------------------------------------
+// Members, roles, invitations
+// ----------------------------------------------------------------------------
+
+export type TreeRole = "admin" | "editor" | "viewer" | "no_access";
+export type TreeNodeKind = "workspace" | "space" | "group" | "item" | "general" | "environment";
+
+export interface GrantInput {
+  kind: TreeNodeKind;
+  /** Node id; null for the workspace. For "general" this is the item id. */
+  id?: string | null;
+  role: TreeRole;
+}
+
+export interface GrantView extends GrantInput {
+  /** Human path, for example "Backend / auth-service / Production". */
+  label: string;
+  /** Optional: the space that contains the node, when the backend sends it. */
+  space_id?: string | null;
+}
+
+export interface MemberDeviceView {
+  id: string;
+  fingerprint: string;
+  revoked: boolean;
+}
+
+export type MemberStatus = "invited" | "accepted" | "active" | "removed" | "expired";
+
+export interface MemberView {
+  member_id: string;
+  email: string | null;
+  status: MemberStatus;
+  grants: GrantView[];
+  devices: MemberDeviceView[];
+  invited_at: number;
+  invitation_id: string | null;
+}
+
+export interface InviteResultDto {
+  invitation_id: string;
+  member_id: string;
+  link: string;
+  expires_at: number;
+}
+
+export interface ScopeNodeView {
+  kind: TreeNodeKind;
+  id: string;
+  label: string;
+  /** Space 0, group 1, item 2, general / environment 3. */
+  depth: number;
+  parent_id: string | null;
+}
+
+export interface AccessView {
+  is_owner: boolean;
+  grants: GrantView[];
+}
+
+export const CROCKFORD_CHARS = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/**
+ * Normalizes user-supplied recovery key input according to Crockford base32:
+ * - Upper-cases all letters
+ * - Strips hyphens and whitespace
+ * - Replaces 'I' and 'L' with '1'
+ * - Replaces 'O' with '0'
+ * - Formats into groups of 5 Crockford characters (up to 25 chars)
+ */
+export function normalizeRecoveryKey(input: string): string {
+  let cleaned = "";
+  for (const ch of input) {
+    if (/\s|-/.test(ch)) continue;
+    const upper = ch.toUpperCase();
+    if (upper === "I" || upper === "L") {
+      cleaned += "1";
+    } else if (upper === "O") {
+      cleaned += "0";
+    } else if (CROCKFORD_CHARS.includes(upper)) {
+      cleaned += upper;
+    }
+  }
+  const truncated = cleaned.slice(0, 25);
+  const chunks = truncated.match(/.{1,5}/g);
+  return chunks ? chunks.join("-") : "";
+}
+
+export function isValidRecoveryKey(formattedOrRaw: string): boolean {
+  const stripped = formattedOrRaw.replace(/[\s-]/g, "");
+  if (stripped.length !== 25) return false;
+  for (const ch of stripped) {
+    if (!CROCKFORD_CHARS.includes(ch)) return false;
+  }
+  return true;
+}
+
 // ============================================================================
-// 2. Helpers for VaultStatus and Errors
+// 2. Helpers for SecwetStatus and Errors
 // ============================================================================
 
-export function isUnlocked(status: VaultStatus | null | undefined): boolean {
+export function isUnlocked(status: SecwetStatus | null | undefined): boolean {
   if (!status) return false;
   if (typeof status === "object") {
     if ("status" in status && status.status === "unlocked") return true;
@@ -243,7 +493,7 @@ export function isUnlocked(status: VaultStatus | null | undefined): boolean {
   return false;
 }
 
-export function isLocked(status: VaultStatus | null | undefined): boolean {
+export function isLocked(status: SecwetStatus | null | undefined): boolean {
   if (!status) return false;
   if (typeof status === "object") {
     if ("status" in status && status.status === "locked") return true;
@@ -252,19 +502,31 @@ export function isLocked(status: VaultStatus | null | undefined): boolean {
   return false;
 }
 
-export function isUninitialized(status: VaultStatus | null | undefined): boolean {
+export function isUninitialized(status: SecwetStatus | null | undefined): boolean {
   if (!status) return false;
   if (typeof status === "string") return status === "Uninitialized";
   if (typeof status === "object" && "status" in status && status.status === "uninitialized") return true;
   return false;
 }
 
-export function getVaultId(status: VaultStatus | null | undefined): string | undefined {
+export function getSecwetId(status: SecwetStatus | null | undefined): string | undefined {
   if (!status || typeof status !== "object") return undefined;
-  if ("vault_id" in status && typeof status.vault_id === "string") return status.vault_id;
-  if ("Unlocked" in status) return status.Unlocked.vault_id;
-  if ("Locked" in status) return status.Locked.vault_id;
+  if ("secwet_id" in status && typeof status.secwet_id === "string") return status.secwet_id;
+  if ("Unlocked" in status) return status.Unlocked.secwet_id;
+  if ("Locked" in status) return status.Locked.secwet_id;
   return undefined;
+}
+
+/** True when the call failed because it needs an active Pro plan (or Pro ended). */
+export function isPlanError(err: unknown): boolean {
+  const code = String((err as { code?: string } | null)?.code ?? "").toLowerCase();
+  return code === "needs_pro" || code === "sync_paused" || code === "relay_not_entitled";
+}
+
+/** True when the call failed because this device has no sync relay set up. */
+export function isRelayNotConfigured(err: unknown): boolean {
+  const code = String((err as { code?: string } | null)?.code ?? "").toLowerCase();
+  return code === "relay_not_configured" || code === "relay_relay_not_configured";
 }
 
 /**
@@ -287,8 +549,9 @@ export function formatUiError(err: unknown, defaultMessage = "Something went wro
     case "last_environment":
       return "Cannot delete the last environment.";
     case "locked":
-    case "vault_locked":
       return "Secwet is locked. Unlock it to continue.";
+    case "not_initialized":
+      return "Secwet not initialized on this device.";
     case "crypto":
     case "crypto_error":
       return "This item could not be decrypted.";
@@ -300,6 +563,28 @@ export function formatUiError(err: unknown, defaultMessage = "Something went wro
       return "Item not found.";
     case "keystore_error":
       return "Secure storage error.";
+    case "revoked":
+      return "This device was unlinked from Secwet. Changes are turned off.";
+    case "forbidden":
+      return uiErr.message || "You don't have access to do that.";
+    case "epoch_conflict":
+      return "Another device changed this at the same time. Try again.";
+    case "invalid_invitation":
+      return "This invite link isn't valid. Ask for a new one.";
+    case "already_joined":
+      return "This invite was already used.";
+    case "expired":
+      return "This invite link has expired. Ask for a new one.";
+    case "exists":
+      return uiErr.message || "This person already has an invite or access.";
+    case "relay_not_configured":
+    case "relay_relay_not_configured":
+      return "Sharing needs sync. Set it up in Settings > Sync.";
+    case "needs_pro":
+    case "relay_not_entitled":
+      return "This needs the Pro plan. Everything on this device keeps working on Free.";
+    case "sync_paused":
+      return "Sync is paused because Pro ended. Everything on this device stays available.";
     default:
       return uiErr.message || defaultMessage;
   }
@@ -312,9 +597,33 @@ export function formatUiError(err: unknown, defaultMessage = "Something went wro
 export const isTauri = (): boolean =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+/**
+ * Copies through the document's copy event instead of the async clipboard API.
+ * Used by the browser preview mock and for rich (HTML) note copies. Secrets, recovery keys
+ * and invite links go through the Rust clipboard in the desktop app, which clears itself.
+ */
+export function copyViaDocument(plain: string, html?: string): void {
+  if (typeof document === "undefined") return;
+  const onCopy = (e: ClipboardEvent) => {
+    e.preventDefault();
+    e.clipboardData?.setData("text/plain", plain);
+    if (html) e.clipboardData?.setData("text/html", html);
+  };
+  document.addEventListener("copy", onCopy);
+  try {
+    if (!document.execCommand("copy")) throw new Error("copy failed");
+  } finally {
+    document.removeEventListener("copy", onCopy);
+  }
+}
+
 /** In-memory mock store for web browser preview (`pnpm desktop:dev`). */
 export class BrowserMockBackend {
-  private status: VaultStatus = { status: "unlocked", vault_id: "00000000-0000-0000-0000-000000000001" };
+  private status: SecwetStatus = {
+    status: "unlocked",
+    secwet_id: "00000000-0000-0000-0000-000000000001",
+  };
+  private spaces: SpaceView[];
   private labels: LabelView[];
   private items: ItemView[];
   private environments: EnvironmentView[];
@@ -369,16 +678,31 @@ export class BrowserMockBackend {
       added_at: Date.now() - 86400000 * 3,
       current: true,
     },
+    {
+      id: "dev-iphone-1",
+      name: "iPhone 16",
+      platform: "iOS",
+      fingerprint: "91DD 3C07 5AB4",
+      added_at: Date.now() - 86400000 * 2,
+      last_sync_at: Date.now() - 3600000,
+      current: false,
+    },
   ];
   private cliConnected = false;
   private recoveryCreated = false;
+  private activeSessions: ActiveSession[] = [];
   private listeners = new Map<string, Set<(payload: any) => void>>();
 
   constructor() {
+    this.spaces = [
+      { id: "space-personal", name: "Personal", position: 0, icon: "user", is_default: true, groups_count: 2 },
+      { id: "space-work", name: "Work", position: 1, icon: "briefcase", is_default: false, groups_count: 1 },
+    ];
+
     this.labels = [
-      { id: "lbl-proj", name: "Projects", position: 0, icon: "folder", items_count: 2 },
-      { id: "lbl-pers", name: "Personal", position: 1, icon: "key", items_count: 1 },
-      { id: "lbl-work", name: "Work", position: 2, icon: "devices", items_count: 0 },
+      { id: "lbl-proj", name: "Projects", position: 0, icon: "folder", items_count: 2, space_id: "space-personal" },
+      { id: "lbl-pers", name: "Personal", position: 1, icon: "key", items_count: 1, space_id: "space-personal" },
+      { id: "lbl-work", name: "Work", position: 2, icon: "devices", items_count: 0, space_id: "space-work" },
     ];
 
     this.items = [
@@ -532,16 +856,19 @@ export class BrowserMockBackend {
   }
 
   private emit(event: string, payload?: any) {
-    const handlers = this.listeners.get(event);
-    if (handlers) {
-      handlers.forEach((h) => {
-        try {
-          h(payload);
-        } catch (e) {
-          console.error("Mock event handler error:", e);
-        }
-      });
-    }
+    const fire = (ev: string) => {
+      const handlers = this.listeners.get(ev);
+      if (handlers) {
+        handlers.forEach((h) => {
+          try {
+            h(payload);
+          } catch (e) {
+            console.error("Mock event handler error:", e);
+          }
+        });
+      }
+    };
+    fire(event);
   }
 
   public listen(event: string, handler: (payload: any) => void): UnlistenFn {
@@ -565,31 +892,110 @@ export class BrowserMockBackend {
     for (const label of this.labels) {
       label.items_count = this.items.filter((i) => i.label_id === label.id).length;
     }
+    for (const space of this.spaces) {
+      space.groups_count = this.labels.filter((l) => l.space_id === space.id).length;
+    }
     for (const env of this.environments) {
       env.secret_count = this.secrets.filter((s) => s.environment_id === env.id).length;
     }
   }
 
   // 1. Lifecycle
-  async vaultStatus(): Promise<VaultStatus> {
+  async secwetStatus(): Promise<SecwetStatus> {
     return this.status;
   }
 
-  async vaultCreate(deviceName?: string): Promise<VaultStatus> {
-    this.status = { status: "unlocked", vault_id: crypto.randomUUID() };
+  async secwetCreate(deviceName?: string): Promise<SecwetStatus> {
+    const id = crypto.randomUUID();
+    this.status = { status: "unlocked", secwet_id: id };
     if (deviceName) this.settings.device_name = deviceName;
-    this.emit("vault://changed", { scope: "all" });
+    this.emit("secwet://changed", { scope: "all" });
     return this.status;
   }
 
-  async vaultUnlock(): Promise<void> {
-    this.status = { status: "unlocked", vault_id: "00000000-0000-0000-0000-000000000001" };
-    this.emit("vault://changed", { scope: "all" });
+  async secwetUnlock(): Promise<void> {
+    if (this.biometricEnabled && this.biometricKind !== "none") {
+      // Stands in for the OS prompt the Rust side shows.
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+    this.status = {
+      status: "unlocked",
+      secwet_id: "00000000-0000-0000-0000-000000000001",
+      };
+    this.emit("secwet://changed", { scope: "all" });
   }
 
-  async vaultLock(): Promise<void> {
-    this.status = { status: "locked", vault_id: "00000000-0000-0000-0000-000000000001" };
-    this.emit("vault://locked");
+  async secwetLock(): Promise<void> {
+    this.status = {
+      status: "locked",
+      secwet_id: "00000000-0000-0000-0000-000000000001",
+      };
+    this.emit("secwet://locked");
+  }
+
+  // 1.5. Spaces
+  async spacesList(): Promise<SpaceView[]> {
+    this.updateCounts();
+    return JSON.parse(JSON.stringify(this.spaces.sort((a, b) => a.position - b.position)));
+  }
+
+  async spaceCreate(name: string, icon?: string | null): Promise<SpaceView> {
+    const trimmed = name.trim();
+    if (this.spaces.some((s) => s.name.toLowerCase() === trimmed.toLowerCase())) {
+      throw { code: "duplicate", message: `A space called "${trimmed}" already exists.` };
+    }
+    const newSpace: SpaceView = {
+      id: crypto.randomUUID(),
+      name: trimmed,
+      position: this.spaces.length,
+      icon: icon || null,
+      is_default: false,
+      groups_count: 0,
+    };
+    this.spaces.push(newSpace);
+    this.emit("secwet://changed", { scope: "spaces" });
+    return newSpace;
+  }
+
+  async spaceRename(id: string, name: string, icon?: string | null): Promise<SpaceView> {
+    const s = this.spaces.find((x) => x.id === id);
+    if (!s) throw { code: "not_found", message: "Space not found" };
+    s.name = name.trim();
+    if (icon !== undefined) s.icon = icon;
+    this.emit("secwet://changed", { scope: "spaces" });
+    return { ...s };
+  }
+
+  async spaceDelete(id: string): Promise<void> {
+    const s = this.spaces.find((x) => x.id === id);
+    if (!s) throw { code: "not_found", message: "Space not found" };
+    if (s.is_default || s.name.toLowerCase() === "personal") {
+      throw { code: "invalid", message: "Cannot delete the default Personal space." };
+    }
+    const defaultSpace = this.spaces.find((x) => x.is_default) || this.spaces[0];
+    this.labels.forEach((l) => {
+      if (l.space_id === id) l.space_id = defaultSpace?.id || null;
+    });
+    this.spaces = this.spaces.filter((x) => x.id !== id);
+    this.updateCounts();
+    this.emit("secwet://changed", { scope: "spaces" });
+    this.emit("secwet://changed", { scope: "labels" });
+  }
+
+  async spaceReorder(ids: string[]): Promise<void> {
+    ids.forEach((id, pos) => {
+      const s = this.spaces.find((x) => x.id === id);
+      if (s) s.position = pos;
+    });
+    this.emit("secwet://changed", { scope: "spaces" });
+  }
+
+  async groupMoveToSpace(id: string, spaceId: string): Promise<void> {
+    const l = this.labels.find((x) => x.id === id);
+    if (!l) throw { code: "not_found", message: "Group not found" };
+    l.space_id = spaceId;
+    this.updateCounts();
+    this.emit("secwet://changed", { scope: "labels" });
   }
 
   // 2. Groups & Labels
@@ -598,9 +1004,11 @@ export class BrowserMockBackend {
     return JSON.parse(JSON.stringify(this.labels.sort((a, b) => a.position - b.position)));
   }
 
-  async groupCreate(name: string, icon?: string | null): Promise<GroupView> {
+  async groupCreate(name: string, icon?: string | null, spaceId?: string | null): Promise<GroupView> {
     const trimmed = name.trim();
-    if (this.labels.some((l) => l.name.toLowerCase() === trimmed.toLowerCase())) {
+    const defaultSpace = this.spaces.find((s) => s.is_default) || this.spaces[0];
+    const targetSpaceId = spaceId || defaultSpace?.id || null;
+    if (this.labels.some((l) => l.space_id === targetSpaceId && l.name.toLowerCase() === trimmed.toLowerCase())) {
       throw { code: "duplicate", message: `A group called "${trimmed}" already exists.` };
     }
     const newGroup: GroupView = {
@@ -609,10 +1017,11 @@ export class BrowserMockBackend {
       position: this.labels.length,
       icon: icon || null,
       items_count: 0,
+      space_id: targetSpaceId,
     };
     this.labels.push(newGroup);
-    this.emit("vault://changed", { scope: "groups" });
-    this.emit("vault://changed", { scope: "labels" });
+    this.emit("secwet://changed", { scope: "groups" });
+    this.emit("secwet://changed", { scope: "labels" });
     return newGroup;
   }
 
@@ -621,8 +1030,8 @@ export class BrowserMockBackend {
     if (!l) throw { code: "not_found", message: "Group not found" };
     l.name = name.trim();
     if (icon !== undefined) l.icon = icon;
-    this.emit("vault://changed", { scope: "groups" });
-    this.emit("vault://changed", { scope: "labels" });
+    this.emit("secwet://changed", { scope: "groups" });
+    this.emit("secwet://changed", { scope: "labels" });
   }
 
   async groupDelete(id: string): Promise<void> {
@@ -634,8 +1043,8 @@ export class BrowserMockBackend {
     this.files = this.files.filter((f) => !itemIds.includes(f.item_id));
     this.notes = this.notes.filter((n) => !itemIds.includes(n.item_id));
     this.updateCounts();
-    this.emit("vault://changed", { scope: "groups" });
-    this.emit("vault://changed", { scope: "labels" });
+    this.emit("secwet://changed", { scope: "groups" });
+    this.emit("secwet://changed", { scope: "labels" });
   }
 
   async groupReorder(ids: string[]): Promise<void> {
@@ -643,8 +1052,8 @@ export class BrowserMockBackend {
       const l = this.labels.find((x) => x.id === id);
       if (l) l.position = pos;
     });
-    this.emit("vault://changed", { scope: "groups" });
-    this.emit("vault://changed", { scope: "labels" });
+    this.emit("secwet://changed", { scope: "groups" });
+    this.emit("secwet://changed", { scope: "labels" });
   }
 
   async labelsList(): Promise<LabelView[]> {
@@ -696,7 +1105,7 @@ export class BrowserMockBackend {
     };
     this.items.push(newItem);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "items" });
+    this.emit("secwet://changed", { scope: "items" });
     return newItem;
   }
 
@@ -705,7 +1114,7 @@ export class BrowserMockBackend {
     if (!it) throw { code: "not_found", message: "Item not found" };
     it.name = name.trim();
     if (description !== undefined) it.description = description?.trim() || null;
-    this.emit("vault://changed", { scope: "items" });
+    this.emit("secwet://changed", { scope: "items" });
   }
 
   async itemDelete(id: string): Promise<void> {
@@ -715,7 +1124,7 @@ export class BrowserMockBackend {
     this.files = this.files.filter((f) => f.item_id !== id);
     this.notes = this.notes.filter((n) => n.item_id !== id);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "items" });
+    this.emit("secwet://changed", { scope: "items" });
   }
 
   // 4. Environments
@@ -745,7 +1154,7 @@ export class BrowserMockBackend {
     };
     this.environments.push(newEnv);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "environments" });
+    this.emit("secwet://changed", { scope: "environments" });
     return newEnv;
   }
 
@@ -753,7 +1162,7 @@ export class BrowserMockBackend {
     const env = this.environments.find((e) => e.id === id);
     if (!env) throw { code: "not_found", message: "Environment not found" };
     env.name = name.trim();
-    this.emit("vault://changed", { scope: "environments" });
+    this.emit("secwet://changed", { scope: "environments" });
   }
 
   async environmentDelete(id: string, preserveContent?: boolean | null): Promise<void> {
@@ -779,7 +1188,7 @@ export class BrowserMockBackend {
 
     this.environments = this.environments.filter((e) => e.id !== id);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "environments" });
+    this.emit("secwet://changed", { scope: "environments" });
   }
 
   // 5. Secrets
@@ -815,9 +1224,7 @@ export class BrowserMockBackend {
   async secretCopy(id: string): Promise<void> {
     const s = this.secrets.find((x) => x.id === id);
     if (!s) throw { code: "not_found", message: "Secret not found" };
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      await navigator.clipboard.writeText(s.value);
-    }
+    copyViaDocument(s.value);
   }
 
   async secretCreate(draft: SecretDraft): Promise<SecretMeta> {
@@ -836,7 +1243,7 @@ export class BrowserMockBackend {
     };
     this.secrets.push(item);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "secrets" });
+    this.emit("secwet://changed", { scope: "secrets" });
     return {
       id: item.id,
       project_id: item.item_id,
@@ -870,7 +1277,7 @@ export class BrowserMockBackend {
       updated_at: Date.now(),
     };
     this.updateCounts();
-    this.emit("vault://changed", { scope: "secrets" });
+    this.emit("secwet://changed", { scope: "secrets" });
     return {
       id,
       project_id: targetItemId,
@@ -890,7 +1297,7 @@ export class BrowserMockBackend {
   async secretDelete(id: string): Promise<void> {
     this.secrets = this.secrets.filter((x) => x.id !== id);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "secrets" });
+    this.emit("secwet://changed", { scope: "secrets" });
   }
 
   async secretCopyToEnvironment(id: string, targetEnvironmentId?: string | null): Promise<SecretMeta> {
@@ -905,7 +1312,7 @@ export class BrowserMockBackend {
     };
     this.secrets.push(copyItem);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "secrets" });
+    this.emit("secwet://changed", { scope: "secrets" });
     return {
       id: newId,
       project_id: copyItem.item_id,
@@ -970,8 +1377,8 @@ export class BrowserMockBackend {
     };
     this.files.push(newFile);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "assets" });
-    this.emit("vault://changed", { scope: "files" });
+    this.emit("secwet://changed", { scope: "assets" });
+    this.emit("secwet://changed", { scope: "files" });
     return {
       id: newFile.id,
       item_id: newFile.item_id,
@@ -1021,8 +1428,8 @@ export class BrowserMockBackend {
     if (!f) throw { code: "not_found", message: "Asset not found" };
     f.name = name.trim();
     f.updated_at = Date.now();
-    this.emit("vault://changed", { scope: "assets" });
-    this.emit("vault://changed", { scope: "files" });
+    this.emit("secwet://changed", { scope: "assets" });
+    this.emit("secwet://changed", { scope: "files" });
     return {
       id: f.id,
       item_id: f.item_id,
@@ -1042,8 +1449,8 @@ export class BrowserMockBackend {
   async assetDelete(id: string): Promise<void> {
     this.files = this.files.filter((x) => x.id !== id);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "assets" });
-    this.emit("vault://changed", { scope: "files" });
+    this.emit("secwet://changed", { scope: "assets" });
+    this.emit("secwet://changed", { scope: "files" });
   }
 
   async fileDelete(id: string): Promise<void> {
@@ -1091,7 +1498,7 @@ export class BrowserMockBackend {
     };
     this.notes.push(newNote);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "notes" });
+    this.emit("secwet://changed", { scope: "notes" });
     return newNote;
   }
 
@@ -1107,29 +1514,25 @@ export class BrowserMockBackend {
       n.content = draft.content;
     }
     n.updated_at = Date.now();
-    this.emit("vault://changed", { scope: "notes" });
+    this.emit("secwet://changed", { scope: "notes" });
     return { ...n, environment_id: n.environment_id ?? null };
   }
 
   async noteDelete(id: string): Promise<void> {
     this.notes = this.notes.filter((x) => x.id !== id);
     this.updateCounts();
-    this.emit("vault://changed", { scope: "notes" });
+    this.emit("secwet://changed", { scope: "notes" });
   }
 
   async noteCopyPlain(id: string): Promise<void> {
     const n = this.notes.find((x) => x.id === id);
     if (!n) throw { code: "not_found", message: "Note not found" };
     const plain = n.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      await navigator.clipboard.writeText(plain);
-    }
+    copyViaDocument(plain);
   }
 
   async clipboardCopyText(text: string): Promise<void> {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-    }
+    copyViaDocument(text);
   }
 
   // 8. Overview & Dashboard
@@ -1172,7 +1575,7 @@ export class BrowserMockBackend {
       })),
       recent,
       checklist: {
-        vault_created: true,
+        secwet_created: true,
         recovery_key_created: this.recoveryCreated,
         cli_connected: this.cliConnected,
         add_device_done: this.devices.length > 1,
@@ -1189,7 +1592,7 @@ export class BrowserMockBackend {
     if (config.home_label) {
       this.settings.home_label = config.home_label;
     }
-    this.emit("vault://changed", { scope: "dashboard" });
+    this.emit("secwet://changed", { scope: "dashboard" });
   }
 
   // 9. Settings
@@ -1197,12 +1600,54 @@ export class BrowserMockBackend {
     return this.settings.device_name || "Desktop";
   }
 
-  async biometricStatus(): Promise<{ available: boolean; biometry_type: string }> {
-    return { available: true, biometry_type: "touch_id" };
+  // Browser preview: ?biometric=<kind> picks what the "OS" offers.
+  private biometricKind: BiometryKind =
+    typeof window !== "undefined"
+      ? ((new URLSearchParams(window.location.search).get("biometric") as BiometryKind | null) ?? "touch_id")
+      : "none";
+  private biometricEnabled = false;
+
+  async biometricStatus(): Promise<BiometricStatus> {
+    const available = this.biometricKind !== "none";
+    return { available, kind: this.biometricKind, enabled: available && this.biometricEnabled };
   }
 
-  async biometricAuthenticate(_reason?: string): Promise<boolean> {
-    return true;
+  async biometricSetEnabled(enabled: boolean): Promise<BiometricStatus> {
+    if (enabled && this.biometricKind === "none") {
+      throw { code: "biometric_unavailable", message: "Biometrics are not set up on this device." };
+    }
+    if (enabled) await new Promise((resolve) => setTimeout(resolve, 500));
+    this.biometricEnabled = enabled;
+    this.emit("secwet://changed", { scope: "settings" });
+    return this.biometricStatus();
+  }
+
+  async cliStatus(): Promise<CliInstallStatus> {
+    const installed = typeof window !== "undefined" && window.localStorage.getItem("secwet:cli_installed") === "true";
+    return {
+      installed,
+      path: installed ? "/usr/local/bin/secwet" : null,
+      in_path: installed,
+      binary_found: true,
+      binary_path: "/Applications/Secwet.app/Contents/MacOS/secwet",
+      symlink_target: "/Applications/Secwet.app/Contents/MacOS/secwet",
+      can_install: true,
+    };
+  }
+
+  async cliInstall(): Promise<CliInstallStatus> {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("secwet:cli_installed", "true");
+      window.localStorage.setItem("secwet:cli_guide_read", "true");
+    }
+    return this.cliStatus();
+  }
+
+  async cliUninstall(): Promise<CliInstallStatus> {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("secwet:cli_installed");
+    }
+    return this.cliStatus();
   }
 
   async settingsGet(): Promise<Settings> {
@@ -1223,7 +1668,7 @@ export class BrowserMockBackend {
     if (next.home_label) {
       this.dashboardConfig.home_label = next.home_label;
     }
-    this.emit("vault://changed", { scope: "settings" });
+    this.emit("secwet://changed", { scope: "settings" });
     return { ...this.settings };
   }
 
@@ -1259,42 +1704,425 @@ export class BrowserMockBackend {
   }
 
   // Additional mock helpers
+  private activePairingSession: {
+    sessionId: string;
+    expiresAt: number;
+    qrPayload: string;
+    pollCount: number;
+  } | null = null;
+
   async devicesList(): Promise<DeviceView[]> {
     return JSON.parse(JSON.stringify(this.devices));
   }
 
-  async deviceRevoke(deviceId: string): Promise<void> {
+  async deviceRevoke(deviceId: string, wipe: boolean): Promise<RevokeResultDto> {
     const dev = this.devices.find((d) => d.id === deviceId);
-    if (dev) {
-      dev.revoked_at = Date.now();
-      this.emit("vault://changed", { scope: "devices" });
+    if (!dev) throw { code: "not_found", message: "Device not found." };
+    if (dev.current || dev.is_current) {
+      throw { code: "cannot_revoke_self", message: "You can't revoke the device you're using." };
     }
+    if (dev.revoked_at) throw { code: "already_revoked", message: "This device is already revoked." };
+    dev.revoked_at = Date.now();
+    this.keyState.rotation_recommended = true;
+    this.keyState.pending_reason = `${dev.name} was revoked.`;
+    this.emit("secwet://changed", { scope: "devices" });
+    this.emit("secwet://changed", { scope: "keys" });
+    return { device_id: deviceId, wipe_requested: wipe, rotation_recommended: true };
+  }
+
+  // --------------------------------------------------------------------------
+  // Key rotation and link status (browser preview only)
+  // --------------------------------------------------------------------------
+
+  private keyState: KeyStatusDto = {
+    epoch: 1,
+    rotated_at: null,
+    rotation_recommended: false,
+    pending_reason: null,
+  };
+
+  private linkState: LinkStatusDto = { state: "active", revoked_at: null };
+
+  async keyStatus(): Promise<KeyStatusDto> {
+    return { ...this.keyState };
+  }
+
+  async keyRotate(): Promise<KeyRotationReport> {
+    await new Promise((r) => setTimeout(r, 1200));
+    const previous = this.keyState.epoch;
+    this.keyState = {
+      epoch: previous + 1,
+      rotated_at: Date.now(),
+      rotation_recommended: false,
+      pending_reason: null,
+    };
+    this.emit("secwet://changed", { scope: "keys" });
+    return {
+      previous_epoch: previous,
+      epoch: previous + 1,
+      resealed: this.secrets.length + this.notes.length + this.files.length + this.items.length,
+      recipients: this.devices.filter((d) => !d.revoked_at).length,
+      adopted_from_conflict: false,
+    };
+  }
+
+  async linkStatus(): Promise<LinkStatusDto> {
+    return { ...this.linkState };
+  }
+
+  /** Preview helper: behave as if another device revoked this one. */
+  simulateRevocation(wipe: boolean): void {
+    if (wipe) {
+      this.status = { status: "uninitialized" };
+      this.emit("secwet://wiped");
+    } else {
+      this.linkState = { state: "unlinked", revoked_at: Date.now() };
+      this.emit("secwet://unlinked", { ...this.linkState });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Members and invitations (browser preview only)
+  // --------------------------------------------------------------------------
+
+  private members: MemberView[] = [
+    {
+      member_id: "mem-ana",
+      email: "ana@example.com",
+      status: "active",
+      grants: [{ kind: "space", id: "space-work", role: "editor", label: "Work", space_id: "space-work" }],
+      devices: [{ id: "dev-ana-1", fingerprint: "3C07 91DD 5AB4", revoked: false }],
+      invited_at: Date.now() - 86400000 * 6,
+      invitation_id: null,
+    },
+  ];
+
+  /** Set when this preview joined through an invite; null for the owner. */
+  private memberJoinedAt: number | null = null;
+
+  private mockRole(): TreeRole | null {
+    try {
+      const v = window.localStorage.getItem("secwet:mock-role");
+      if (v === "admin" || v === "editor" || v === "viewer") return v;
+    } catch {
+      // storage unavailable
+    }
+    return null;
+  }
+
+  private labelForNode(kind: TreeNodeKind, id?: string | null): string {
+    if (kind === "workspace") return "Everything";
+    if (kind === "space") return this.spaces.find((s) => s.id === id)?.name ?? "Space";
+    if (kind === "group") {
+      const g = this.labels.find((l) => l.id === id);
+      const s = this.spaces.find((sp) => sp.id === g?.space_id);
+      return [s?.name, g?.name].filter(Boolean).join(" / ") || "Group";
+    }
+    const itemId = kind === "environment" ? this.environments.find((e) => e.id === id)?.project_id : id;
+    const item = this.items.find((i) => i.id === itemId);
+    const g = this.labels.find((l) => l.id === item?.label_id);
+    const s = this.spaces.find((sp) => sp.id === g?.space_id);
+    const leaf =
+      kind === "general" ? "General" : kind === "environment" ? this.environments.find((e) => e.id === id)?.name : null;
+    return [s?.name, g?.name, item?.name, leaf].filter(Boolean).join(" / ") || "Item";
+  }
+
+  private toGrantViews(grants: GrantInput[]): GrantView[] {
+    return grants.map((g) => ({ ...g, id: g.id ?? null, label: this.labelForNode(g.kind, g.id) }));
+  }
+
+  async myAccess(): Promise<AccessView> {
+    if (this.memberJoinedAt !== null) {
+      // Access arrives a few seconds after joining, once the admin's device syncs.
+      if (Date.now() - this.memberJoinedAt < 7000) return { is_owner: false, grants: [] };
+      return {
+        is_owner: false,
+        grants: this.toGrantViews([{ kind: "space", id: "space-work", role: "editor" }]),
+      };
+    }
+    const role = this.mockRole();
+    if (role) {
+      return {
+        is_owner: false,
+        grants: this.toGrantViews([
+          { kind: "space", id: "space-personal", role },
+          { kind: "space", id: "space-work", role },
+        ]),
+      };
+    }
+    return { is_owner: true, grants: [] };
+  }
+
+  async scopeNodes(spaceId: string): Promise<ScopeNodeView[]> {
+    const space = this.spaces.find((s) => s.id === spaceId);
+    if (!space) throw { code: "not_found", message: "Space not found." };
+    const out: ScopeNodeView[] = [{ kind: "space", id: space.id, label: space.name, depth: 0, parent_id: null }];
+    for (const g of this.labels.filter((l) => l.space_id === spaceId).sort((a, b) => a.position - b.position)) {
+      out.push({ kind: "group", id: g.id, label: g.name, depth: 1, parent_id: space.id });
+      for (const it of this.items.filter((i) => i.label_id === g.id).sort((a, b) => a.position - b.position)) {
+        out.push({ kind: "item", id: it.id, label: it.name, depth: 2, parent_id: g.id });
+        out.push({ kind: "general", id: it.id, label: "General", depth: 3, parent_id: it.id });
+        for (const e of this.environments.filter((en) => en.project_id === it.id).sort((a, b) => a.position - b.position)) {
+          out.push({ kind: "environment", id: e.id, label: e.name, depth: 3, parent_id: it.id });
+        }
+      }
+    }
+    return out;
+  }
+
+  async membersList(): Promise<MemberView[]> {
+    const now = Date.now();
+    for (const m of this.members) {
+      if (m.status === "invited" && now - m.invited_at > 7 * 86400000) m.status = "expired";
+    }
+    return JSON.parse(JSON.stringify(this.members.filter((m) => m.status !== "removed")));
+  }
+
+  async memberInvite(email: string, grants: GrantInput[]): Promise<InviteResultDto> {
+    const normalized = email.trim().toLowerCase();
+    if (this.members.some((m) => m.email?.toLowerCase() === normalized && m.status !== "removed" && m.status !== "expired")) {
+      throw { code: "exists", message: `${email.trim()} already has an invite or access.` };
+    }
+    if (!grants.some((g) => g.role !== "no_access")) {
+      throw { code: "invalid", message: "Give access to at least one part of this space." };
+    }
+    const invitationId = crypto.randomUUID();
+    const memberId = crypto.randomUUID();
+    const expiresAt = Date.now() + 7 * 86400000;
+    this.members.push({
+      member_id: memberId,
+      email: email.trim(),
+      status: "invited",
+      grants: this.toGrantViews(grants),
+      devices: [],
+      invited_at: Date.now(),
+      invitation_id: invitationId,
+    });
+    this.emit("secwet://changed", { scope: "members" });
+    const link = `secwet://invite?v=1&w=${(this.status as { secwet_id?: string }).secwet_id ?? "mock"}&i=${invitationId}&t=${crypto.randomUUID().replace(/-/g, "")}&r=127.0.0.1:8787`;
+    this.inviteLinkCache.set(invitationId, link);
+    return {
+      invitation_id: invitationId,
+      member_id: memberId,
+      link,
+      expires_at: expiresAt,
+    };
+  }
+
+  async memberSetGrants(memberId: string, grants: GrantInput[]): Promise<MemberView> {
+    const m = this.members.find((x) => x.member_id === memberId);
+    if (!m) throw { code: "not_found", message: "Member not found." };
+    m.grants = this.toGrantViews(grants);
+    this.emit("secwet://changed", { scope: "members" });
+    return JSON.parse(JSON.stringify(m));
+  }
+
+  async memberRemove(memberId: string, _wipe: boolean): Promise<void> {
+    const m = this.members.find((x) => x.member_id === memberId);
+    if (!m) throw { code: "not_found", message: "Member not found." };
+    m.status = "removed";
+    m.devices = m.devices.map((d) => ({ ...d, revoked: true }));
+    this.emit("secwet://changed", { scope: "members" });
+  }
+
+  /** Links stay only in memory here, like the Rust cache that dies with the app. */
+  private inviteLinkCache = new Map<string, string>();
+
+  async inviteLinkCopy(invitationId: string): Promise<void> {
+    const link = this.inviteLinkCache.get(invitationId);
+    if (!link) throw { code: "not_found", message: "This link is no longer available. Revoke the invitation and invite again." };
+    copyViaDocument(link);
+  }
+
+  async invitationRevoke(invitationId: string): Promise<void> {
+    const m = this.members.find((x) => x.invitation_id === invitationId);
+    if (!m) throw { code: "not_found", message: "Invitation not found." };
+    m.status = "removed";
+    this.emit("secwet://changed", { scope: "members" });
+  }
+
+  async invitationAccept(link: string, email: string, deviceName: string): Promise<SecwetStatus> {
+    if (!link.trim().startsWith("secwet://invite?")) {
+      throw { code: "invalid_invitation", message: "This invite link isn't valid. Ask for a new one." };
+    }
+    if (!email.trim()) throw { code: "invalid", message: "Enter your email." };
+    this.memberJoinedAt = Date.now();
+    this.status = { status: "unlocked", secwet_id: "00000000-0000-0000-0000-000000000002" };
+    if (deviceName) this.settings.device_name = deviceName;
+    return this.status;
+  }
+
+  async pairingStart(): Promise<PairingSessionInfo> {
+    const sessionId = crypto.randomUUID();
+    const expiresAt = Date.now() + 5 * 60_000;
+    this.activePairingSession = {
+      sessionId,
+      expiresAt,
+      qrPayload: `secwet://pair?v=1&s=${sessionId}&k=mock-ephemeral-key&r=127.0.0.1:8787`,
+      pollCount: 0,
+    };
+    return {
+      session_id: sessionId,
+      expires_at: new Date(expiresAt).toISOString(),
+      qr_payload: this.activePairingSession.qrPayload,
+    };
+  }
+
+  async pairingPoll(): Promise<PairingPollResponse> {
+    if (!this.activePairingSession) return { status: "expired" };
+    if (Date.now() > this.activePairingSession.expiresAt) return { status: "expired" };
+    this.activePairingSession.pollCount++;
+    if (this.activePairingSession.pollCount < 2) {
+      return { status: "waiting" };
+    }
+    return {
+      status: "found",
+      name: "iPhone 16",
+      platform: "iOS",
+      fingerprint: "91DD 3C07 5AB4",
+      code: "482 913",
+      device_id: "mock-device-id-2",
+    };
+  }
+
+  async pairingApprove(): Promise<DeviceView> {
+    const newDev: DeviceView = {
+      id: "dev-iphone-" + Date.now(),
+      name: "iPhone 16",
+      platform: "iOS",
+      fingerprint: "91DD 3C07 5AB4",
+      added_at: Date.now(),
+      last_sync_at: Date.now(),
+      current: false,
+    };
+    this.devices.push(newDev);
+    this.activePairingSession = null;
+    this.emit("secwet://changed", { scope: "devices" });
+    return newDev;
+  }
+
+  async pairingCancel(): Promise<void> {
+    this.activePairingSession = null;
   }
 
   async recoveryCreate(): Promise<string> {
     this.recoveryCreated = true;
-    this.emit("vault://changed", { scope: "settings" });
-    return "MOCK-RECV-KEY-1234-5678-ABCD";
+    this.emit("secwet://changed", { scope: "settings" });
+    return "A3K9M-4P7RX-8N2WC-5T6HQ-1BDVF";
+  }
+
+  async recoveryKeyReplace(): Promise<string> {
+    this.recoveryCreated = true;
+    this.emit("secwet://changed", { scope: "settings" });
+    return "K7M2W-9PJ3R-4N8XC-5T1HQ-6BDVF";
   }
 
   async recoveryStatus(): Promise<{ created: boolean; createdAt?: number }> {
     return { created: this.recoveryCreated, createdAt: this.recoveryCreated ? Date.now() - 3600000 : undefined };
   }
 
-  async exportVault(_recoveryKey: string): Promise<string> {
-    return "/mock/path/to/vault.secwet";
+  async workspaceExport(filePath?: string | null, _recoveryKey?: string): Promise<ExportSummaryDto> {
+    const path = filePath || "secwet-export-mock.secwet";
+    return {
+      file_path: path,
+      spaces_count: this.spaces.length,
+      labels_count: this.labels.length,
+      items_count: this.items.length,
+      environments_count: this.environments.length,
+      secrets_count: this.secrets.length,
+      notes_count: this.notes.length,
+      files_count: this.files.length,
+      bytes_written: 1024,
+      projects_count: this.items.length,
+      assets_count: this.files.length,
+    };
   }
 
-  async vaultRotateKey(): Promise<number> {
-    return 2;
+  async workspaceRestore(_filePath?: string | null, _recoveryKey?: string, deviceName?: string): Promise<SecwetStatus> {
+    const secwetId = "00000000-0000-0000-0000-000000000001";
+    this.status = { status: "unlocked", secwet_id: secwetId };
+    if (deviceName) {
+      this.settings.device_name = deviceName;
+    }
+    this.emit("secwet://changed", { scope: "all" });
+    return this.status;
+  }
+
+  async exportSecwet(_recoveryKey: string): Promise<string> {
+    const summary = await this.workspaceExport(null, _recoveryKey);
+    return summary.file_path;
+  }
+
+  async rotateMasterKey(): Promise<KeyRotationReport> {
+    return this.keyRotate();
   }
 
   async syncNow(): Promise<SyncReport> {
     return { pushed: 0, pulled: 0 };
   }
+
+  async activeSessionsList(): Promise<ActiveSession[]> {
+    return [...this.activeSessions];
+  }
+
+  async activeSessionStop(sessionId: string): Promise<void> {
+    this.activeSessions = this.activeSessions.filter((s) => s.session_id !== sessionId);
+    this.emit("secwet://changed", { scope: "sessions" });
+  }
+
+  simulateStartSession(session: ActiveSession): void {
+    this.activeSessions.push(session);
+    this.emit("secwet://changed", { scope: "sessions" });
+  }
+
+  async relayStatus(): Promise<RelayStatusDto> {
+    return {
+      connected: true,
+      relay_url: "http://127.0.0.1:8787",
+      plan: "free",
+      device_limit: 2,
+      active_devices: 1,
+      expires_at: null,
+      pending_outbox_count: 0,
+    };
+  }
+
+  async relayRegister(): Promise<RegisterSecwetResponse> {
+    return {
+      secwet_id: "00000000-0000-0000-0000-000000000001",
+      device_id: "dev-mock-001",
+      created_at: new Date().toISOString(),
+      current_epoch: 1,
+    };
+  }
+
+  async relaySetUrl(_url: string): Promise<void> {
+    // no-op in browser mock
+  }
+
+  // Browser preview only: the plan always reads as Free here.
+  async planStatus(): Promise<PlanStatusDto> {
+    return {
+      plan: "free",
+      device_limit: 1,
+      active_devices: 1,
+      expires_at: null,
+      checked_at: null,
+      relay_configured: false,
+      sync_enabled: false,
+      relay_security: false,
+      secwet_id: "00000000-0000-0000-0000-000000000001",
+    };
+  }
 }
 
 export const mockBackend = new BrowserMockBackend();
+
+// Browser preview only: lets a developer simulate a remote revocation from the console,
+// for example `__secwetMock.simulateRevocation(false)`.
+if (import.meta.env.DEV && typeof window !== "undefined" && !isTauri()) {
+  (window as unknown as { __secwetMock?: BrowserMockBackend }).__secwetMock = mockBackend;
+}
 
 function normalizeDraft(draft: SecretDraft) {
   const targetId = draft.item_id ?? draft.project_id ?? draft.projectId ?? "";
@@ -1347,32 +2175,73 @@ function normalizeSecretMeta(s: any): SecretMeta {
 
 export const api = {
   // 1. Lifecycle (4)
-  vaultStatus: async (): Promise<VaultStatus> => {
+  secwetStatus: async (): Promise<SecwetStatus> => {
     if (isTauri()) {
-      return invoke<VaultStatus>("vault_status");
+      return invoke<SecwetStatus>("secwet_status");
     }
-    return mockBackend.vaultStatus();
+    return mockBackend.secwetStatus();
+  },
+  secwetCreate: async (deviceName?: string): Promise<SecwetStatus> => {
+    if (isTauri()) {
+      return invoke<SecwetStatus>("secwet_create", { deviceName, device_name: deviceName });
+    }
+    return mockBackend.secwetCreate(deviceName);
+  },
+  /** `recoveryKey` stands in for biometric unlock while the device can't check it. */
+  secwetUnlock: async (recoveryKey?: string): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("secwet_unlock", { recoveryKey: recoveryKey ?? null });
+    }
+    return mockBackend.secwetUnlock();
+  },
+  secwetLock: async (): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("secwet_lock");
+    }
+    return mockBackend.secwetLock();
   },
 
-  vaultCreate: async (deviceName?: string): Promise<VaultStatus> => {
+  // 1.5. Spaces
+  spacesList: async (): Promise<SpaceView[]> => {
     if (isTauri()) {
-      return invoke<VaultStatus>("vault_create", { deviceName, device_name: deviceName });
+      return invoke<SpaceView[]>("spaces_list");
     }
-    return mockBackend.vaultCreate(deviceName);
+    return mockBackend.spacesList();
   },
 
-  vaultUnlock: async (): Promise<void> => {
+  spaceCreate: async (name: string, icon?: string | null): Promise<SpaceView> => {
     if (isTauri()) {
-      return invoke<void>("vault_unlock");
+      return invoke<SpaceView>("space_create", { name: name.trim(), icon: icon || null });
     }
-    return mockBackend.vaultUnlock();
+    return mockBackend.spaceCreate(name, icon);
   },
 
-  vaultLock: async (): Promise<void> => {
+  spaceRename: async (id: string, name: string, icon?: string | null): Promise<SpaceView> => {
     if (isTauri()) {
-      return invoke<void>("vault_lock");
+      return invoke<SpaceView>("space_rename", { id, name: name.trim(), icon: icon || null });
     }
-    return mockBackend.vaultLock();
+    return mockBackend.spaceRename(id, name, icon);
+  },
+
+  spaceDelete: async (id: string): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("space_delete", { id });
+    }
+    return mockBackend.spaceDelete(id);
+  },
+
+  spaceReorder: async (ids: string[]): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("space_reorder", { ids });
+    }
+    return mockBackend.spaceReorder(ids);
+  },
+
+  groupMoveToSpace: async (id: string, spaceId: string): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("group_move_to_space", { id, spaceId, space_id: spaceId });
+    }
+    return mockBackend.groupMoveToSpace(id, spaceId);
   },
 
   // 2. Groups (5)
@@ -1383,11 +2252,16 @@ export const api = {
     return mockBackend.groupsList();
   },
 
-  groupCreate: async (name: string, icon?: string | null): Promise<GroupView> => {
+  groupCreate: async (name: string, icon?: string | null, spaceId?: string | null): Promise<GroupView> => {
     if (isTauri()) {
-      return invoke<GroupView>("group_create", { name: name.trim(), icon: icon || null });
+      return invoke<GroupView>("group_create", {
+        name: name.trim(),
+        icon: icon || null,
+        spaceId: spaceId || null,
+        space_id: spaceId || null,
+      });
     }
-    return mockBackend.groupCreate(name, icon);
+    return mockBackend.groupCreate(name, icon, spaceId);
   },
 
   groupRename: async (id: string, name: string, icon?: string | null): Promise<void> => {
@@ -1771,21 +2645,50 @@ export const api = {
     return mockBackend.systemDeviceName();
   },
 
-  biometricStatus: async (): Promise<{ available: boolean; biometry_type: string }> => {
+  /** Never rejects: a failed check reads as "no biometrics", which keeps the default unlock. */
+  biometricStatus: async (): Promise<BiometricStatus> => {
     if (isTauri()) {
-      return invoke<{ available: boolean; biometry_type: string }>("biometric_status").catch(() => ({
-        available: false,
-        biometry_type: "none",
-      }));
+      return invoke<BiometricStatus>("biometric_status").catch(
+        (): BiometricStatus => ({ available: false, kind: "none", enabled: false }),
+      );
     }
     return mockBackend.biometricStatus();
   },
 
-  biometricAuthenticate: async (reason?: string): Promise<boolean> => {
+  /** Turning it on shows the OS prompt first; rejects when the check fails. */
+  biometricSetEnabled: async (enabled: boolean): Promise<BiometricStatus> => {
     if (isTauri()) {
-      return invoke<boolean>("biometric_authenticate", { reason });
+      return invoke<BiometricStatus>("biometric_set_enabled", { enabled });
     }
-    return mockBackend.biometricAuthenticate(reason);
+    return mockBackend.biometricSetEnabled(enabled);
+  },
+
+  /** Stops an app-drawn fingerprint prompt (Linux); a no-op elsewhere. */
+  biometricCancel: async (): Promise<void> => {
+    if (isTauri()) {
+      await invoke("biometric_cancel").catch(() => undefined);
+    }
+  },
+
+  cliStatus: async (): Promise<CliInstallStatus> => {
+    if (isTauri()) {
+      return invoke<CliInstallStatus>("cli_status");
+    }
+    return mockBackend.cliStatus();
+  },
+
+  cliInstall: async (): Promise<CliInstallStatus> => {
+    if (isTauri()) {
+      return invoke<CliInstallStatus>("cli_install");
+    }
+    return mockBackend.cliInstall();
+  },
+
+  cliUninstall: async (): Promise<CliInstallStatus> => {
+    if (isTauri()) {
+      return invoke<CliInstallStatus>("cli_uninstall");
+    }
+    return mockBackend.cliUninstall();
   },
 
   // 10. Backward Compatibility / Projects (4)
@@ -1817,48 +2720,259 @@ export const api = {
     return mockBackend.projectDelete(id);
   },
 
-  // 11. Mock helpers / Extra
+  // 11. Devices & Pairing
   devicesList: async (): Promise<DeviceView[]> => {
+    if (isTauri()) {
+      return invoke<DeviceView[]>("devices_list");
+    }
     return mockBackend.devicesList();
   },
 
-  deviceRevoke: async (deviceId: string): Promise<void> => {
-    return mockBackend.deviceRevoke(deviceId);
+  /** Revokes another device. `wipe` asks it to crypto-shred its local store on next contact. */
+  deviceRevoke: async (deviceId: string, wipe: boolean): Promise<RevokeResultDto> => {
+    if (isTauri()) {
+      return invoke<RevokeResultDto>("device_revoke", { deviceId, wipe });
+    }
+    return mockBackend.deviceRevoke(deviceId, wipe);
+  },
+
+  // 11a. Key rotation and link status
+  keyStatus: async (): Promise<KeyStatusDto> => {
+    if (isTauri()) {
+      return invoke<KeyStatusDto>("key_status");
+    }
+    return mockBackend.keyStatus();
+  },
+
+  keyRotate: async (): Promise<KeyRotationReport> => {
+    if (isTauri()) {
+      return invoke<KeyRotationReport>("key_rotate");
+    }
+    return mockBackend.keyRotate();
+  },
+
+  linkStatus: async (): Promise<LinkStatusDto> => {
+    if (isTauri()) {
+      return invoke<LinkStatusDto>("link_status");
+    }
+    return mockBackend.linkStatus();
+  },
+
+  // 11c. Members, roles and invitations
+  myAccess: async (): Promise<AccessView> => {
+    if (isTauri()) {
+      return invoke<AccessView>("my_access");
+    }
+    return mockBackend.myAccess();
+  },
+
+  scopeNodes: async (spaceId: string): Promise<ScopeNodeView[]> => {
+    if (isTauri()) {
+      return invoke<ScopeNodeView[]>("scope_nodes", { spaceId });
+    }
+    return mockBackend.scopeNodes(spaceId);
+  },
+
+  membersList: async (): Promise<MemberView[]> => {
+    if (isTauri()) {
+      return invoke<MemberView[]>("members_list");
+    }
+    return mockBackend.membersList();
+  },
+
+  memberInvite: async (email: string, grants: GrantInput[]): Promise<InviteResultDto> => {
+    if (isTauri()) {
+      return invoke<InviteResultDto>("member_invite", { email, grants });
+    }
+    return mockBackend.memberInvite(email, grants);
+  },
+
+  memberSetGrants: async (memberId: string, grants: GrantInput[]): Promise<MemberView> => {
+    if (isTauri()) {
+      return invoke<MemberView>("member_set_grants", { memberId, grants });
+    }
+    return mockBackend.memberSetGrants(memberId, grants);
+  },
+
+  memberRemove: async (memberId: string, wipe: boolean): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("member_remove", { memberId, wipe });
+    }
+    return mockBackend.memberRemove(memberId, wipe);
+  },
+
+  /**
+   * Copies an invite link through the auto-clearing Rust clipboard. The link carries the
+   * invite token, so it never goes through the webview clipboard. `not_found` after a restart.
+   */
+  inviteLinkCopy: async (invitationId: string): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("invite_link_copy", { invitationId });
+    }
+    return mockBackend.inviteLinkCopy(invitationId);
+  },
+
+  invitationRevoke: async (invitationId: string): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("invitation_revoke", { invitationId });
+    }
+    return mockBackend.invitationRevoke(invitationId);
+  },
+
+  invitationAccept: async (link: string, email: string, deviceName: string): Promise<SecwetStatus> => {
+    if (isTauri()) {
+      return invoke<SecwetStatus>("invitation_accept", { link, email, deviceName });
+    }
+    return mockBackend.invitationAccept(link, email, deviceName);
+  },
+
+  pairingStart: async (): Promise<PairingSessionInfo> => {
+    if (isTauri()) {
+      return invoke<PairingSessionInfo>("pairing_start");
+    }
+    return mockBackend.pairingStart();
+  },
+
+  pairingPoll: async (): Promise<PairingPollResponse> => {
+    if (isTauri()) {
+      return invoke<PairingPollResponse>("pairing_poll");
+    }
+    return mockBackend.pairingPoll();
+  },
+
+  pairingApprove: async (): Promise<DeviceView> => {
+    if (isTauri()) {
+      return invoke<DeviceView>("pairing_approve");
+    }
+    return mockBackend.pairingApprove();
+  },
+
+  pairingCancel: async (): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("pairing_cancel");
+    }
+    return mockBackend.pairingCancel();
   },
 
   recoveryCreate: async (): Promise<string> => {
+    if (isTauri()) {
+      return invoke<string>("recovery_key_create");
+    }
     return mockBackend.recoveryCreate();
   },
 
+  recoveryKeyCreate: async (): Promise<string> => {
+    return api.recoveryCreate();
+  },
+
+  recoveryKeyReplace: async (): Promise<string> => {
+    if (isTauri()) {
+      return invoke<string>("recovery_key_replace");
+    }
+    return mockBackend.recoveryKeyReplace();
+  },
+
   recoveryStatus: async (): Promise<{ created: boolean; createdAt?: number }> => {
+    if (isTauri()) {
+      const res = await invoke<{ created: boolean; created_at?: number }>("recovery_status");
+      return { created: res.created, createdAt: res.created_at };
+    }
     return mockBackend.recoveryStatus();
   },
 
-  exportVault: async (recoveryKey: string): Promise<string> => {
-    return mockBackend.exportVault(recoveryKey);
+  workspaceExport: async (filePath?: string | null, recoveryKey: string = ""): Promise<ExportSummaryDto> => {
+    if (isTauri()) {
+      return invoke<ExportSummaryDto>("workspace_export", {
+        path: filePath || null,
+        recoveryKey,
+        recovery_key: recoveryKey,
+      });
+    }
+    return mockBackend.workspaceExport(filePath, recoveryKey);
   },
 
-  vaultRotateKey: async (): Promise<number> => {
-    return mockBackend.vaultRotateKey();
+  workspaceRestore: async (
+    filePath?: string | null,
+    recoveryKey: string = "",
+    deviceName?: string
+  ): Promise<SecwetStatus> => {
+    if (isTauri()) {
+      return invoke<SecwetStatus>("workspace_restore", {
+        path: filePath || null,
+        recoveryKey,
+        recovery_key: recoveryKey,
+        deviceName: deviceName || null,
+        device_name: deviceName || null,
+      });
+    }
+    return mockBackend.workspaceRestore(filePath, recoveryKey, deviceName);
+  },
+
+  exportSecwet: async (recoveryKey: string): Promise<string> => {
+    const summary = await api.workspaceExport(null, recoveryKey);
+    return summary.file_path;
+  },
+
+  /** Alias of keyRotate kept for older call sites. */
+  rotateMasterKey: async (): Promise<KeyRotationReport> => {
+    return api.keyRotate();
   },
 
   syncNow: async (): Promise<SyncReport> => {
+    if (isTauri()) {
+      return invoke<SyncReport>("sync_now");
+    }
     return mockBackend.syncNow();
   },
 
-  // 12. Event Subscriptions
-  onVaultChanged: async (handler: (e: VaultChangedEvent) => void): Promise<UnlistenFn> => {
+  // 11b. Active Process Sessions
+  activeSessionsList: async (): Promise<ActiveSession[]> => {
     if (isTauri()) {
-      return listen<VaultChangedEvent>("vault://changed", (event) => handler(event.payload));
+      return invoke<ActiveSession[]>("active_sessions_list");
     }
-    return mockBackend.listen("vault://changed", handler);
+    return mockBackend.activeSessionsList();
   },
 
-  onVaultLocked: async (handler: () => void): Promise<UnlistenFn> => {
+  activeSessionStop: async (sessionId: string): Promise<void> => {
     if (isTauri()) {
-      return listen<void>("vault://locked", () => handler());
+      return invoke<void>("active_session_stop", { sessionId });
     }
-    return mockBackend.listen("vault://locked", handler);
+    return mockBackend.activeSessionStop(sessionId);
+  },
+
+  simulateStartSession: (session: ActiveSession) => {
+    mockBackend.simulateStartSession(session);
+  },
+
+  // 12. Event Subscriptions
+  onSecwetChanged: async (handler: (e: SecwetChangedEvent) => void): Promise<UnlistenFn> => {
+    if (isTauri()) {
+      return listen<SecwetChangedEvent>("secwet://changed", (event) => handler(event.payload));
+    }
+    return mockBackend.listen("secwet://changed", handler);
+  },
+
+  onSecwetLocked: async (handler: () => void): Promise<UnlistenFn> => {
+    if (isTauri()) {
+      return listen<void>("secwet://locked", () => handler());
+    }
+    return mockBackend.listen("secwet://locked", handler);
+  },
+
+  /** The store was crypto-shredded after a remote wipe; the app must return to onboarding. */
+  onWiped: async (handler: () => void): Promise<UnlistenFn> => {
+    if (isTauri()) {
+      return listen<void>("secwet://wiped", () => handler());
+    }
+    return mockBackend.listen("secwet://wiped", handler);
+  },
+
+  /** This device was revoked without a wipe; the store is now a read-only archive. */
+  onUnlinked: async (handler: (e: LinkStatusDto | null) => void): Promise<UnlistenFn> => {
+    if (isTauri()) {
+      return listen<LinkStatusDto | null>("secwet://unlinked", (event) => handler(event.payload ?? null));
+    }
+    return mockBackend.listen("secwet://unlinked", (payload) => handler(payload ?? null));
   },
 
   onSyncStatus: async (handler: (e: SyncStatusEvent) => void): Promise<UnlistenFn> => {
@@ -1866,5 +2980,52 @@ export const api = {
       return listen<SyncStatusEvent>("sync://status", (event) => handler(event.payload));
     }
     return mockBackend.listen("sync://status", handler);
+  },
+
+  // 13. Relay & Entitlements
+  relayStatus: async (): Promise<RelayStatusDto> => {
+    if (isTauri()) {
+      return invoke<RelayStatusDto>("relay_status");
+    }
+    return mockBackend.relayStatus();
+  },
+
+  relayRegister: async (): Promise<RegisterSecwetResponse> => {
+    if (isTauri()) {
+      return invoke<RegisterSecwetResponse>("relay_register");
+    }
+    return mockBackend.relayRegister();
+  },
+
+  relaySetUrl: async (url: string): Promise<void> => {
+    if (isTauri()) {
+      return invoke<void>("relay_set_url", { url });
+    }
+    return mockBackend.relaySetUrl(url);
+  },
+
+  // 13b. Plans
+  /** Cached plan. Never contacts the relay. */
+  planStatus: async (): Promise<PlanStatusDto> => {
+    if (isTauri()) {
+      return invoke<PlanStatusDto>("plan_status");
+    }
+    return mockBackend.planStatus();
+  },
+
+  /** Re-reads the entitlement on Pro and paused plans; Free returns the cached plan offline. */
+  planRefresh: async (): Promise<PlanStatusDto> => {
+    if (isTauri()) {
+      return invoke<PlanStatusDto>("plan_refresh");
+    }
+    return mockBackend.planStatus();
+  },
+
+  /** "Check for Pro": the one relay call a Free Secwet makes, started by the user. */
+  planActivate: async (): Promise<PlanStatusDto> => {
+    if (isTauri()) {
+      return invoke<PlanStatusDto>("plan_activate");
+    }
+    return mockBackend.planStatus();
   },
 };

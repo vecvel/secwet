@@ -7,7 +7,8 @@ import { SearchInput } from "../../components/Field";
 import { Icon } from "../../components/Icon";
 import { MoreMenu, type MenuItem } from "../../components/Menu";
 import { NameDialog } from "../../components/NameDialog";
-import { SegmentedTabs } from "../../components/SegmentedTabs";
+import { SegmentedTabs, type TabItem } from "../../components/SegmentedTabs";
+import { kindLabels, type SecretKind } from "../../data/mock";
 import { TopBarActions } from "../../layout/TopBar";
 import type {
   EnvironmentView,
@@ -23,6 +24,7 @@ import type {
 } from "../../lib/api";
 import { api } from "../../lib/api";
 import { formatAgo } from "../../lib/format";
+import { usePermissions } from "../../lib/useAccess";
 import { CopySecretDialog } from "../secrets/CopySecretDialog";
 import { SecretDialog } from "../secrets/SecretDialog";
 import { SecretRow } from "../secrets/SecretRow";
@@ -63,9 +65,46 @@ interface Props {
   onCreateNote: (title: string, content: string) => Promise<void>;
   onUpdateNote: (id: string, title?: string, content?: string) => Promise<void>;
   onDeleteNote: (id: string) => Promise<void>;
+  /** Opens the Share dialog for this item, or for the environment when one is selected. */
+  onShare?: (target: { kind: "item" | "environment"; id: string }) => void;
 }
 
 type ContentTab = "secrets" | "assets" | "notes";
+
+/**
+ * Secret kinds sorted alphabetically by their display label by default:
+ * Access token, API key, Certificate, Codes, Environment variable, Password, SSH key.
+ */
+const ALL_SECRET_KINDS: SecretKind[] = [
+  "access_token",
+  "api_key",
+  "certificate",
+  "codes",
+  "env_var",
+  "password",
+  "ssh_key",
+];
+
+const SECRET_TYPES_TAB_ORDER_KEY = "secwet:secret-types-tab-order-v2";
+
+function getInitialSecretTypeOrder(): string[] {
+  const defaultOrder = ["all", ...ALL_SECRET_KINDS];
+  try {
+    const saved = localStorage.getItem(SECRET_TYPES_TAB_ORDER_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const validSet = new Set(defaultOrder);
+        const filtered = parsed.filter((id) => typeof id === "string" && validSet.has(id));
+        const missing = defaultOrder.filter((id) => !filtered.includes(id));
+        return [...filtered, ...missing];
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return defaultOrder;
+}
 
 export function ItemScreen({
   item,
@@ -99,12 +138,29 @@ export function ItemScreen({
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
+  onShare,
 }: Props) {
   const [contentTab, setContentTab] = useState<ContentTab>("secrets");
   const [secretSearch, setSecretSearch] = useState("");
+  const [selectedKindFilter, setSelectedKindFilter] = useState<SecretKind | "all">("all");
+  const [secretTypeOrder, setSecretTypeOrder] = useState<string[]>(getInitialSecretTypeOrder);
   const [noteSearch, setNoteSearch] = useState("");
 
   const effectiveAssets = useMemo(() => assets ?? files ?? [], [assets, files]);
+
+  // Member mode: the role on the item (containers) and on the open scope (content).
+  const groupForPath = _group ?? _label;
+  const basePath = {
+    spaceId: groupForPath?.space_id ?? null,
+    groupId: item.group_id ?? item.label_id ?? groupForPath?.id ?? null,
+    itemId: item.id,
+  };
+  const itemPerms = usePermissions(basePath);
+  const scopePerms = usePermissions({
+    ...basePath,
+    environmentId: selectedEnvironmentId,
+    general: !selectedEnvironmentId,
+  });
 
   // Modals for Item
   const [editingItem, setEditingItem] = useState(false);
@@ -138,14 +194,48 @@ export function ItemScreen({
   }, [secrets, selectedEnvironmentId, environments.length]);
 
   const filteredSecrets = useMemo(() => {
+    let result = scopedSecrets;
+    if (selectedKindFilter !== "all") {
+      result = result.filter((s) => s.kind === selectedKindFilter);
+    }
     const q = secretSearch.trim().toLowerCase();
-    if (!q) return scopedSecrets;
-    return scopedSecrets.filter(
+    if (!q) return result;
+    return result.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.note && s.note.toLowerCase().includes(q))
     );
-  }, [scopedSecrets, secretSearch]);
+  }, [scopedSecrets, selectedKindFilter, secretSearch]);
+
+  const secretTypeTabs: TabItem[] = useMemo(() => {
+    const tabsMap: Record<string, TabItem> = {
+      all: { id: "all", label: "All", count: scopedSecrets.length },
+      ...Object.fromEntries(
+        ALL_SECRET_KINDS.map((k) => [
+          k,
+          {
+            id: k,
+            label: kindLabels[k],
+            count: scopedSecrets.filter((s) => s.kind === k).length,
+          },
+        ])
+      ),
+    };
+
+    return secretTypeOrder
+      .map((id) => tabsMap[id])
+      .filter((t): t is TabItem => Boolean(t));
+  }, [scopedSecrets, secretTypeOrder]);
+
+  const handleReorderSecretTypes = (newItems: TabItem[]) => {
+    const newOrder = newItems.map((item) => item.id);
+    setSecretTypeOrder(newOrder);
+    try {
+      localStorage.setItem(SECRET_TYPES_TAB_ORDER_KEY, JSON.stringify(newOrder));
+    } catch {
+      // ignore
+    }
+  };
 
   const scopedAssets = useMemo(() => {
     return effectiveAssets.filter((a) => {
@@ -175,36 +265,56 @@ export function ItemScreen({
     );
   }, [scopedNotes, noteSearch]);
 
-  const itemMenuItems: MenuItem[] = [
-    {
-      label: "Rename",
-      icon: "pencil",
-      onSelect: () => setEditingItem(true),
-    },
-    {
-      label: "Add environment",
-      icon: "plus",
-      onSelect: () => setAddingEnv(true),
-    },
-    {
-      label: "Delete",
-      icon: "trash",
-      danger: true,
-      onSelect: () => setDeletingItem(true),
-    },
-  ];
+  const shareTarget = selectedEnvironmentId
+    ? ({ kind: "environment", id: selectedEnvironmentId } as const)
+    : ({ kind: "item", id: item.id } as const);
+  const canShareHere = Boolean(onShare) && (selectedEnvironmentId ? scopePerms.canShare : itemPerms.canShare);
+
+  const itemMenuItems: MenuItem[] = [];
+  if (itemPerms.canManage) {
+    itemMenuItems.push(
+      {
+        label: "Rename",
+        icon: "pencil",
+        onSelect: () => setEditingItem(true),
+      },
+      {
+        label: "Add environment",
+        icon: "plus",
+        onSelect: () => setAddingEnv(true),
+      },
+      {
+        label: "Delete",
+        icon: "trash",
+        danger: true,
+        onSelect: () => setDeletingItem(true),
+      }
+    );
+  }
 
   return (
     <>
       <TopBarActions>
-        <Button
-          variant="secondary"
-          icon="plus"
-          onClick={() => setAddingEnv(true)}
-        >
-          Add environment
-        </Button>
-        <MoreMenu label="Actions" items={itemMenuItems} />
+        {canShareHere && onShare && (
+          <Button
+            variant="secondary"
+            icon="user"
+            title={selectedEnvironmentId ? "Share this environment" : "Share this item"}
+            onClick={() => onShare(shareTarget)}
+          >
+            Share…
+          </Button>
+        )}
+        {itemPerms.canManage && (
+          <Button
+            variant="secondary"
+            icon="plus"
+            onClick={() => setAddingEnv(true)}
+          >
+            Add environment
+          </Button>
+        )}
+        {itemMenuItems.length > 0 && <MoreMenu label="Actions" items={itemMenuItems} />}
       </TopBarActions>
 
       <div className={styles.screen}>
@@ -229,7 +339,7 @@ export function ItemScreen({
               })),
             ]}
             extra={(() => {
-              if (!selectedEnvironmentId) return null;
+              if (!selectedEnvironmentId || !scopePerms.canManage) return null;
               const activeEnv = environments.find((e) => e.id === selectedEnvironmentId);
               if (!activeEnv) return null;
               const envMenu: MenuItem[] = [
@@ -277,7 +387,7 @@ export function ItemScreen({
       {/* 1. Secrets Content Section */}
       {contentTab === "secrets" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-          {(scopedSecrets.length > 0 || secretSearch) && (
+          {(scopedSecrets.length > 0 || secretSearch || selectedKindFilter !== "all") && (
             <div className={styles.sectionHeader}>
               <SearchInput
                 className={styles.searchBar}
@@ -287,13 +397,28 @@ export function ItemScreen({
                 onChange={(e) => setSecretSearch(e.target.value)}
               />
 
-              <Button
-                variant="primary"
-                icon="plus"
-                onClick={() => setAddingSecret(true)}
-              >
-                Add secret
-              </Button>
+              {scopePerms.canWrite && (
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  onClick={() => setAddingSecret(true)}
+                >
+                  Add secret
+                </Button>
+              )}
+            </div>
+          )}
+
+          {(scopedSecrets.length > 0 || secretSearch || selectedKindFilter !== "all") && (
+            <div className={styles.typeTabsRow}>
+              <SegmentedTabs
+                label="Secret types"
+                value={selectedKindFilter}
+                onChange={(val) => setSelectedKindFilter(val as SecretKind | "all")}
+                items={secretTypeTabs}
+                reorderable
+                onReorder={handleReorderSecretTypes}
+              />
             </div>
           )}
 
@@ -303,20 +428,39 @@ export function ItemScreen({
               title="No secrets yet"
               body="Secrets are encrypted on this device and sealed with strict record binding."
               action={
-                <Button
-                  variant="primary"
-                  icon="plus"
-                  onClick={() => setAddingSecret(true)}
-                >
-                  Add secret
-                </Button>
+                scopePerms.canWrite ? (
+                  <Button
+                    variant="primary"
+                    icon="plus"
+                    onClick={() => setAddingSecret(true)}
+                  >
+                    Add secret
+                  </Button>
+                ) : undefined
               }
             />
           ) : filteredSecrets.length === 0 ? (
             <EmptyState
               icon="search"
               title="No matching secrets"
-              body={`No secrets matching "${secretSearch}".`}
+              body={
+                secretSearch
+                  ? `No secrets matching "${secretSearch}"${selectedKindFilter !== "all" ? ` in ${kindLabels[selectedKindFilter]}` : ""}.`
+                  : `No ${kindLabels[selectedKindFilter as SecretKind]} secrets found in this environment.`
+              }
+              action={
+                secretSearch || selectedKindFilter !== "all" ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setSecretSearch("");
+                      setSelectedKindFilter("all");
+                    }}
+                  >
+                    Clear filter
+                  </Button>
+                ) : undefined
+              }
             />
           ) : (
             <div className={styles.secretsContainer}>
@@ -325,7 +469,11 @@ export function ItemScreen({
                   <SecretRow
                     key={sec.id}
                     secret={sec}
+                    itemName={item.name}
+                    environmentName={environments.find((e) => e.id === selectedEnvironmentId)?.name}
                     canCopy={true}
+                    canEdit={scopePerms.canWrite}
+                    canDelete={scopePerms.canDelete}
                     onEdit={() => setEditingSecret(sec)}
                     onCopyToEnvironment={() => setCopyingSecret(sec)}
                     onDelete={() => setDeletingSecret(sec)}
@@ -343,6 +491,9 @@ export function ItemScreen({
           itemId={item.id}
           environmentId={selectedEnvironmentId}
           assets={scopedAssets}
+          canUpload={scopePerms.canWrite}
+          canRename={scopePerms.canWrite}
+          canDelete={scopePerms.canDelete}
           onUpload={async (name, mime, bytes) => {
             if (onUploadAsset) {
               await onUploadAsset(name, mime, bytes);
@@ -375,6 +526,7 @@ export function ItemScreen({
               note={activeNote}
               itemId={item.id}
               environmentId={selectedEnvironmentId}
+              readOnly={!scopePerms.canWrite}
               onSave={async (title, content) => {
                 if (activeNote) {
                   await onUpdateNote(activeNote.id, title, content);
@@ -384,11 +536,15 @@ export function ItemScreen({
                 setActiveNote(null);
                 setIsCreatingNote(false);
               }}
-              onDelete={async (id) => {
-                await onDeleteNote(id);
-                setActiveNote(null);
-                setIsCreatingNote(false);
-              }}
+              onDelete={
+                scopePerms.canDelete
+                  ? async (id) => {
+                      await onDeleteNote(id);
+                      setActiveNote(null);
+                      setIsCreatingNote(false);
+                    }
+                  : undefined
+              }
               onClose={() => {
                 setActiveNote(null);
                 setIsCreatingNote(false);
@@ -406,13 +562,15 @@ export function ItemScreen({
                     onChange={(e) => setNoteSearch(e.target.value)}
                   />
 
-                  <Button
-                    variant="primary"
-                    icon="plus"
-                    onClick={() => setIsCreatingNote(true)}
-                  >
-                    New note
-                  </Button>
+                  {scopePerms.canWrite && (
+                    <Button
+                      variant="primary"
+                      icon="plus"
+                      onClick={() => setIsCreatingNote(true)}
+                    >
+                      New note
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -422,13 +580,15 @@ export function ItemScreen({
                   title="No rich-text notes yet"
                   body="Create formatted notes with headings, tables, code blocks, and lists."
                   action={
-                    <Button
-                      variant="primary"
-                      icon="plus"
-                      onClick={() => setIsCreatingNote(true)}
-                    >
-                      New note
-                    </Button>
+                    scopePerms.canWrite ? (
+                      <Button
+                        variant="primary"
+                        icon="plus"
+                        onClick={() => setIsCreatingNote(true)}
+                      >
+                        New note
+                      </Button>
+                    ) : undefined
                   }
                 />
               ) : filteredNotes.length === 0 ? (
@@ -458,6 +618,7 @@ export function ItemScreen({
                       >
                         <div className={styles.noteCardHeader}>
                           <span className={styles.noteTitle}>{n.title}</span>
+                          {scopePerms.canDelete && (
                           <button
                             type="button"
                             className={styles.noteDeleteBtn}
@@ -470,6 +631,7 @@ export function ItemScreen({
                           >
                             <Icon name="trash" size={14} />
                           </button>
+                          )}
                         </div>
                         <p className={styles.noteBody}>{n.snippet || "Empty note"}</p>
                         <div className={styles.noteFooter}>

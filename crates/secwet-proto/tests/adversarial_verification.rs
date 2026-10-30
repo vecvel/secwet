@@ -31,6 +31,7 @@ fn challenge_secret_body_debug_never_leaks_plaintext() {
         SecretKind::EnvVar,
         SecretKind::SshKey,
         SecretKind::Certificate,
+        SecretKind::Codes,
     ];
 
     for i in 0..500 {
@@ -202,7 +203,7 @@ fn challenge_postcard_truncation_fuzzing_all_types() {
     };
     let event_aad = EventAadOwned {
         event_id: [10u8; 16],
-        vault_id: [11u8; 16],
+        secwet_id: [11u8; 16],
         device_id: "DEVICE_X".to_string(),
         device_seq: 100,
         key_epoch: 2,
@@ -210,18 +211,19 @@ fn challenge_postcard_truncation_fuzzing_all_types() {
     let signed_event = SignedEvent {
         envelope: EventEnvelope {
             event_id: [20u8; 16],
-            vault_id: [21u8; 16],
+            secwet_id: [21u8; 16],
             device_id: "DEVICE_Y".to_string(),
             device_seq: 42,
             key_epoch: 1,
             nonce: [22u8; 24],
             ciphertext: vec![99u8; 48],
+            scope: None,
         },
         signature: [77u8; 64],
     };
     let key_wrap = KeyWrapInfoOwned {
-        purpose: "vault-key".to_string(),
-        vault_id: [30u8; 16],
+        purpose: "master-key".to_string(),
+        secwet_id: [30u8; 16],
         key_epoch: 1,
         recipient_device_id: "DEV_RECIPIENT".to_string(),
     };
@@ -230,7 +232,7 @@ fn challenge_postcard_truncation_fuzzing_all_types() {
         ciphertext: vec![41u8; 48],
     };
     let pairing = PairingApproval {
-        vault_id: [50u8; 16],
+        secwet_id: [50u8; 16],
         session_id: [51u8; 16],
         device_id: "DEV_APPROVED".to_string(),
         sign_pub: [52u8; 32],
@@ -242,6 +244,7 @@ fn challenge_postcard_truncation_fuzzing_all_types() {
             code: RelayErrorCode::DeviceLimit,
             message: "Limit reached".to_string(),
         },
+        revocation: None,
     };
 
     // Helper macro to verify every prefix of an encoded message returns an Err, never panics
@@ -314,12 +317,13 @@ fn challenge_signed_event_signature_bytes_visitor_robustness() {
     // Test custom signature_bytes visitor with invalid lengths
     let envelope = EventEnvelope {
         event_id: [1u8; 16],
-        vault_id: [2u8; 16],
+        secwet_id: [2u8; 16],
         device_id: "DEV_TEST".to_string(),
         device_seq: 1,
         key_epoch: 1,
         nonce: [3u8; 24],
         ciphertext: vec![4u8; 16],
+        scope: None,
     };
 
     let valid_event = SignedEvent {

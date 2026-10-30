@@ -1,16 +1,16 @@
 use secrecy::ExposeSecret;
-use secwet_core::Vault;
+use secwet_core::Secwet;
 use std::path::Path;
 use uuid::Uuid;
 
 pub fn execute_export(
-    vault: &Vault,
+    secwet: &Secwet,
     item_id: Uuid,
     env_id: Option<Uuid>,
     out_path: Option<&Path>,
     format: &str,
 ) -> Result<(), String> {
-    let mut secrets = vault
+    let mut secrets = secwet
         .env_for(item_id, env_id)
         .map_err(|e| format!("{e}"))?;
     secrets.sort_by(|a, b| a.0.cmp(&b.0));

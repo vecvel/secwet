@@ -1,0 +1,277 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.subtle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  container-type: inline-size;
+}
+
+.scopeHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scopeTree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+}
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  min-height: 48px;
+}
+
+.cardRow + .cardRow,
+.childList > .cardRow:first-child {
+  border-top: 1px solid var(--color-border-separator);
+}
+
+.groupBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 2px 0;
+}
+
+.groupName {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.chevron {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  color: var(--color-text-tertiary);
+}
+
+.childList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Thread from under the item's chevron to each scope row: the vertical line
+   spans the full row (through its padding) so rows join up; the last row
+   stops at its middle. */
+.childLead {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.thread {
+  position: relative;
+  flex: none;
+  align-self: stretch;
+  width: 28px;
+  margin-block: calc(-1 * var(--space-2) - 1px) calc(-1 * var(--space-2));
+}
+
+.thread::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-tree-guide);
+}
+
+.threadEnd::before {
+  bottom: calc(50% + var(--radius-small));
+}
+
+.thread::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  right: 6px;
+  top: 50%;
+  height: 1px;
+  background: var(--color-tree-guide);
+}
+
+/* The last row turns with a soft corner instead of a sharp L. The vertical
+   line above stops where the curve starts, so the translucent strokes never
+   overlap and darken. */
+.threadEnd::after {
+  top: calc(50% - var(--radius-small));
+  height: var(--radius-small);
+  background: none;
+  border-left: 1px solid var(--color-tree-guide);
+  border-bottom: 1px solid var(--color-tree-guide);
+  border-bottom-left-radius: var(--radius-small);
+}
+
+.childName {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scopeName {
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roleSelect {
+  flex: none;
+  width: 168px;
+}
+
+.loading {
+  padding: var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text-tertiary);
+}
+
+/* Narrow dialogs: put the role picker under the name instead of squeezing it. */
+@container (max-width: 380px) {
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+  .roleSelect {
+    width: 100%;
+  }
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.infoButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-control);
+  color: var(--color-text-tertiary);
+}
+
+.infoButtonOpen {
+  color: var(--color-text-primary);
+  background: var(--color-accent-tint-soft);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+  font-size: var(--font-size-sm);
+}
+
+.legendRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.legendRow dt {
+  flex: none;
+  width: 72px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.legendRow dd {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.linkRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.linkRow > :first-child {
+  flex: 1;
+}
+
+.copyBtn {
+  flex: none;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}

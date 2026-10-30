@@ -5,6 +5,7 @@
 //   assets/                         icon.png, icon-dark.png, icon-light.png, tile-dark.svg, tile-light.svg, mark-dark.svg, mark-light.svg, mark.svg, favicon.svg
 //   apps/desktop/public/            favicon.svg
 //   apps/desktop/src/components/    brandMark.generated.ts
+//   apps/mobile/lib/theme/          secwet_icons.g.dart (flutter.mjs)
 //   apps/desktop/src-tauri/icons/   icon.icns, icon.ico, 32x32, 64x64, 128x128, 128x128@2x, icon.png, Windows Store logos
 //   apps/mobile/ios/.../AppIcon     1024 default, dark and tinted + Contents.json
 //   apps/mobile/android/.../res     adaptive icon (foreground, monochrome, background) + legacy mipmaps
@@ -13,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
 import { markSvg, twin } from "./geometry.mjs";
+import { writeFlutter } from "./flutter.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../..");
@@ -158,6 +160,9 @@ write(
       2,
     )} as const;\n`,
 );
+
+// 2b. In-app mark and icon set for the Flutter app
+writeFlutter();
 
 // 3. Desktop bundle icons (Tauri)
 const iconsDir = "apps/desktop/src-tauri/icons";

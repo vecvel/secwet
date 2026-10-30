@@ -1,21 +1,21 @@
 use secrecy::ExposeSecret;
-use secwet_core::Vault;
+use secwet_core::Secwet;
 use std::io::{IsTerminal, Write};
 use uuid::Uuid;
 
 pub fn execute_get(
-    vault: &Vault,
+    secwet: &Secwet,
     item_id: Uuid,
     env_id: Option<Uuid>,
     name: &str,
 ) -> Result<(), String> {
     let secret_meta = match env_id {
         Some(e) => {
-            let env_secrets = vault.list_secrets(item_id, Some(e)).map_err(|err| format!("{err}"))?;
+            let env_secrets = secwet.list_secrets(item_id, Some(e)).map_err(|err| format!("{err}"))?;
             if let Some(s) = env_secrets.into_iter().find(|s| s.name == name) {
                 s
             } else {
-                let item_secrets = vault.list_secrets(item_id, None).map_err(|err| format!("{err}"))?;
+                let item_secrets = secwet.list_secrets(item_id, None).map_err(|err| format!("{err}"))?;
                 item_secrets
                     .into_iter()
                     .find(|s| s.name == name)
@@ -23,7 +23,7 @@ pub fn execute_get(
             }
         }
         None => {
-            let item_secrets = vault.list_secrets(item_id, None).map_err(|err| format!("{err}"))?;
+            let item_secrets = secwet.list_secrets(item_id, None).map_err(|err| format!("{err}"))?;
             item_secrets
                 .into_iter()
                 .find(|s| s.name == name)
@@ -31,7 +31,7 @@ pub fn execute_get(
         }
     };
 
-    let secret_val = vault
+    let secret_val = secwet
         .reveal_secret(secret_meta.id)
         .map_err(|e| format!("{e}"))?;
     let exposed = secret_val.expose_secret();

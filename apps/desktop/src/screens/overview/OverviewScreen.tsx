@@ -3,7 +3,7 @@ import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { Device, Plan, Project, Secret } from "../../data/mock";
 import { thisDevice } from "../../data/mock";
-import type { SecretMeta } from "../../lib/api";
+import { api, type ItemView, type SecretMeta } from "../../lib/api";
 import { formatAgo, plural } from "../../lib/format";
 import { useStore } from "../../lib/store";
 import { PlanDialog } from "../PlanDialog";
@@ -17,17 +17,29 @@ interface Props {
   onCliCopied: () => void;
   onOpenDevices: () => void;
   onOpenRecovery: () => void;
+  /** Settings > Security, where key rotation lives. */
+  onOpenSecurity: () => void;
+  onOpenCli?: () => void;
   onOpenItem?: (itemId: string, environmentId?: string) => void;
   onOpenGroup?: (groupId: string) => void;
   onOpenLabel?: (labelId: string) => void;
   onNewItem?: () => void;
   onAddSecret?: () => void;
+  /** Member mode and read-only archive: show "New entry" only when creating is allowed. Default true. */
+  canCreate?: boolean;
+  /** Show "Add secret" only when this device may write somewhere. Default true. */
+  canAddSecret?: boolean;
+  /** Show pairing actions only when the device is not a read-only archive. Default true. */
+  canPair?: boolean;
   onOpenSettings?: () => void;
+  items?: ItemView[];
+  isSpaceFiltered?: boolean;
   // Backward compatibility props
   projects?: Project[];
   secrets?: (Secret | SecretMeta)[];
   devices?: Device[];
   recoveryKeyCreatedAt?: number;
+  /** Reason sentence from key_status when rotation is recommended, for example "iPhone 16 was revoked." */
   pendingRotation?: string;
   onOpenProject?: (projectId: string, environmentId?: string) => void;
   onNewProject?: () => void;
@@ -42,12 +54,42 @@ interface Step {
 }
 
 export function OverviewScreen(props: Props) {
+  const canCreate = props.canCreate ?? true;
+  const canAddSecret = props.canAddSecret ?? true;
+  const canPair = props.canPair ?? true;
   const [appState] = useStore();
   const { dashboardConfig, settings, items, overview } = appState;
 
   const [comparing, setComparing] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  const [cliCopiedLocally, setCliCopiedLocally] = useState(false);
+  const [cliReadLocally, setCliReadLocally] = useState(() => {
+    return typeof window !== "undefined" && window.localStorage.getItem("secwet:cli_guide_read") === "true";
+  });
+
+  useEffect(() => {
+    api.cliStatus().then((status) => {
+      if (status.installed) {
+        setCliReadLocally(true);
+        props.onCliCopied();
+      }
+    }).catch(() => {});
+  }, []);
+
+  const isCliDone = props.cliConnected || cliReadLocally;
+
+  function markCliAsRead() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("secwet:cli_guide_read", "true");
+    }
+    setCliReadLocally(true);
+    props.onCliCopied();
+  }
+
+  function handleOpenCli() {
+    markCliAsRead();
+    if (props.onOpenCli) {
+      props.onOpenCli();
+    }
+  }
 
   const plan = props.plan;
   const devices = props.devices || [];
@@ -55,49 +97,8 @@ export function OverviewScreen(props: Props) {
   const recoveryKeyCreatedAt = props.recoveryKeyCreatedAt;
   const pendingRotation = props.pendingRotation;
 
-  // Track clipboard state: check on focus, visibility change, and document copy events
-  useEffect(() => {
-    async function verifyClipboard() {
-      try {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          const text = await navigator.clipboard.readText();
-          setCliCopiedLocally(text.trim() === CLI_COMMAND.trim());
-        }
-      } catch {
-        // Permissions may deny clipboard reading without direct user interaction
-      }
-    }
-
-    function handleCopyEvent() {
-      // If the user copied something else in the page, revert copy state
-      setTimeout(verifyClipboard, 50);
-    }
-
-    window.addEventListener("focus", verifyClipboard);
-    document.addEventListener("visibilitychange", verifyClipboard);
-    document.addEventListener("copy", handleCopyEvent);
-    const interval = setInterval(verifyClipboard, 2500);
-    return () => {
-      window.removeEventListener("focus", verifyClipboard);
-      document.removeEventListener("visibilitychange", verifyClipboard);
-      document.removeEventListener("copy", handleCopyEvent);
-      clearInterval(interval);
-    };
-  }, []);
-
   const visibleKpis = dashboardConfig.visible_kpis || ["secrets", "assets", "notes", "devices"];
   const widgets = dashboardConfig.widgets || ["recent_secrets", "recent_notes", "quick_actions", "checklist"];
-
-  async function copyCli() {
-    try {
-      await navigator.clipboard.writeText(CLI_COMMAND);
-      setCopyFailed(false);
-      setCliCopiedLocally(true);
-      props.onCliCopied();
-    } catch {
-      setCopyFailed(true);
-    }
-  }
 
   const steps: Step[] = [
     ...(pendingRotation
@@ -105,10 +106,10 @@ export function OverviewScreen(props: Props) {
           {
             id: "rotate",
             title: "Rotate encryption key",
-            detail: `${pendingRotation} was revoked. Rotating stops it reading changes made from now on.`,
+            detail: `${pendingRotation} Rotating stops revoked devices reading changes made from now on.`,
             done: false,
             action: (
-              <Button variant="primary" onClick={props.onOpenRecovery}>
+              <Button variant="primary" onClick={props.onOpenSecurity}>
                 Rotate
               </Button>
             ),
@@ -137,15 +138,20 @@ export function OverviewScreen(props: Props) {
     {
       id: "cli",
       title: "Connect the command line",
-      detail: copyFailed
-        ? `Copy isn't available here. Run: ${CLI_COMMAND}`
-        : "Run apps with secrets as environment variables.",
-      done: cliCopiedLocally,
-      action: !cliCopiedLocally ? (
-        <Button variant="secondary" icon="copy" onClick={copyCli}>
-          Copy command
-        </Button>
-      ) : undefined,
+      detail: "Run apps with secrets as environment variables.",
+      done: isCliDone,
+      action: (
+        <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+          {props.onOpenCli && (
+            <Button variant="secondary" onClick={handleOpenCli}>
+              CLI Guide
+            </Button>
+          )}
+          <Button variant="tertiary" onClick={markCliAsRead}>
+            Mark as read
+          </Button>
+        </div>
+      ),
     },
     {
       id: "device",
@@ -157,40 +163,66 @@ export function OverviewScreen(props: Props) {
       done: activeDevices.length > 1 && plan === "pro",
       action:
         plan === "pro" ? (
-          <Button variant="secondary" onClick={props.onOpenDevices}>
-            Pair a device
-          </Button>
+          canPair ? (
+            <Button variant="secondary" onClick={props.onOpenDevices}>
+              Pair a device
+            </Button>
+          ) : undefined
         ) : (
           <Button variant="tertiary" onClick={() => setComparing(true)}>
             Compare plans
           </Button>
         ),
     },
-  ];
+  ].filter((step) => step.id !== "device" || canPair);
   const remaining = steps.filter((s) => !s.done).length;
 
+  // Scoped visible items
+  const visibleItems = props.items || items;
+  const visibleItemIds = new Set(visibleItems.map((i) => i.id));
+  const isFiltered = props.isSpaceFiltered ?? Boolean(props.items && props.items.length !== items.length);
+
   // Counts for KPIs
-  const secretsCount = overview?.secrets_count ?? (props.secrets?.length ?? appState.secrets.length);
-  const assetsCount = overview?.assets_count ?? overview?.files_count ?? (appState.assets?.length ?? appState.files?.length ?? 0);
-  const notesCount = overview?.notes_count ?? appState.notes.length;
+  const secretsCount = isFiltered
+    ? visibleItems.reduce((acc, it) => acc + (it.secrets_count || 0), 0)
+    : (overview?.secrets_count ?? (props.secrets?.length ?? appState.secrets.length));
+  const assetsCount = isFiltered
+    ? visibleItems.reduce((acc, it) => acc + (it.assets_count || it.files_count || 0), 0)
+    : (overview?.assets_count ?? overview?.files_count ?? (appState.assets?.length ?? appState.files?.length ?? 0));
+  const notesCount = isFiltered
+    ? visibleItems.reduce((acc, it) => acc + (it.notes_count || 0), 0)
+    : (overview?.notes_count ?? appState.notes.length);
   const devicesCount = overview?.active_devices_count ?? (activeDevices.length || 1);
 
   // Recent secrets from overview or props
-  const recentSecrets = overview?.recent?.length
+  const rawRecent = overview?.recent?.length
     ? overview.recent
     : (props.secrets || appState.secrets)
-        .slice(0, 5)
+        .slice(0, 10)
         .map((s: any) => ({
           id: s.id,
           name: s.name,
           project_id: s.project_id || s.projectId || s.item_id || "",
-          project_name: s.project_name || items.find((i) => i.id === (s.project_id || s.item_id))?.name || "Entry",
+          project_name: s.project_name || visibleItems.find((i) => i.id === (s.project_id || s.item_id))?.name || "Entry",
           environment_id: s.environment_id || s.environmentId || "",
           environment_name: s.environment_name || "General",
           updated_at: s.updated_at || s.updatedAt || Date.now(),
           item_id: s.item_id || s.project_id || s.projectId,
           item_name: s.item_name || s.project_name,
         }));
+
+  const recentSecrets = (isFiltered
+    ? rawRecent.filter((s: any) => {
+        const targetItemId = s.item_id || s.project_id;
+        return targetItemId ? visibleItemIds.has(targetItemId) : true;
+      })
+    : rawRecent
+  ).slice(0, 5);
+
+  const recentNotes = (isFiltered
+    ? appState.notes.filter((n) => visibleItemIds.has(n.item_id))
+    : appState.notes
+  ).slice(0, 5);
 
   function navigateToItem(itemId?: string, envId?: string) {
     if (!itemId) return;
@@ -254,23 +286,29 @@ export function OverviewScreen(props: Props) {
                 <h2 id="ov-quick">Quick actions</h2>
               </div>
               <div className={styles.quickActionsGrid}>
-                <Button
-                  variant="secondary"
-                  icon="plus"
-                  onClick={props.onNewItem || props.onNewProject}
-                >
-                  New entry
-                </Button>
-                <Button
-                  variant="secondary"
-                  icon="key"
-                  onClick={props.onAddSecret || props.onNewItem}
-                >
-                  Add secret
-                </Button>
-                <Button variant="secondary" icon="devices" onClick={props.onOpenDevices}>
-                  Pair device
-                </Button>
+                {canCreate && (
+                  <Button
+                    variant="secondary"
+                    icon="plus"
+                    onClick={props.onNewItem || props.onNewProject}
+                  >
+                    New entry
+                  </Button>
+                )}
+                {canAddSecret && (
+                  <Button
+                    variant="secondary"
+                    icon="key"
+                    onClick={props.onAddSecret || props.onNewItem}
+                  >
+                    Add secret
+                  </Button>
+                )}
+                {canPair && (
+                  <Button variant="secondary" icon="devices" onClick={props.onOpenDevices}>
+                    Pair device
+                  </Button>
+                )}
                 <Button variant="secondary" icon="recovery" onClick={props.onOpenRecovery}>
                   Backup key
                 </Button>
@@ -283,12 +321,12 @@ export function OverviewScreen(props: Props) {
               <div className={styles.cardHead}>
                 <h2 id="ov-notes">Recent notes</h2>
               </div>
-              {appState.notes.length === 0 ? (
+              {recentNotes.length === 0 ? (
                 <p className={styles.empty}>Notes you create appear here.</p>
               ) : (
                 <ul className={styles.list}>
-                  {appState.notes.slice(0, 5).map((n) => {
-                    const item = items.find((i) => i.id === n.item_id);
+                  {recentNotes.map((n) => {
+                    const item = visibleItems.find((i) => i.id === n.item_id);
                     return (
                       <li key={n.id}>
                         <button

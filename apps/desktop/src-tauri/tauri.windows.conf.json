@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "Secwet",
+        "decorations": false,
+        "shadow": true,
+        "width": 1180,
+        "height": 760,
+        "minWidth": 640,
+        "minHeight": 520
+      }
+    ]
+  }
+}

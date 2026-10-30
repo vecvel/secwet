@@ -1,6 +1,4 @@
 //! Security and local storage acceptance test suite.
-//!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.2, §11.2, and `ORIGINAL_REQUEST.md`.
 
 use secwet_core::crypto::{open_record, seal_record};
 use secwet_core::records::{
@@ -13,7 +11,7 @@ use secwet_proto::{EnvironmentBody, ProjectBody, RecordAad, RecordType, SecretBo
 use tempfile::tempdir;
 use uuid::Uuid;
 
-/// Acceptance test mandated by `docs/IMPLEMENTATION.md` §11.2 and `ORIGINAL_REQUEST.md`:
+/// Acceptance test:
 /// `db_contains_no_plaintext_names`
 ///
 /// Verifies:
@@ -22,15 +20,15 @@ use uuid::Uuid;
 /// 3. Canary project, environment, and secret (with secret value and secret note) are sealed and inserted.
 /// 4. `PRAGMA wal_checkpoint(TRUNCATE)` is executed to flush all pages to the database file.
 /// 5. Database connection is closed.
-/// 6. Raw bytes of `vault.sqlite3`, `vault.sqlite3-wal`, and `vault.sqlite3-shm` are scanned.
+/// 6. Raw bytes of `secwet.sqlite3`, `secwet.sqlite3-wal`, and `secwet.sqlite3-shm` are scanned.
 /// 7. Zero occurrences of any plaintext canary strings are found in the files.
 /// 8. Reopens database and verifies that cascade deletion marks child records `deleted = 1` with `blob = NULL`.
 #[test]
 fn db_contains_no_plaintext_names() {
     let dir = tempdir().expect("failed to create temp dir");
-    let db_path = dir.path().join("vault.sqlite3");
-    let wal_path = dir.path().join("vault.sqlite3-wal");
-    let shm_path = dir.path().join("vault.sqlite3-shm");
+    let db_path = dir.path().join("secwet.sqlite3");
+    let wal_path = dir.path().join("secwet.sqlite3-wal");
+    let shm_path = dir.path().join("secwet.sqlite3-shm");
 
     let canary_project_name = "CanaryProject_Omega_9871";
     let canary_env_name = "CanaryEnv_Staging_5432";
@@ -38,7 +36,7 @@ fn db_contains_no_plaintext_names() {
     let canary_secret_val = "sk_live_canary_super_secret_payload_value_99999";
     let canary_secret_note = "Confidential canary operational note 4401";
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x5au8; 32];
     let origin_device = "device_test_runner";
     let now_ms = 1_730_000_000_000i64;
@@ -55,7 +53,7 @@ fn db_contains_no_plaintext_names() {
         let project_body = ProjectBody::new(canary_project_name);
         let project_bytes = postcard::to_stdvec(&project_body).expect("postcard serialization");
         let project_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -77,7 +75,7 @@ fn db_contains_no_plaintext_names() {
         let env_body = EnvironmentBody::new(project_id, canary_env_name, 0);
         let env_bytes = postcard::to_stdvec(&env_body).expect("postcard serialization");
         let env_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             env_id.as_bytes(),
             RecordType::Environment,
             1,
@@ -106,7 +104,7 @@ fn db_contains_no_plaintext_names() {
         );
         let secret_bytes = postcard::to_stdvec(&secret_body).expect("postcard serialization");
         let secret_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             secret_id.as_bytes(),
             RecordType::Secret,
             1,
@@ -249,10 +247,10 @@ fn db_contains_no_plaintext_names() {
 #[test]
 fn test_cascade_delete_environment_and_last_environment_protection() {
     let dir = tempdir().expect("failed to create temp dir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let mut conn = open_and_migrate(&db_path).expect("open_and_migrate");
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x77u8; 32];
     let origin_device = "dev_1";
     let now_ms = 1_730_000_000_000i64;
@@ -266,7 +264,7 @@ fn test_cascade_delete_environment_and_last_environment_protection() {
     let p_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -293,7 +291,7 @@ fn test_cascade_delete_environment_and_last_environment_protection() {
     let e1_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             env_1_id.as_bytes(),
             RecordType::Environment,
             1,
@@ -328,7 +326,7 @@ fn test_cascade_delete_environment_and_last_environment_protection() {
     let e2_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             env_2_id.as_bytes(),
             RecordType::Environment,
             1,
@@ -355,7 +353,7 @@ fn test_cascade_delete_environment_and_last_environment_protection() {
     let s1_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             secret_1_id.as_bytes(),
             RecordType::Secret,
             1,
@@ -413,10 +411,10 @@ fn test_cascade_delete_environment_and_last_environment_protection() {
 #[test]
 fn test_update_record_blob_and_soft_delete() {
     let dir = tempdir().expect("failed to create temp dir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let conn = open_and_migrate(&db_path).expect("open_and_migrate");
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x88u8; 32];
     let origin_device = "dev_1";
     let now_ms = 1_730_000_000_000i64;
@@ -426,7 +424,7 @@ fn test_update_record_blob_and_soft_delete() {
     let initial_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -455,7 +453,7 @@ fn test_update_record_blob_and_soft_delete() {
     let updated_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -477,7 +475,7 @@ fn test_update_record_blob_and_soft_delete() {
     let decrypted = open_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -514,27 +512,27 @@ fn test_update_record_blob_and_soft_delete() {
     }
 }
 
-/// Acceptance test mandated by `docs/IMPLEMENTATION.md` §11.2 and `ORIGINAL_REQUEST.md`:
+/// Acceptance test:
 /// `lock_zeroizes_keys`
 ///
 /// Verifies:
-/// 1. Create and unlock a vault with `MemoryStore`.
+/// 1. Create and unlock a secwet with `MemoryStore`.
 /// 2. Retain a witness hook to internal key buffers (k_rec and k_evt).
 /// 3. Assert before lock that the key buffers are non-zero.
-/// 4. Call `vault.lock()`.
+/// 4. Call `secwet.lock()`.
 /// 5. Assert after lock that key buffers are overwritten with zeros (`0x00`).
-/// 6. Assert that `Vault::status(data_dir)` now returns `VaultStatus::Locked { vault_id }`.
+/// 6. Assert that `Secwet::status(data_dir)` now returns `SecwetStatus::Locked { secwet_id }`.
 #[test]
 fn lock_zeroizes_keys() {
     let dir = tempdir().expect("failed to create temp dir");
     let keystore = secwet_core::MemoryStore::new();
 
-    let vault = secwet_core::Vault::create(dir.path(), "test-device", &keystore)
-        .expect("Vault::create should succeed");
-    let vault_id = vault.vault_id();
+    let secwet = secwet_core::Secwet::create(dir.path(), "test-device", &keystore)
+        .expect("Secwet::create should succeed");
+    let secwet_id = secwet.secwet_id();
 
-    let k_rec_witness = vault.test_k_rec_witness();
-    let k_evt_witness = vault.test_k_evt_witness();
+    let k_rec_witness = secwet.test_k_rec_witness();
+    let k_evt_witness = secwet.test_k_evt_witness();
 
     // Verify keys in memory are non-zero before lock
     assert_ne!(
@@ -548,8 +546,8 @@ fn lock_zeroizes_keys() {
         "k_evt buffer must be non-zero while unlocked"
     );
 
-    // Call lock consuming the vault
-    vault.lock();
+    // Call lock consuming the secwet
+    secwet.lock();
 
     // Assert that in-memory key buffers are zeroized
     assert_eq!(
@@ -564,10 +562,10 @@ fn lock_zeroizes_keys() {
     );
 
     // Verify status returns Locked
-    let status = secwet_core::Vault::status(dir.path()).expect("Vault::status");
+    let status = secwet_core::Secwet::status(dir.path()).expect("Secwet::status");
     assert_eq!(
         status,
-        secwet_core::VaultStatus::Locked { vault_id },
-        "Vault status must be Locked after calling lock()"
+        secwet_core::SecwetStatus::Locked { secwet_id },
+        "Secwet status must be Locked after calling lock()"
     );
 }

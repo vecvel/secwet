@@ -1,7 +1,5 @@
 //! Adversarial challenge and stress test suite for secwet-core SQLite local storage & records.
 //!
-//! Authoritative source: `docs/IMPLEMENTATION.md` §5.2, §11.2, and `ORIGINAL_REQUEST.md`.
-//!
 //! Evaluates:
 //! 1. Plaintext Leakage (`db_contains_no_plaintext_names`):
 //!    - Varied Unicode scripts (CJK, Cyrillic, Arabic, Hebrew, Greek).
@@ -44,11 +42,11 @@ use uuid::Uuid;
 #[test]
 fn challenge_db_contains_no_plaintext_adversarial_unicode_and_large_secrets() {
     let dir = tempdir().expect("tempdir creation");
-    let db_path = dir.path().join("vault.sqlite3");
-    let wal_path = dir.path().join("vault.sqlite3-wal");
-    let shm_path = dir.path().join("vault.sqlite3-shm");
+    let db_path = dir.path().join("secwet.sqlite3");
+    let wal_path = dir.path().join("secwet.sqlite3-wal");
+    let shm_path = dir.path().join("secwet.sqlite3-shm");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x4au8; 32];
     let origin_device = "adversarial_test_runner_node_01";
     let now_ms = 1_730_100_000_000i64;
@@ -90,7 +88,7 @@ fn challenge_db_contains_no_plaintext_adversarial_unicode_and_large_secrets() {
         let project_body = ProjectBody::new(canary_cjk_project);
         let p_bytes = postcard::to_stdvec(&project_body).unwrap();
         let p_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -115,7 +113,7 @@ fn challenge_db_contains_no_plaintext_adversarial_unicode_and_large_secrets() {
         let env_body = EnvironmentBody::new(project_id, canary_cyrillic_env, 0);
         let e_bytes = postcard::to_stdvec(&env_body).unwrap();
         let e_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             env_id.as_bytes(),
             RecordType::Environment,
             1,
@@ -147,7 +145,7 @@ fn challenge_db_contains_no_plaintext_adversarial_unicode_and_large_secrets() {
         );
         let s_bytes = postcard::to_stdvec(&secret_body).unwrap();
         let s_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             secret_id.as_bytes(),
             RecordType::Secret,
             1,
@@ -228,7 +226,7 @@ fn challenge_db_contains_no_plaintext_adversarial_unicode_and_large_secrets() {
         );
         let updated_bytes = postcard::to_stdvec(&updated_secret_body).unwrap();
         let updated_aad = RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             secret_id.as_bytes(),
             RecordType::Secret,
             1,
@@ -282,10 +280,10 @@ fn challenge_db_contains_no_plaintext_adversarial_unicode_and_large_secrets() {
 #[test]
 fn challenge_cascade_deletion_deep_and_edge_cases() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let mut conn = open_and_migrate(&db_path).expect("open_and_migrate");
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x55u8; 32];
     let origin_device = "cascade_adversary";
     let now_ms = 1_730_200_000_000i64;
@@ -296,7 +294,7 @@ fn challenge_cascade_deletion_deep_and_edge_cases() {
     let p_blob = seal_record(
         &k_rec,
         &RecordAad::new(
-            vault_id.as_bytes(),
+            secwet_id.as_bytes(),
             project_id.as_bytes(),
             RecordType::Project,
             1,
@@ -338,7 +336,7 @@ fn challenge_cascade_deletion_deep_and_edge_cases() {
         let e_blob = seal_record(
             &k_rec,
             &RecordAad::new(
-                vault_id.as_bytes(),
+                secwet_id.as_bytes(),
                 env_id.as_bytes(),
                 RecordType::Environment,
                 1,
@@ -375,7 +373,7 @@ fn challenge_cascade_deletion_deep_and_edge_cases() {
             let s_blob = seal_record(
                 &k_rec,
                 &RecordAad::new(
-                    vault_id.as_bytes(),
+                    secwet_id.as_bytes(),
                     secret_id.as_bytes(),
                     RecordType::Secret,
                     1,
@@ -515,7 +513,7 @@ fn challenge_cascade_deletion_deep_and_edge_cases() {
 #[test]
 fn challenge_pragma_invariants_and_foreign_key_enforcement() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let conn = open_connection(&db_path).expect("open_connection");
 
@@ -597,7 +595,7 @@ fn challenge_pragma_invariants_and_foreign_key_enforcement() {
 #[test]
 fn challenge_wal_concurrent_readers_and_writers_stress() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     // Initialize schema
     {
@@ -715,7 +713,7 @@ fn challenge_wal_concurrent_readers_and_writers_stress() {
 #[test]
 fn challenge_busy_timeout_empirical_resolution() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     // Initialize database
     {
@@ -792,21 +790,21 @@ fn challenge_busy_timeout_empirical_resolution() {
 #[test]
 fn challenge_meta_table_storage_and_version() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let conn = open_and_migrate(&db_path).expect("open_and_migrate");
 
     // Schema version
     let ver = get_schema_version(&conn).expect("get_schema_version");
-    assert_eq!(ver, 2);
+    assert_eq!(ver, 3);
 
     let meta_ver = get_meta(&conn, "schema_version").expect("get_meta");
-    assert_eq!(meta_ver, Some("2".to_string()));
+    assert_eq!(meta_ver, Some("3".to_string()));
 
     // Custom metadata
-    set_meta(&conn, "vault_id", "018f-canary-vault-id").expect("set_meta");
-    let fetched = get_meta(&conn, "vault_id").expect("get_meta");
-    assert_eq!(fetched, Some("018f-canary-vault-id".to_string()));
+    set_meta(&conn, "secwet_id", "018f-canary-secwet-id").expect("set_meta");
+    let fetched = get_meta(&conn, "secwet_id").expect("get_meta");
+    assert_eq!(fetched, Some("018f-canary-secwet-id".to_string()));
 
     // Missing key
     let missing = get_meta(&conn, "non_existent_key").expect("get_meta");
@@ -816,10 +814,10 @@ fn challenge_meta_table_storage_and_version() {
 #[test]
 fn challenge_db_contains_no_plaintext_in_uncheckpointed_wal() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
-    let wal_path = dir.path().join("vault.sqlite3-wal");
+    let db_path = dir.path().join("secwet.sqlite3");
+    let wal_path = dir.path().join("secwet.sqlite3-wal");
 
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x7eu8; 32];
     let origin_device = "uncheckpointed_wal_tester";
     let now_ms = 1_730_300_000_000i64;
@@ -845,7 +843,7 @@ fn challenge_db_contains_no_plaintext_in_uncheckpointed_wal() {
     );
     let s_blob = seal_record(
         &k_rec,
-        &RecordAad::new(vault_id.as_bytes(), s_id.as_bytes(), RecordType::Secret, 1),
+        &RecordAad::new(secwet_id.as_bytes(), s_id.as_bytes(), RecordType::Secret, 1),
         &postcard::to_stdvec(&s_body).unwrap(),
     )
     .unwrap();
@@ -891,10 +889,10 @@ fn challenge_db_contains_no_plaintext_in_uncheckpointed_wal() {
 #[test]
 fn challenge_multi_project_last_environment_protection_isolation() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let mut conn = open_and_migrate(&db_path).expect("open_and_migrate");
-    let vault_id = Uuid::now_v7();
+    let secwet_id = Uuid::now_v7();
     let k_rec = [0x66u8; 32];
     let origin = "multi_proj_tester";
     let now = 1_730_000_000_000i64;
@@ -913,7 +911,7 @@ fn challenge_multi_project_last_environment_protection_isolation() {
             seal_record(
                 &k_rec,
                 &RecordAad::new(
-                    vault_id.as_bytes(),
+                    secwet_id.as_bytes(),
                     p1_id.as_bytes(),
                     RecordType::Project,
                     1,
@@ -938,7 +936,7 @@ fn challenge_multi_project_last_environment_protection_isolation() {
             seal_record(
                 &k_rec,
                 &RecordAad::new(
-                    vault_id.as_bytes(),
+                    secwet_id.as_bytes(),
                     e1a_id.as_bytes(),
                     RecordType::Environment,
                     1,
@@ -968,7 +966,7 @@ fn challenge_multi_project_last_environment_protection_isolation() {
             seal_record(
                 &k_rec,
                 &RecordAad::new(
-                    vault_id.as_bytes(),
+                    secwet_id.as_bytes(),
                     p2_id.as_bytes(),
                     RecordType::Project,
                     1,
@@ -993,7 +991,7 @@ fn challenge_multi_project_last_environment_protection_isolation() {
             seal_record(
                 &k_rec,
                 &RecordAad::new(
-                    vault_id.as_bytes(),
+                    secwet_id.as_bytes(),
                     e2a_id.as_bytes(),
                     RecordType::Environment,
                     1,
@@ -1018,7 +1016,7 @@ fn challenge_multi_project_last_environment_protection_isolation() {
             seal_record(
                 &k_rec,
                 &RecordAad::new(
-                    vault_id.as_bytes(),
+                    secwet_id.as_bytes(),
                     e2b_id.as_bytes(),
                     RecordType::Environment,
                     1,
@@ -1058,7 +1056,7 @@ fn challenge_multi_project_last_environment_protection_isolation() {
 #[test]
 fn challenge_schema_all_seven_tables_and_indices_exist() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let conn = open_and_migrate(&db_path).expect("open_and_migrate");
 
@@ -1099,7 +1097,7 @@ fn challenge_schema_all_seven_tables_and_indices_exist() {
 #[test]
 fn challenge_lamport_clock_monotonicity_under_sequential_and_cascade_ops() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     let mut conn = open_and_migrate(&db_path).expect("open_and_migrate");
 
@@ -1170,7 +1168,7 @@ fn challenge_lamport_clock_monotonicity_under_sequential_and_cascade_ops() {
 #[test]
 fn challenge_busy_timeout_failure_when_lock_held_beyond_timeout() {
     let dir = tempdir().expect("tempdir");
-    let db_path = dir.path().join("vault.sqlite3");
+    let db_path = dir.path().join("secwet.sqlite3");
 
     {
         let conn = open_and_migrate(&db_path).expect("init");

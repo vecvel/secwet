@@ -97,12 +97,13 @@ fn test_stress_64kib_secret_value() {
     // 7. EventEnvelope with 64 KiB ciphertext
     let event_env = EventEnvelope {
         event_id: [1u8; 16],
-        vault_id: [2u8; 16],
+        secwet_id: [2u8; 16],
         device_id: "DEVICE_TEST".to_string(),
         device_seq: 100,
         key_epoch: 1,
         nonce: [0x55u8; 24],
         ciphertext: ciphertext_64kib,
+        scope: None,
     };
     let enc_event_env = postcard::to_stdvec(&event_env).expect("EventEnvelope serialize 64KiB");
     let dec_event_env: EventEnvelope =
@@ -264,16 +265,16 @@ fn test_stress_boundary_numbers() {
     ];
     let boundary_i64s = [i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX];
 
-    let vault_id = [0xFFu8; 16];
+    let secwet_id = [0xFFu8; 16];
     let record_id = [0x00u8; 16];
 
     // Test RecordAad with extreme u32 key_epoch
     for &epoch in &boundary_u32s {
-        let aad = RecordAad::new(&vault_id, &record_id, RecordType::Secret, epoch);
+        let aad = RecordAad::new(&secwet_id, &record_id, RecordType::Secret, epoch);
         let bytes = aad
             .to_bytes()
             .expect("serialize RecordAad with boundary epoch");
-        let owned = RecordAadOwned::new(vault_id, record_id, RecordType::Secret, epoch);
+        let owned = RecordAadOwned::new(secwet_id, record_id, RecordType::Secret, epoch);
         let owned_bytes = owned.as_borrowed().to_bytes().unwrap();
         assert_eq!(bytes, owned_bytes);
 
@@ -305,12 +306,13 @@ fn test_stress_boundary_numbers() {
         for &epoch in &boundary_u32s {
             let env = EventEnvelope {
                 event_id: [0x11; 16],
-                vault_id: [0x22; 16],
+                secwet_id: [0x22; 16],
                 device_id: "DEV_EDGE".to_string(),
                 device_seq: seq,
                 key_epoch: epoch,
                 nonce: [0x33; 24],
                 ciphertext: vec![1, 2, 3],
+                scope: None,
             };
             let encoded = postcard::to_stdvec(&env).expect("serialize EventEnvelope");
             let decoded: EventEnvelope =
@@ -331,7 +333,7 @@ fn test_stress_boundary_numbers() {
     // Test PairingApproval with boundary approved_at
     for &ts in &boundary_i64s {
         let approval = PairingApproval {
-            vault_id: [1u8; 16],
+            secwet_id: [1u8; 16],
             session_id: [2u8; 16],
             device_id: "DEVICE_PAIR".to_string(),
             sign_pub: [3u8; 32],
@@ -409,11 +411,11 @@ fn test_stress_utf8_strings_and_validation() {
 
 #[test]
 fn test_postcard_determinism_and_canonical_aad() {
-    let vault_id = [0x55u8; 16];
+    let secwet_id = [0x55u8; 16];
     let record_id = [0xAAu8; 16];
 
     // RecordAad determinism
-    let aad = RecordAad::new(&vault_id, &record_id, RecordType::Secret, 42);
+    let aad = RecordAad::new(&secwet_id, &record_id, RecordType::Secret, 42);
     let baseline = aad.to_bytes().expect("serialize baseline");
 
     for _ in 0..500 {
@@ -425,7 +427,7 @@ fn test_postcard_determinism_and_canonical_aad() {
     }
 
     // RecordAadOwned vs borrowed RecordAad equivalence
-    let owned = RecordAadOwned::new(vault_id, record_id, RecordType::Secret, 42);
+    let owned = RecordAadOwned::new(secwet_id, record_id, RecordType::Secret, 42);
     assert_eq!(
         owned.as_borrowed().to_bytes().unwrap(),
         baseline,
@@ -433,28 +435,28 @@ fn test_postcard_determinism_and_canonical_aad() {
     );
 
     // Tampering any field produces different postcard bytes
-    let tampered_type = RecordAad::new(&vault_id, &record_id, RecordType::Project, 42)
+    let tampered_type = RecordAad::new(&secwet_id, &record_id, RecordType::Project, 42)
         .to_bytes()
         .unwrap();
     assert_ne!(tampered_type, baseline);
 
-    let tampered_epoch = RecordAad::new(&vault_id, &record_id, RecordType::Secret, 43)
+    let tampered_epoch = RecordAad::new(&secwet_id, &record_id, RecordType::Secret, 43)
         .to_bytes()
         .unwrap();
     assert_ne!(tampered_epoch, baseline);
 
-    let mut tampered_vault_id = vault_id;
-    tampered_vault_id[0] ^= 0x01;
-    let tampered_vault = RecordAad::new(&tampered_vault_id, &record_id, RecordType::Secret, 42)
+    let mut tampered_secwet_id = secwet_id;
+    tampered_secwet_id[0] ^= 0x01;
+    let tampered_secwet = RecordAad::new(&tampered_secwet_id, &record_id, RecordType::Secret, 42)
         .to_bytes()
         .unwrap();
-    assert_ne!(tampered_vault, baseline);
+    assert_ne!(tampered_secwet, baseline);
 
     // EventAad determinism & equivalence
     let event_id = [0x12u8; 16];
     let event_aad = EventAad {
         event_id: &event_id,
-        vault_id: &vault_id,
+        secwet_id: &secwet_id,
         device_id: "DEVICE_CANONICAL",
         device_seq: 999,
         key_epoch: 5,
@@ -467,7 +469,7 @@ fn test_postcard_determinism_and_canonical_aad() {
 
     let event_owned = EventAadOwned {
         event_id,
-        vault_id,
+        secwet_id,
         device_id: "DEVICE_CANONICAL".to_string(),
         device_seq: 999,
         key_epoch: 5,
@@ -477,8 +479,8 @@ fn test_postcard_determinism_and_canonical_aad() {
 
     // KeyWrapInfo determinism & equivalence
     let wrap_info = KeyWrapInfo {
-        purpose: "vault-key",
-        vault_id: &vault_id,
+        purpose: "master-key",
+        secwet_id: &secwet_id,
         key_epoch: 1,
         recipient_device_id: "DEVICE_RECIPIENT",
     };
@@ -489,8 +491,8 @@ fn test_postcard_determinism_and_canonical_aad() {
     }
 
     let wrap_owned = KeyWrapInfoOwned {
-        purpose: "vault-key".to_string(),
-        vault_id,
+        purpose: "master-key".to_string(),
+        secwet_id,
         key_epoch: 1,
         recipient_device_id: "DEVICE_RECIPIENT".to_string(),
     };
@@ -509,6 +511,7 @@ fn test_all_secwet_proto_structs_roundtrip() {
             4 => assert_eq!(RecordType::try_from(b), Ok(RecordType::Secret)),
             5 => assert_eq!(RecordType::try_from(b), Ok(RecordType::File)),
             6 => assert_eq!(RecordType::try_from(b), Ok(RecordType::Note)),
+            7 => assert_eq!(RecordType::try_from(b), Ok(RecordType::Space)),
             other => assert_eq!(RecordType::try_from(other), Err(other)),
         }
     }
@@ -521,6 +524,7 @@ fn test_all_secwet_proto_structs_roundtrip() {
         ("env_var", SecretKind::EnvVar),
         ("ssh_key", SecretKind::SshKey),
         ("certificate", SecretKind::Certificate),
+        ("codes", SecretKind::Codes),
     ];
     for (s, kind) in all_kinds {
         assert_eq!(kind.as_str(), s);
@@ -600,12 +604,13 @@ fn test_all_secwet_proto_structs_roundtrip() {
         let signed_event = SignedEvent {
             envelope: EventEnvelope {
                 event_id: [1u8; 16],
-                vault_id: [2u8; 16],
+                secwet_id: [2u8; 16],
                 device_id: "DEV_TEST".to_string(),
                 device_seq: 42,
                 key_epoch: 1,
                 nonce: [3u8; 24],
                 ciphertext: vec![10, 20, 30],
+                scope: None,
             },
             signature: sig,
         };
@@ -660,6 +665,10 @@ fn test_all_secwet_proto_structs_roundtrip() {
         RelayErrorCode::CursorExpired,
         RelayErrorCode::NotFound,
         RelayErrorCode::Internal,
+        RelayErrorCode::ReusedNonce,
+        RelayErrorCode::ExpiredTimestamp,
+        RelayErrorCode::Unauthorized,
+        RelayErrorCode::RateLimited,
     ];
 
     for code in all_relay_codes {
@@ -668,6 +677,7 @@ fn test_all_secwet_proto_structs_roundtrip() {
                 code,
                 message: format!("Error code test: {:?}", code),
             },
+            revocation: None,
         };
         let enc = postcard::to_stdvec(&err).unwrap();
         let dec: RelayError = postcard::from_bytes(&enc).unwrap();
@@ -675,15 +685,15 @@ fn test_all_secwet_proto_structs_roundtrip() {
         assert_eq!(dec.error.code, code);
     }
 
-    // 8. VaultStatus variants
+    // 8. SecwetStatus variants
     let id = Uuid::new_v4();
     for st in [
-        VaultStatus::Uninitialized,
-        VaultStatus::Locked { vault_id: id },
-        VaultStatus::Unlocked { vault_id: id },
+        SecwetStatus::Uninitialized,
+        SecwetStatus::Locked { secwet_id: id },
+        SecwetStatus::Unlocked { secwet_id: id },
     ] {
         let enc = postcard::to_stdvec(&st).unwrap();
-        let dec: VaultStatus = postcard::from_bytes(&enc).unwrap();
+        let dec: SecwetStatus = postcard::from_bytes(&enc).unwrap();
         assert_eq!(dec, st);
     }
 
