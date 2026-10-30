@@ -6,6 +6,7 @@ import { BrandMark } from "./Icon";
 import { Toast } from "./Toast";
 import { api, formatUiError, isValidRecoveryKey, normalizeRecoveryKey, type BiometricStatus } from "../lib/api";
 import { biometricName, biometricPromptIsInApp, isBiometricCancel } from "../lib/biometric";
+import { WindowControls } from "./WindowControls";
 import { onWindowDragMouseDown } from "../lib/windowDrag";
 import styles from "./UnlockScreen.module.css";
 
@@ -127,6 +128,7 @@ export function UnlockScreen({ onUnlock, deviceName, onRestore }: UnlockScreenPr
         <span className={styles.brand} aria-hidden="true">
           <BrandMark size={20} />
         </span>
+        <WindowControls />
       </header>
 
       {error && (

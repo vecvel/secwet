@@ -170,6 +170,24 @@ textarea {
   --titlebar-controls-width: 96px;
 }
 
+/* Linux frameless window: round the app surface; the window behind it is transparent. Paint
+   containment also clips fixed dialogs and overlays to the corners. Square when maximized. */
+:root[data-window-corners="rounded"],
+:root[data-window-corners="rounded"] body {
+  background: transparent;
+}
+
+:root[data-window-corners="rounded"] #root {
+  background: var(--color-bg);
+  border-radius: var(--radius-dialog);
+  overflow: hidden;
+  contain: paint;
+}
+
+:root[data-window-corners="rounded"][data-maximized] #root {
+  border-radius: 0;
+}
+
 /* Safe-area insets in one place. Phones report real insets (notch, home indicator); the desktop
    shell's web view reports insets for rounded window corners, which would only add empty space. */
 :root {

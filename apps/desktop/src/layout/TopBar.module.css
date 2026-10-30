@@ -30,6 +30,11 @@
   flex: none;
 }
 
+/* Windows and Linux: the window buttons sit at the right edge, so keep that gutter tight. */
+:global([data-titlebar="custom"]) .bar {
+  padding-right: var(--space-3);
+}
+
 @media (max-width: 639px) {
   .bar {
     padding: var(--safe-top) max(var(--space-4), var(--safe-right)) 0 max(var(--space-4), var(--safe-left));
