@@ -9,6 +9,10 @@ pub struct RelayConfig {
     pub retention_days: i64,
     pub public_url: String,
     pub default_device_limit: u32,
+    /// Behind a reverse proxy on a private network (the deploy compose
+    /// stack): take the client IP from `X-Forwarded-For` when the direct peer
+    /// is a private or loopback address. Off by default.
+    pub trust_proxy: bool,
 }
 
 impl RelayConfig {
@@ -35,12 +39,18 @@ impl RelayConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(5);
 
+        let trust_proxy = matches!(
+            std::env::var("TRUST_PROXY").ok().as_deref(),
+            Some("1" | "true" | "yes")
+        );
+
         Self {
             database_url,
             addr,
             retention_days,
             public_url,
             default_device_limit,
+            trust_proxy,
         }
     }
 }

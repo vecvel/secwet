@@ -1,0 +1,5 @@
+# Real settings and credentials live only on the server (written by the
+# deploy workflow) or in a local copy for testing; never commit them.
+.env
+.env.*
+rclone.conf

@@ -1,0 +1,144 @@
+# Builds the relay and backup images, pushes them to GitHub's container
+# registry, and rolls them out to the server over SSH (deploy/scripts/deploy.sh).
+# Setup and the secrets and variables it reads: deploy/README.md.
+name: "Relay: deploy"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deploy/**"
+      - ".github/workflows/deploy-relay.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-relay
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    name: Build images
+    runs-on: ubuntu-latest
+    outputs:
+      relay: ${{ steps.names.outputs.relay }}
+      backup: ${{ steps.names.outputs.backup }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: names
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "relay=ghcr.io/${owner}/secwet-relay:${GITHUB_SHA}" >>"$GITHUB_OUTPUT"
+          echo "backup=ghcr.io/${owner}/secwet-backup:${GITHUB_SHA}" >>"$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Relay image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/relay.Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.relay }}
+          cache-from: type=gha,scope=relay
+          cache-to: type=gha,scope=relay,mode=max
+          provenance: false
+
+      - name: Backup image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/backup.Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.backup }}
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,scope=backup,mode=max
+          provenance: false
+
+  deploy:
+    name: Deploy to server
+    needs: images
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment in the repository settings
+    # to approve each production deploy.
+    environment: production
+    env:
+      HOST: ${{ vars.RELAY_HOST }}
+      PORT: ${{ vars.SSH_PORT || '22' }}
+      APP_DIR: /opt/secwet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check settings
+        env:
+          RELAY_DOMAIN: ${{ vars.RELAY_DOMAIN }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
+          HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+          HAS_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS != '' }}
+          HAS_PG: ${{ secrets.POSTGRES_PASSWORD != '' }}
+          HAS_BACKUP: ${{ secrets.BACKUP_PASSPHRASE != '' }}
+        run: |
+          missing=""
+          for v in HOST RELAY_DOMAIN ACME_EMAIL; do [ -n "${!v}" ] || missing="$missing $v"; done
+          for v in HAS_KEY HAS_HOSTS HAS_PG HAS_BACKUP; do [ "${!v}" = "true" ] || missing="$missing ${v#HAS_}"; done
+          if [ -n "$missing" ]; then echo "::error::Missing settings:$missing (see deploy/README.md)"; exit 1; fi
+
+      - name: SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/deploy && chmod 0600 ~/.ssh/deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" >~/.ssh/known_hosts && chmod 0600 ~/.ssh/known_hosts
+
+      - name: Write settings
+        env:
+          RELAY_DOMAIN: ${{ vars.RELAY_DOMAIN }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
+          RELAY_IMAGE: ${{ needs.images.outputs.relay }}
+          BACKUP_IMAGE: ${{ needs.images.outputs.backup }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          RETENTION_DAYS: ${{ vars.RETENTION_DAYS || '30' }}
+          DEFAULT_DEVICE_LIMIT: ${{ vars.DEFAULT_DEVICE_LIMIT || '5' }}
+          BACKUP_KEEP_DAYS: ${{ vars.BACKUP_KEEP_DAYS || '14' }}
+          RCLONE_REMOTE: ${{ vars.RCLONE_REMOTE }}
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          umask 077
+          mkdir -p bundle
+          cp -R deploy/compose.yml deploy/caddy deploy/scripts bundle/
+          for v in RELAY_DOMAIN ACME_EMAIL RELAY_IMAGE BACKUP_IMAGE POSTGRES_PASSWORD BACKUP_PASSPHRASE \
+                   RETENTION_DAYS DEFAULT_DEVICE_LIMIT BACKUP_KEEP_DAYS RCLONE_REMOTE; do
+            printf '%s=%s\n' "$v" "${!v}"
+          done >bundle/.env
+          printf '%s\n' "$RCLONE_CONF" >bundle/rclone.conf
+
+      - name: Upload and roll out
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh_opts=(-i ~/.ssh/deploy -p "$PORT" -o StrictHostKeyChecking=yes -o BatchMode=yes)
+          tar -C bundle -czf - . | ssh "${ssh_opts[@]}" "deploy@$HOST" "mkdir -p $APP_DIR && tar -C $APP_DIR -xzf -"
+          # The registry token goes over stdin, not the command line.
+          printf '%s\n' "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "deploy@$HOST" \
+            "read -r GHCR_TOKEN && GHCR_USER='$GHCR_USER' GHCR_TOKEN=\"\$GHCR_TOKEN\" bash $APP_DIR/scripts/deploy.sh"
+
+      - name: Clean up
+        if: always()
+        run: rm -rf bundle ~/.ssh/deploy

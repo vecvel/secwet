@@ -16,6 +16,8 @@ scripts/
 **/scripts/
 # The iOS Runner's "Build Rust" phase runs this one.
 !apps/mobile/scripts/
+# Server bootstrap, deploy and backup scripts used by the deploy workflows.
+!deploy/scripts/
 scratch/
 
 # Python artifacts

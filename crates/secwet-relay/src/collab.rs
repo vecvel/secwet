@@ -634,17 +634,38 @@ pub async fn remove_member(
     Ok(Json(member_dto(&state.pool, &updated).await?))
 }
 
+/// The client address used for IP rate limits. With [`crate::config::RelayConfig::trust_proxy`]
+/// and a private or loopback peer (the reverse proxy), it is the first
+/// `X-Forwarded-For` entry; otherwise the direct peer, so a client on the
+/// internet cannot pick its own address.
+pub fn client_ip(peer: IpAddr, headers: &axum::http::HeaderMap, trust_proxy: bool) -> IpAddr {
+    let from_proxy = match peer {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_loopback(),
+        IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00,
+    };
+    if !(trust_proxy && from_proxy) {
+        return peer;
+    }
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(peer)
+}
+
 /// POST /v1/invitations/{invitation_id}/accept (unauthenticated, IP rate-limited)
 pub async fn accept_invitation(
     State(state): State<Arc<AppState>>,
     Path(invitation_id): Path<Uuid>,
     req: Request,
 ) -> Result<Json<AcceptInvitationResponse>, RelayApiError> {
-    let ip = req
+    let peer = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|ci| ci.0.ip())
         .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+    let ip = client_ip(peer, req.headers(), state.config.trust_proxy);
     if !state.limiter.check_ip(ip) {
         return Err(RelayApiError::RateLimited);
     }
@@ -887,4 +908,31 @@ pub async fn get_certificates(
     Ok(Json(DeviceCertificates {
         certificates: collab_db::list_certificates(&state.pool, secwet_id).await?,
     }))
+}
+
+#[cfg(test)]
+mod client_ip_tests {
+    use super::client_ip;
+    use axum::http::HeaderMap;
+    use std::net::IpAddr;
+
+    fn headers(xff: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert("x-forwarded-for", xff.parse().unwrap());
+        h
+    }
+
+    #[test]
+    fn proxy_header_is_used_only_from_a_private_peer_when_trusted() {
+        let proxy: IpAddr = "172.18.0.3".parse().unwrap();
+        let internet: IpAddr = "203.0.113.9".parse().unwrap();
+        let client: IpAddr = "198.51.100.7".parse().unwrap();
+        let h = headers("198.51.100.7, 10.0.0.1");
+        assert_eq!(client_ip(proxy, &h, true), client);
+        assert_eq!(client_ip(proxy, &h, false), proxy);
+        // A client on the internet cannot choose its own address.
+        assert_eq!(client_ip(internet, &h, true), internet);
+        assert_eq!(client_ip(proxy, &HeaderMap::new(), true), proxy);
+        assert_eq!(client_ip(proxy, &headers("not an ip"), true), proxy);
+    }
 }

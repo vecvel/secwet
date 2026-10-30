@@ -1,0 +1,68 @@
+# One-time server setup (deploy/scripts/bootstrap.sh): deploy user with the
+# deploy key, Docker, firewall, keys-only SSH, fail2ban, security updates.
+# Run it once with the server's root password in SERVER_ROOT_PASSWORD, then
+# delete that secret: root login and passwords are turned off afterwards.
+name: "Relay: bootstrap server"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type the server IP or name (vars.RELAY_HOST) to confirm'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HOST: ${{ vars.RELAY_HOST }}
+      PORT: ${{ vars.SSH_PORT || '22' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Confirm target
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          [ -n "$HOST" ] || { echo "::error::Set the RELAY_HOST variable first"; exit 1; }
+          [ "$CONFIRM" = "$HOST" ] || { echo "::error::Confirmation does not match RELAY_HOST"; exit 1; }
+
+      - name: Deploy key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          [ -n "$DEPLOY_SSH_KEY" ] || { echo "::error::Add the DEPLOY_SSH_KEY secret first"; exit 1; }
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/deploy && chmod 0600 ~/.ssh/deploy
+          echo "PUBKEY=$(ssh-keygen -y -f ~/.ssh/deploy)" >>"$GITHUB_ENV"
+
+      - name: Server host key
+        run: |
+          ssh-keyscan -p "$PORT" -t ed25519 "$HOST" 2>/dev/null >~/.ssh/known_hosts
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::Could not reach $HOST:$PORT"; exit 1; }
+          echo "Check this fingerprint against your provider's console before trusting it:"
+          ssh-keygen -lf ~/.ssh/known_hosts
+
+      - name: Run bootstrap as root
+        env:
+          SSHPASS: ${{ secrets.SERVER_ROOT_PASSWORD }}
+        run: |
+          [ -n "$SSHPASS" ] || { echo "::error::Add the SERVER_ROOT_PASSWORD secret for this one run"; exit 1; }
+          sudo apt-get install -yq sshpass >/dev/null
+          sshpass -e ssh -p "$PORT" -o StrictHostKeyChecking=yes -o PubkeyAuthentication=no "root@$HOST" \
+            "DEPLOY_SSH_PUBLIC_KEY='$PUBKEY' SSH_PORT='$PORT' bash -s" <deploy/scripts/bootstrap.sh
+
+      - name: Check the deploy user
+        run: |
+          ssh -i ~/.ssh/deploy -p "$PORT" -o StrictHostKeyChecking=yes -o BatchMode=yes "deploy@$HOST" 'docker version --format "Docker {{.Server.Version}}"'
+          echo
+          echo "Save this line as the SSH_KNOWN_HOSTS secret, then delete SERVER_ROOT_PASSWORD:"
+          cat ~/.ssh/known_hosts
+
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/deploy

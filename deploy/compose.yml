@@ -1,0 +1,123 @@
+# Secwet relay stack: Caddy (HTTPS) -> relay -> Postgres, plus nightly
+# encrypted backups. Settings come from .env next to this file (see
+# env.example); the deploy workflow writes it on the server.
+#
+# Networks: `edge` is the only one with published ports (Caddy, 80/443).
+# `internal` has no route to the internet; Postgres and the backup job live
+# only there, so the database is never reachable from outside.
+
+name: secwet
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  caddy:
+    <<: *hardening
+    image: caddy:2.10.2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?set RELAY_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    networks: [edge]
+    depends_on:
+      relay:
+        condition: service_started
+
+  relay:
+    <<: *hardening
+    image: ${RELAY_IMAGE:?set RELAY_IMAGE in .env}
+    environment:
+      DATABASE_URL: postgres://secwet:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/secwet_relay
+      PUBLIC_URL: https://${RELAY_DOMAIN}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+      DEFAULT_DEVICE_LIMIT: ${DEFAULT_DEVICE_LIMIT:-5}
+      # Caddy is the only peer on the private network; trust its
+      # X-Forwarded-For for the IP rate limit.
+      TRUST_PROXY: "true"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 256
+    networks: [edge, internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    <<: *hardening
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: secwet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: secwet_relay
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secwet -d secwet_relay"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    shm_size: 128m
+    mem_limit: 1g
+    networks: [internal]
+
+  backup:
+    <<: *hardening
+    image: ${BACKUP_IMAGE:?set BACKUP_IMAGE in .env}
+    environment:
+      PGHOST: postgres
+      PGUSER: secwet
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: secwet_relay
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?set BACKUP_PASSPHRASE in .env}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-3}
+      # Optional off-server copy, e.g. "b2:my-bucket/secwet" with the remote
+      # defined in rclone.conf. Empty keeps backups on this server only.
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+      RCLONE_CONFIG: /config/rclone.conf
+    volumes:
+      - backups:/backups
+      - ./rclone.conf:/config/rclone.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    mem_limit: 256m
+    # Reaches the internet only for the optional off-server upload.
+    networks: [internal, egress]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  edge: {}
+  internal:
+    internal: true
+  egress: {}
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}
+  postgres-data: {}
+  backups: {}
