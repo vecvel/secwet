@@ -465,7 +465,7 @@ fn test_adversarial_secwet_toml_deep_discovery_and_cli_flag_overrides() {
         r#"
 project = "core-banking"
 env = "production"
-data_dir = "{}"
+data_dir = '{}'
 "#,
         secwet_dir.display()
     );
@@ -566,7 +566,7 @@ fn test_adversarial_secwet_toml_default_env_fallback() {
     let toml_path = root.join(".secwet.toml");
     std::fs::write(
         &toml_path,
-        format!("project = \"service-a\"\ndata_dir = \"{}\"\n", root.display()),
+        format!("project = \"service-a\"\ndata_dir = '{}'\n", root.display()),
     )
     .unwrap();
 

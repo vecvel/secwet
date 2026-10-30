@@ -542,7 +542,7 @@ fn test_secwet_toml_item_project_precedence_and_cli_override() {
     let toml_file = root.join(".secwet.toml");
 
     // Case 1: toml defines `item`
-    std::fs::write(&toml_file, format!("item = \"item-from-toml\"\ndata_dir = \"{}\"\n", root.display())).unwrap();
+    std::fs::write(&toml_file, format!("item = \"item-from-toml\"\ndata_dir = '{}'\n", root.display())).unwrap();
 
     let out1 = Command::cargo_bin("secwet")
         .unwrap()
@@ -572,7 +572,7 @@ fn test_secwet_toml_item_project_precedence_and_cli_override() {
 
     std::fs::write(
         &toml_file,
-        format!("item = \"item-from-toml\"\nproject = \"item-legacy\"\ndata_dir = \"{}\"\n", root.display())
+        format!("item = \"item-from-toml\"\nproject = \"item-legacy\"\ndata_dir = '{}'\n", root.display())
     ).unwrap();
 
     let out3 = Command::cargo_bin("secwet")
